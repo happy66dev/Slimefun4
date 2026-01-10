@@ -95,7 +95,7 @@ public class HeatedPressureChamber extends AContainer {
         });
         registerRecipe(
                 60,
-                new ItemStack[] {SlimefunItems.BLISTERING_INGOT_2, new ItemStack(Material.NETHER_STAR)},
+                new ItemStack[] {SlimefunItems.BLISTERING_INGOT_2, SlimefunItems.REINFORCED_PLATE},
                 new ItemStack[] {SlimefunItems.BLISTERING_INGOT_3});
         registerRecipe(90, new ItemStack[] {SlimefunItems.PLUTONIUM, SlimefunItems.URANIUM}, new ItemStack[] {
             SlimefunItems.BOOSTED_URANIUM

@@ -21,7 +21,7 @@ public class CoalGenerator extends AGenerator implements NotDiagonallyRotatable 
 
     @Override
     protected void registerDefaultFuelTypes() {
-        registerFuel(new MachineFuel(80, new ItemStack(Material.COAL_BLOCK)));
+        registerFuel(new MachineFuel(144, new ItemStack(Material.COAL_BLOCK)));
         registerFuel(new MachineFuel(12, new ItemStack(Material.BLAZE_ROD)));
         registerFuel(new MachineFuel(20, new ItemStack(Material.DRIED_KELP_BLOCK)));
 
@@ -31,7 +31,7 @@ public class CoalGenerator extends AGenerator implements NotDiagonallyRotatable 
         }
 
         // Coal & Charcoal
-        registerFuel(new MachineFuel(8, new ItemStack(Material.COAL)));
+        registerFuel(new MachineFuel(16, new ItemStack(Material.COAL)));
         registerFuel(new MachineFuel(8, new ItemStack(Material.CHARCOAL)));
 
         // Logs

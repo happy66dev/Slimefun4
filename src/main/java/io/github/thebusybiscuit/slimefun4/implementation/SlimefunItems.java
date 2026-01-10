@@ -1661,33 +1661,44 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.BASIC, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(0),
-            LoreBuilder.powerPerSecond(4));
+            LoreBuilder.powerPerSecond(4),
+            " (日间)");
     public static final SlimefunItemStack SOLAR_GENERATOR_2 = new SlimefunItemStack(
             "SOLAR_GENERATOR_2",
             Material.DAYLIGHT_DETECTOR,
             "&c高级太阳能发电机",
             "",
+            "&9可以在夜间工作,尽管效率不高",
+            "",
             LoreBuilder.machine(MachineTier.MEDIUM, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(0),
-            LoreBuilder.powerPerSecond(16));
+            LoreBuilder.powerPerSecond(20),
+            " (日间)",
+            LoreBuilder.powerPerSecond(4),
+            " (夜间)");
     public static final SlimefunItemStack SOLAR_GENERATOR_3 = new SlimefunItemStack(
             "SOLAR_GENERATOR_3",
             Material.DAYLIGHT_DETECTOR,
             "&4黑金刚石太阳能发电机",
             "",
+            "&9可以在夜间工作",
+            "",
             LoreBuilder.machine(MachineTier.END_GAME, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(0),
-            LoreBuilder.powerPerSecond(64));
+            LoreBuilder.powerPerSecond(120),
+            " (日间)",
+            LoreBuilder.powerPerSecond(24),
+            " (夜间)");
     public static final SlimefunItemStack SOLAR_GENERATOR_4 = new SlimefunItemStack(
             "SOLAR_GENERATOR_4",
             Material.DAYLIGHT_DETECTOR,
             "&e充能太阳能发电机",
             "",
-            "&9可以在夜间工作",
+            "&9可以在夜间工作,性价比超高(",
             "",
             LoreBuilder.machine(MachineTier.END_GAME, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(0),
-            LoreBuilder.powerPerSecond(256),
+            LoreBuilder.powerPerSecond(500),
             " (日间)",
             LoreBuilder.powerPerSecond(128),
             " (夜间)");
@@ -1698,16 +1709,16 @@ public final class SlimefunItems {
             "&c煤发电机",
             "",
             LoreBuilder.machine(MachineTier.AVERAGE, MachineType.GENERATOR),
-            LoreBuilder.powerBuffer(64),
-            LoreBuilder.powerPerSecond(16));
+            LoreBuilder.powerBuffer(32),
+            LoreBuilder.powerPerSecond(24));
     public static final SlimefunItemStack COAL_GENERATOR_2 = new SlimefunItemStack(
             "COAL_GENERATOR_2",
             HeadTexture.GENERATOR,
             "&c煤发电机 &7(&eII&7)",
             "",
             LoreBuilder.machine(MachineTier.ADVANCED, MachineType.GENERATOR),
-            LoreBuilder.powerBuffer(256),
-            LoreBuilder.powerPerSecond(30));
+            LoreBuilder.powerBuffer(128),
+            LoreBuilder.powerPerSecond(72));
 
     public static final SlimefunItemStack LAVA_GENERATOR = new SlimefunItemStack(
             "LAVA_GENERATOR",
@@ -1716,7 +1727,7 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.AVERAGE, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(512),
-            LoreBuilder.powerPerSecond(20));
+            LoreBuilder.powerPerSecond(32));
     public static final SlimefunItemStack LAVA_GENERATOR_2 = new SlimefunItemStack(
             "LAVA_GENERATOR_2",
             HeadTexture.GENERATOR,
@@ -1724,7 +1735,7 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.ADVANCED, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(1024),
-            LoreBuilder.powerPerSecond(40));
+            LoreBuilder.powerPerSecond(72));
 
     public static final SlimefunItemStack ELECTRIC_FURNACE = new SlimefunItemStack(
             "ELECTRIC_FURNACE",
@@ -1806,7 +1817,7 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.MEDIUM, MachineType.MACHINE),
             LoreBuilder.speed(1),
-            LoreBuilder.powerPerSecond(18));
+            LoreBuilder.powerPerSecond(240));
     public static final SlimefunItemStack AUTO_ENCHANTER_2 = new SlimefunItemStack(
             "AUTO_ENCHANTER_2",
             Material.ENCHANTING_TABLE,
@@ -1814,7 +1825,7 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.END_GAME, MachineType.MACHINE),
             LoreBuilder.speed(3),
-            LoreBuilder.powerPerSecond(48));
+            LoreBuilder.powerPerSecond(720));
     public static final SlimefunItemStack AUTO_DISENCHANTER = new SlimefunItemStack(
             "AUTO_DISENCHANTER",
             Material.ENCHANTING_TABLE,
@@ -1822,7 +1833,7 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.MEDIUM, MachineType.MACHINE),
             LoreBuilder.speed(1),
-            LoreBuilder.powerPerSecond(18));
+            LoreBuilder.powerPerSecond(96));
     public static final SlimefunItemStack AUTO_DISENCHANTER_2 = new SlimefunItemStack(
             "AUTO_DISENCHANTER_2",
             Material.ENCHANTING_TABLE,
@@ -1830,7 +1841,7 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.END_GAME, MachineType.MACHINE),
             LoreBuilder.speed(3),
-            LoreBuilder.powerPerSecond(48));
+            LoreBuilder.powerPerSecond(288));
     public static final SlimefunItemStack AUTO_ANVIL = new SlimefunItemStack(
             "AUTO_ANVIL",
             Material.IRON_BLOCK,
@@ -1864,7 +1875,7 @@ public final class SlimefunItems {
             "&f将多个附魔书全部绑定到一本上.",
             "",
             LoreBuilder.machine(MachineTier.MEDIUM, MachineType.MACHINE),
-            LoreBuilder.powerPerSecond(16));
+            LoreBuilder.powerPerSecond(48));
 
     public static final SlimefunItemStack BIO_REACTOR = new SlimefunItemStack(
             "BIO_REACTOR",
@@ -1873,7 +1884,7 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.AVERAGE, MachineType.GENERATOR),
             "&8\u21E8 &e\u26A1 &7128 J 可储存",
-            LoreBuilder.powerPerSecond(8));
+            LoreBuilder.powerPerSecond(16));
     public static final SlimefunItemStack MULTIMETER =
             new SlimefunItemStack("MULTIMETER", Material.CLOCK, "&e万用表", "", "&r查看机器中储存的能量");
 
@@ -1884,7 +1895,7 @@ public final class SlimefunItems {
             LoreBuilder.range(6),
             "",
             LoreBuilder.machine(MachineTier.BASIC, MachineType.CAPACITOR),
-            "&8\u21E8 &e\u26A1 &7128 J 可储存");
+            "&8\u21E8 &e\u26A1 &7256 J 可储存");
     public static final SlimefunItemStack MEDIUM_CAPACITOR = new SlimefunItemStack(
             "MEDIUM_CAPACITOR",
             HeadTexture.CAPACITOR_25,
@@ -1892,7 +1903,7 @@ public final class SlimefunItems {
             LoreBuilder.range(6),
             "",
             LoreBuilder.machine(MachineTier.AVERAGE, MachineType.CAPACITOR),
-            LoreBuilder.powerBuffer(512));
+            LoreBuilder.powerBuffer(1024));
     public static final SlimefunItemStack BIG_CAPACITOR = new SlimefunItemStack(
             "BIG_CAPACITOR",
             HeadTexture.CAPACITOR_25,
@@ -1900,7 +1911,7 @@ public final class SlimefunItems {
             LoreBuilder.range(6),
             "",
             LoreBuilder.machine(MachineTier.MEDIUM, MachineType.CAPACITOR),
-            LoreBuilder.powerBuffer(1024));
+            LoreBuilder.powerBuffer(4096));
     public static final SlimefunItemStack LARGE_CAPACITOR = new SlimefunItemStack(
             "LARGE_CAPACITOR",
             HeadTexture.CAPACITOR_25,
@@ -1908,7 +1919,7 @@ public final class SlimefunItems {
             LoreBuilder.range(6),
             "",
             LoreBuilder.machine(MachineTier.GOOD, MachineType.CAPACITOR),
-            LoreBuilder.powerBuffer(8192));
+            LoreBuilder.powerBuffer(16384));
     public static final SlimefunItemStack CARBONADO_EDGED_CAPACITOR = new SlimefunItemStack(
             "CARBONADO_EDGED_CAPACITOR",
             HeadTexture.CAPACITOR_25,

@@ -1,0 +1,26 @@
+  happy                                                                                         [m d44a936fa 初始提交：纯净的 SlimefunGuguProject 官方代码基准
+* [32mmaster                                                                                        [m d44a936fa 初始提交：纯净的 SlimefunGuguProject 官方代码基准
+  [31mremotes/official/1-20-5-support                                                               [m c08a04c91 fix: misjudge version code
+  [31mremotes/official/1.13                                                                         [m c3e1b3daa chore: we can build too
+  [31mremotes/official/HEAD                                                                         [m -> official/master
+  [31mremotes/official/copilot/add-transaction-system                                               [m 3cb888174 feat: add transactional write support
+  [31mremotes/official/copilot/fix-all-power-production-devices                                     [m b295565f1 Fix energy generator method resolution bug
+  [31mremotes/official/copilot/fix-energy-manager-issue                                             [m b27907ab2 Improve comments to specify energy and cargo networks
+  [31mremotes/official/dependabot/github_actions/dev/actions/checkout-6                             [m 55a5afb00 🔧 Bump actions/checkout from 4 to 6
+  [31mremotes/official/dependabot/github_actions/dev/actions/upload-artifact-6                      [m 7c9995104 🔧 Bump actions/upload-artifact from 4 to 6
+  [31mremotes/official/dependabot/maven/dev/com.sk89q.worldedit-worldedit-bukkit-7.3.18             [m 16f24a646 🔧 Bump com.sk89q.worldedit:worldedit-bukkit from 7.3.6 to 7.3.18
+  [31mremotes/official/dependabot/maven/dev/io.github.git-commit-id-git-commit-id-maven-plugin-9.0.2[m a6f8e1e7e 🔧 Bump io.github.git-commit-id:git-commit-id-maven-plugin
+  [31mremotes/official/dependabot/maven/dev/me.clip-placeholderapi-2.11.7                           [m 3d3b21612 🔧 Bump me.clip:placeholderapi from 2.11.6 to 2.11.7
+  [31mremotes/official/dependabot/maven/dev/org.apache.maven.plugins-maven-compiler-plugin-3.14.1   [m 1ab3ccc78 🔧 Bump org.apache.maven.plugins:maven-compiler-plugin
+  [31mremotes/official/dependabot/maven/dev/org.apache.maven.plugins-maven-shade-plugin-3.6.1       [m f1daedf6a 🔧 Bump org.apache.maven.plugins:maven-shade-plugin from 3.6.0 to 3.6.1
+  [31mremotes/official/dev                                                                          [m 7a8bd95a3 chore(style): spotless apply
+  [31mremotes/official/feat/universal-inventory                                                     [m 711d351e4 Merge branch 'dev' into feat/universal-inventory
+  [31mremotes/official/feature/795_add_clear_data_if                                                [m 21b8c384f feat(controller): add remove all data in chunk if
+  [31mremotes/official/feature/cargo-simple-opt                                                     [m a615a2739 merge(upstream) Slimefun/Slimefun4@7a2347a
+  [31mremotes/official/feature/folia                                                                [m 41e346005 fix(config): inconsistent config mapping
+  [31mremotes/official/fix/sound-service                                                            [m d9ef6ba8e chore: spotless
+  [31mremotes/official/master                                                                       [m eb550b4a4 Merge branch 'dev'
+  [31mremotes/official/release                                                                      [m baa947d13 2025.1.2 release
+  [31mremotes/official/revert-1107-fix/shitass_gps                                                  [m 10f225d50 Revert "fix: issue 1105 and 一些数据库方法重构"
+  [31mremotes/official/revert-1109-revert-1107-fix/shitass_gps                                      [m a44b07040 Revert "Revert "fix: issue 1105 and 一些数据库方法重构""
+  [31mremotes/official/revert-1110-revert-1109-revert-1107-fix/shitass_gps                          [m 9422bb6fd Revert "Revert "Revert "fix: issue 1105 and 一些数据库方法重构"""
