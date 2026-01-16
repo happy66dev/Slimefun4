@@ -16,6 +16,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.logging.Level;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -44,6 +45,7 @@ public class Research implements Keyed {
     private boolean enabled = true;
     private int levelCost;
     private double currencyCost;
+    private List<SlimefunItem> needUnlockedItems = new ArrayList<>();
 
     private final List<SlimefunItem> items = new LinkedList<>();
 
@@ -119,6 +121,11 @@ public class Research implements Keyed {
      *
      * @return Whether this {@link Research} is enabled or not
      */
+
+    public void addNeedUnlockedItems(SlimefunItem item) {needUnlockedItems.add(item);}
+
+    public void clearNeedUnlockedItems() {needUnlockedItems.clear();}
+
     public boolean isEnabled() {
         return Slimefun.getConfigManager().isResearchingEnabled() && enabled;
     }
@@ -134,6 +141,10 @@ public class Research implements Keyed {
     @Deprecated
     public int getID() {
         return id;
+    }
+
+    public List<SlimefunItem> getNeedUnlockedItems() {
+        return needUnlockedItems;
     }
 
     /**
@@ -305,8 +316,6 @@ public class Research implements Keyed {
                 if (!event.isCancelled()) {
                     if (this.canUnlock(player)) {
                         guide.unlockItem(player, sfItem, pl -> guide.openItemGroup(profile, itemGroup, page));
-                    } else {
-                        Slimefun.getLocalization().sendMessage(player, "messages.not-enough-xp", true);
                     }
                 }
             }
@@ -337,6 +346,21 @@ public class Research implements Keyed {
         boolean creativeResearch = p.getGameMode() == GameMode.CREATIVE
                 && Slimefun.getConfigManager().isFreeCreativeResearchingEnabled();
 
+        Optional<PlayerProfile> profileOptional = PlayerProfile.find(p);
+        boolean hasUnlockNeed = true;
+        if (needUnlockedItems.size() > 0) for (SlimefunItem item : needUnlockedItems) {
+            if (profileOptional.isPresent() && !profileOptional.get().hasUnlocked(item.getResearch())) {
+                hasUnlockNeed = false;
+                break;
+            }
+        }
+        if (profileOptional.isPresent() && !hasUnlockNeed) {
+            Slimefun.getLocalization().sendMessage(p, "messages.not-unlock-need", true);
+            return false;
+        }
+        if (!(creativeResearch || canUnlock)){
+            Slimefun.getLocalization().sendMessage(p, "messages.not-enough-xp", true);
+        }
         return creativeResearch || canUnlock;
     }
 
@@ -388,8 +412,17 @@ public class Research implements Keyed {
         Slimefun.getResearchCfg().setDefaultValue(path + ".cost", getLevelCost());
         Slimefun.getResearchCfg().setDefaultValue(path + ".currency-cost", getCurrencyCost());
         Slimefun.getResearchCfg().setDefaultValue(path + ".enabled", true);
+        Slimefun.getResearchCfg().setDefaultValue(path + ".need-unlocked-items", new ArrayList<String>());
 
         setLevelCost(Slimefun.getResearchCfg().getInt(path + ".cost"));
+
+        List<String> itemsString = Slimefun.getResearchCfg().getStringList(path + ".need-unlocked-items");
+        if (!itemsString.isEmpty()) for (String itemString : itemsString){
+            SlimefunItem item = SlimefunItem.getById(itemString);
+            if (item != null && item.getResearch() != null) {
+                this.addNeedUnlockedItems(item);
+            }
+        }
 
         if (Slimefun.getConfigManager().isResearchAutoConvert()) {
             setCurrencyCost(getLevelCost() * Slimefun.getConfigManager().getResearchCurrencyCostConvertRate());

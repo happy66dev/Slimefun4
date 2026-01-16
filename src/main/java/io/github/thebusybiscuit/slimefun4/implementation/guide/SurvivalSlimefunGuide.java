@@ -318,19 +318,53 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
             } else {
                 lore = research.getLevelCost() + " 级经验";
             }
-
-            menu.addItem(
+            boolean doesPlayerUnLockedNeed = true;
+            for (SlimefunItem item : sfitem.getResearch().getNeedUnlockedItems()){
+                if (item.getResearch() != null && !profile.hasUnlocked(item.getResearch())){
+                    doesPlayerUnLockedNeed = false;
+                    break;
+                }
+            }
+            if (sfitem.getResearch().getNeedUnlockedItems().isEmpty() || doesPlayerUnLockedNeed) {
+                menu.addItem(
                     index,
                     new CustomItemStack(new CustomItemStack(
-                            ChestMenuUtils.getNoPermissionItem(),
-                            "&f" + ItemUtils.getItemName(sfitem.getItem()),
-                            "&7" + sfitem.getId(),
-                            "&4&l" + Slimefun.getLocalization().getMessage(p, "guide.locked"),
-                            "",
-                            "&a> 单击解锁",
-                            "",
-                            "&7需要 &b",
-                            lore)));
+                        ChestMenuUtils.getNoPermissionItem(),
+                        "&f" + ItemUtils.getItemName(sfitem.getItem()),
+                        "&7" + sfitem.getId(),
+                        "&4&l" + Slimefun.getLocalization().getMessage(p, "guide.locked"),
+                        "",
+                        "&a> 单击解锁",
+                        "",
+                        "&7需要 &b",
+                        lore)));
+            } else {
+                StringBuilder sb = new StringBuilder();
+                sb.append("&c[");
+                for (SlimefunItem item : sfitem.getResearch().getNeedUnlockedItems()){
+                    if (isSurvivalMode() && item.getResearch() != null && !profile.hasUnlocked(item.getResearch()) && !item.getItemName().isEmpty()){
+                        sb.append(item.getItemName());
+                        sb.append("&7,");
+                    }
+                }
+                sb.delete(sb.length() - 3, sb.length());
+                sb.append("&c]");
+                String loreNeedUnlock = sb.toString();
+                menu.addItem(
+                    index,
+                    new CustomItemStack(new CustomItemStack(
+                        ChestMenuUtils.getNoPermissionItem(),
+                        "&f" + ItemUtils.getItemName(sfitem.getItem()),
+                        "&7" + sfitem.getId(),
+                        "&4&l" + Slimefun.getLocalization().getMessage(p, "guide.locked"),
+                        "",
+                        "&a> 单击解锁",
+                        "",
+                        "&7需要 &b",
+                        lore,
+                        "&7在解锁这个物品前 你需要解锁下列物品:",
+                        "&c"+loreNeedUnlock)));
+            }
             menu.addMenuClickHandler(index, (pl, slot, item, action) -> {
                 research.unlockFromGuide(this, p, profile, sfitem, itemGroup, page);
                 return false;
