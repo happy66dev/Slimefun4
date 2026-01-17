@@ -6,6 +6,7 @@ import com.xzavier0722.mc.plugin.slimefun4.chat.PlayerChatCatcher;
 import com.xzavier0722.mc.plugin.slimefun4.storage.migrator.BlockStorageMigrator;
 import com.xzavier0722.mc.plugin.slimefun4.storage.migrator.PlayerProfileMigrator;
 import com.xzavier0722.mc.plugin.slimefuncomplib.ICompatibleSlimefun;
+import dev.aurelium.auraskills.api.AuraSkillsApi;
 import io.github.bakedlibs.dough.config.Config;
 import io.github.bakedlibs.dough.protection.ProtectionManager;
 import io.github.thebusybiscuit.slimefun4.api.MinecraftVersion;
@@ -160,6 +161,12 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     private static Slimefun instance;
 
     /**
+     * This is the instance of {@link AuraSkillsApi}
+     */
+
+    private static AuraSkillsApi auraSkills;
+
+    /**
      * Keep track of which {@link MinecraftVersion} we are on.
      */
     private MinecraftVersion minecraftVersion = MinecraftVersion.UNKNOWN;
@@ -247,6 +254,7 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     @Override
     public void onEnable() {
         setInstance(this);
+        auraSkills  = AuraSkillsApi.get();
 
         if (isUnitTest()) {
             // We handle Unit Tests seperately.

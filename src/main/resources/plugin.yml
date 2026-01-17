@@ -21,6 +21,9 @@ softdepend:
   - Vault
   - Orebfuscator
 
+depend:
+  - AuraSkills
+
 # We hook into these plugins too, but they depend on Slimefun.
 loadBefore:
   - ChestTerminal
