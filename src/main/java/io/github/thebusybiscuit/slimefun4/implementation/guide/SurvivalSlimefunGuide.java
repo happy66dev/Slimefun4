@@ -320,7 +320,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
             }
             boolean doesPlayerUnLockedNeed = true;
             for (SlimefunItem item : sfitem.getResearch().getNeedUnlockedItems()){
-                if (item.getResearch() != null && !profile.hasUnlocked(item.getResearch())){
+                if (item.getResearch() != null && !profile.hasUnlocked(item.getResearch()) && !item.isDisabled()){
                     doesPlayerUnLockedNeed = false;
                     break;
                 }
@@ -342,7 +342,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                 StringBuilder sb = new StringBuilder();
                 sb.append("&c[");
                 for (SlimefunItem item : sfitem.getResearch().getNeedUnlockedItems()){
-                    if (isSurvivalMode() && item.getResearch() != null && !profile.hasUnlocked(item.getResearch()) && !item.getItemName().isEmpty()){
+                    if (isSurvivalMode() && item.getResearch() != null && !item.isDisabled() &&!profile.hasUnlocked(item.getResearch()) && !item.getItemName().isEmpty()){
                         sb.append(item.getItemName());
                         sb.append("&7,");
                     }

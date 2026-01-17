@@ -349,7 +349,7 @@ public class Research implements Keyed {
         Optional<PlayerProfile> profileOptional = PlayerProfile.find(p);
         boolean hasUnlockNeed = true;
         if (needUnlockedItems.size() > 0) for (SlimefunItem item : needUnlockedItems) {
-            if (profileOptional.isPresent() && !profileOptional.get().hasUnlocked(item.getResearch())) {
+            if (profileOptional.isPresent() && !profileOptional.get().hasUnlocked(item.getResearch()) && !item.isDisabled()) {
                 hasUnlockNeed = false;
                 break;
             }
