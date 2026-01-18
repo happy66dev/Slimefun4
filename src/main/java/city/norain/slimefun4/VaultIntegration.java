@@ -22,10 +22,12 @@ public class VaultIntegration {
                 econ = rsp.getProvider();
                 plugin.getLogger().log(Level.INFO, "成功接入 Vault");
             } else {
-                plugin.getLogger().log(Level.WARNING, "无法接入 Vault. 如果你是 CMI 用户, 请至配置文件启用经济系统");
+                plugin.getLogger().log(Level.WARNING, "无法接入 Vault.");
+                plugin.onDisable();
             }
         } else {
-            plugin.getLogger().log(Level.WARNING, "服务端未安装 Vault, 游戏币解锁研究特性将无法使用");
+            plugin.getLogger().log(Level.WARNING, "服务端未安装 Vault!");
+            plugin.onDisable();
         }
     }
 
@@ -45,9 +47,5 @@ public class VaultIntegration {
         Objects.requireNonNull(econ, "Vault instance cannot be null!");
 
         econ.withdrawPlayer(p, withdraw);
-    }
-
-    public static boolean isEnabled() {
-        return econ != null && Slimefun.getConfigManager().isUseMoneyUnlock();
     }
 }

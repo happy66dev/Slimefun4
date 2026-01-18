@@ -186,7 +186,7 @@ messages:
     in-progress: '&f正在转换中...'
     wrong-type: '&c目前支持转换的方块: 已修复的刷怪笼'
   not-researched: '&4你还没解锁呢'
-  not-enough-xp: '&4你没有足够的经验来解锁这个研究，加油吧'
+  not-enough-xp: '&4你没有足够的经验/SC来解锁这个研究，加油吧'
   not-unlock-need: '&4你还没有解锁完需要的研究呢，加油吧'
   not-enough-skill: '&4你的技能等级还没有达到理解这个物品的水平捏'
   unlocked: '&b成功解锁研究 &7"%research%"'

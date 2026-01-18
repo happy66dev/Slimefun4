@@ -49,7 +49,6 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.Tag;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.Slime;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
@@ -313,7 +312,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                     message.toArray(new String[0])));
             menu.addMenuClickHandler(index, ChestMenuUtils.getEmptyClickHandler());
         } else if (isSurvivalMode() && research != null && !profile.hasUnlocked(research)) {
-            String lore;
+            List<String> lore = new ArrayList<>();
 
             AuraSkillsApi skillApi = AuraSkillsApi.get();
             SkillsUser playerSkill = skillApi.getUser(p.getUniqueId());
@@ -324,115 +323,116 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
             if (research.getArcheryLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.ARCHERY) >= research.getArcheryLevelNeed()) {
-                    skillLore.add("&b弓箭手 &e"+research.getArcheryLevelNeed()+"级&a√");
+                    skillLore.add("&b弓箭手 &e" + research.getArcheryLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b弓箭手 &e"+research.getArcheryLevelNeed()+"级&c×");
+                    skillLore.add("&b弓箭手 &e" + research.getArcheryLevelNeed() + "级&c×");
                 }
             }
             if (research.getFightingLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.FIGHTING) >= research.getFightingLevelNeed()) {
-                    skillLore.add("&b战士 &e"+research.getFightingLevelNeed()+"级&a√");
+                    skillLore.add("&b战士 &e" + research.getFightingLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b战士 &e"+research.getFightingLevelNeed()+"级&c×");
+                    skillLore.add("&b战士 &e" + research.getFightingLevelNeed() + "级&c×");
                 }
             }
             if (research.getDefenseLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.DEFENSE) >= research.getDefenseLevelNeed()) {
-                    skillLore.add("&b防御 &e"+research.getDefenseLevelNeed()+"级&a√");
+                    skillLore.add("&b防御 &e" + research.getDefenseLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b防御 &e"+research.getDefenseLevelNeed()+"级&c×");
+                    skillLore.add("&b防御 &e" + research.getDefenseLevelNeed() + "级&c×");
                 }
             }
             if (research.getFarmingLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.FARMING) >= research.getFarmingLevelNeed()) {
-                    skillLore.add("&b草药学 &e"+research.getFarmingLevelNeed()+"级&a√");
+                    skillLore.add("&b草药学 &e" + research.getFarmingLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b草药学 &e"+research.getFarmingLevelNeed()+"级&c×");
+                    skillLore.add("&b草药学 &e" + research.getFarmingLevelNeed() + "级&c×");
                 }
             }
             if (research.getForagingLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.FORAGING) >= research.getForagingLevelNeed()) {
-                    skillLore.add("&b伐树 &e"+research.getForagingLevelNeed()+"级&a√");
+                    skillLore.add("&b伐树 &e" + research.getForagingLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b伐树 &e"+research.getForagingLevelNeed()+"级&c×");
+                    skillLore.add("&b伐树 &e" + research.getForagingLevelNeed() + "级&c×");
                 }
             }
             if (research.getMiningLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.MINING) >= research.getMiningLevelNeed()) {
-                    skillLore.add("&b采掘 &e"+research.getMiningLevelNeed()+"级&a√");
+                    skillLore.add("&b采掘 &e" + research.getMiningLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b采掘 &e"+research.getMiningLevelNeed()+"级&c×");
+                    skillLore.add("&b采掘 &e" + research.getMiningLevelNeed() + "级&c×");
                 }
             }
             if (research.getFishingLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.FISHING) >= research.getFishingLevelNeed()) {
-                    skillLore.add("&b钓鱼 &e"+research.getFishingLevelNeed()+"级&a√");
+                    skillLore.add("&b钓鱼 &e" + research.getFishingLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b钓鱼 &e"+research.getFishingLevelNeed()+"级&c×");
+                    skillLore.add("&b钓鱼 &e" + research.getFishingLevelNeed() + "级&c×");
                 }
             }
             if (research.getExcavationLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.EXCAVATION) >= research.getExcavationLevelNeed()) {
-                    skillLore.add("&b挖掘 &e"+research.getExcavationLevelNeed()+"级&a√");
+                    skillLore.add("&b挖掘 &e" + research.getExcavationLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b挖掘 &e"+research.getExcavationLevelNeed()+"级&c×");
+                    skillLore.add("&b挖掘 &e" + research.getExcavationLevelNeed() + "级&c×");
                 }
             }
             if (research.getAgilityLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.AGILITY) >= research.getAgilityLevelNeed()) {
-                    skillLore.add("&b敏捷 &e"+research.getAgilityLevelNeed()+"级&a√");
+                    skillLore.add("&b敏捷 &e" + research.getAgilityLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b敏捷 &e"+research.getAgilityLevelNeed()+"级&c×");
+                    skillLore.add("&b敏捷 &e" + research.getAgilityLevelNeed() + "级&c×");
                 }
             }
             if (research.getAlchemyLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.ALCHEMY) >= research.getAlchemyLevelNeed()) {
-                    skillLore.add("&b炼金术 &e"+research.getAlchemyLevelNeed()+"级&a√");
+                    skillLore.add("&b炼金术 &e" + research.getAlchemyLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b炼金术 &e"+research.getAlchemyLevelNeed()+"级&c×");
+                    skillLore.add("&b炼金术 &e" + research.getAlchemyLevelNeed() + "级&c×");
                 }
             }
             if (research.getEnchantingLevelNeed() > 0) {
                 hasSkill = true;
                 if (playerSkill.getSkillLevel(Skills.ENCHANTING) >= research.getEnchantingLevelNeed()) {
-                    skillLore.add("&b附魔 &e"+research.getEnchantingLevelNeed()+"级&a√");
+                    skillLore.add("&b附魔 &e" + research.getEnchantingLevelNeed() + "级&a√");
                 } else {
-                    skillLore.add("&b附魔 &e"+research.getEnchantingLevelNeed()+"级&c×");
+                    skillLore.add("&b附魔 &e" + research.getEnchantingLevelNeed() + "级&c×");
                 }
             }
-            if (VaultIntegration.isEnabled()) {
-                if (VaultIntegration.getPlayerBalance(p) >= research.getCurrencyCost()) {
-                    lore = "&e" + String.format("%.2f", research.getCurrencyCost()) + " 游戏币&a√";
+            if (research.getMoneyCost() > 0) {
+                if (VaultIntegration.getPlayerBalance(p) >= research.getMoneyCost()) {
+                    lore.add("&e" + String.format("%.2f", research.getMoneyCost()) + " 游戏币&a√");
                 } else {
-                    lore = "&e" + String.format("%.2f", research.getCurrencyCost()) + " 游戏币&c×";
+                    lore.add("&e" + String.format("%.2f", research.getMoneyCost()) + " 游戏币&c×");
                 }
-            } else {
+            }
+            if (research.getLevelCost() > 0) {
                 if (p.getLevel() >= research.getLevelCost()) {
-                    lore = "&a" + research.getLevelCost() + " 级经验&a√";
+                    lore.add("&a" + research.getLevelCost() + " 级经验&a√");
                 } else {
-                    lore = "&a" + research.getLevelCost() + " 级经验&c×";
+                    lore.add("&a" + research.getLevelCost() + " 级经验&c×");
                 }
             }
 
 
             boolean doesPlayerUnLockedNeed = true;
-            for (SlimefunItem item : sfitem.getResearch().getNeedUnlockedItems()) {
+            if (sfitem.getResearch() != null)  for (SlimefunItem item : sfitem.getResearch().getNeedUnlockedItems()) {
                 if (item.getResearch() != null && !profile.hasUnlocked(item.getResearch()) && !item.isDisabled()) {
                     doesPlayerUnLockedNeed = false;
                     break;
                 }
             }
 
-            if (sfitem.getResearch().getNeedUnlockedItems().isEmpty() || doesPlayerUnLockedNeed) {
+            if (sfitem.getResearch() != null && (sfitem.getResearch().getNeedUnlockedItems().isEmpty() || doesPlayerUnLockedNeed)) {
                 if (!hasSkill) {
                     ArrayList<String> RealLore = new ArrayList<>();
                     RealLore.add("&f" + ItemUtils.getItemName(sfitem.getItem()));
@@ -442,7 +442,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                     RealLore.add("&a> 单击解锁");
                     RealLore.add("");
                     RealLore.add("&7需要 &b");
-                    RealLore.add(lore);
+                    RealLore.addAll(lore);
                     menu.addItem(
                         index,
                         new CustomItemStack(new CustomItemStack(
@@ -457,7 +457,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                     RealLore.add("&a> 单击解锁");
                     RealLore.add("");
                     RealLore.add("&7需要 &b");
-                    RealLore.add(lore);
+                    RealLore.addAll(lore);
                     RealLore.add("&7需要技能等级:");
                     RealLore.addAll(skillLore);
                     menu.addItem(
@@ -487,7 +487,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                     RealLore.add("&a> 单击解锁");
                     RealLore.add("");
                     RealLore.add("&7需要 &b");
-                    RealLore.add(lore);
+                    RealLore.addAll(lore);
                     RealLore.add("&7在解锁这个物品前 你需要解锁下列物品:");
                     RealLore.add("&c" + loreNeedUnlock);
                     menu.addItem(
@@ -504,7 +504,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                     RealLore.add("&a> 单击解锁");
                     RealLore.add("");
                     RealLore.add("&7需要 &b");
-                    RealLore.add(lore);
+                    RealLore.addAll(lore);
                     RealLore.add("&7在解锁这个物品前 你需要解锁下列物品:");
                     RealLore.add("&c" + loreNeedUnlock);
                     RealLore.add("&7需要技能等级:");

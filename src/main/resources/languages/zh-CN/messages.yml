@@ -166,7 +166,9 @@ actionbar:
 messages:
   android-no-permission: "&c你的机器人在某个你没有权限的领地/地皮中无法工作, 机器人已自动暂停运行."
   not-researched: '&4你的知识还不足以理解这个物品. &c你需要先解锁 &f"%item%"&f'
-  not-enough-xp: '&4你没有足够的经验来解锁这个研究'
+  not-enough-xp: '&4你没有足够的经验/DWC来解锁这个研究，加油吧'
+  not-unlock-need: '&4你还没有解锁完需要的研究呢，加油吧'
+  not-enough-skill: '&4你的技能等级还没有达到理解这个物品的水平捏'
   unlocked: '&b成功解锁研究 &7"%research%"'
   only-players: '&4这个指令只能在游戏内使用'
   unknown-player: '&4未知玩家: &c%player%'

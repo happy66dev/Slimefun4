@@ -55,8 +55,6 @@ researches:
   enable-fireworks: true
   # 是否使用游戏币替代使用经验解锁
   use-money-unlock: false
-  # 经验自动转换到游戏币倍率
-  currency-cost-convert-rate: 25.0
   # 是否禁用解锁研究时的动画
   disable-learning-animation: false
 

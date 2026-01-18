@@ -19,7 +19,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.logging.Level;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -47,7 +46,7 @@ public class Research implements Keyed {
     private final String name;
     private boolean enabled = true;
     private int levelCost;
-    private double currencyCost;
+    private double moneyCost;
     private List<SlimefunItem> needUnlockedItems = new ArrayList<>();
     private int farmingLevelNeed;
     //axe use
@@ -171,12 +170,12 @@ public class Research implements Keyed {
      *            The displayed name of this {@link Research}
      * @param levelCost
      *            The Cost in XP levels to unlock this {@link Research}
-     * @param currencyCost
+     * @param moneyCost
      *            The Cost in economy to unlock this {@link Research}
      *
      */
     public Research(
-            @Nonnull NamespacedKey key, int id, @Nonnull String defaultName, int levelCost, double currencyCost) {
+            @Nonnull NamespacedKey key, int id, @Nonnull String defaultName, int levelCost, double moneyCost) {
         Validate.notNull(key, "A NamespacedKey must be provided");
         Validate.notNull(defaultName, "A default name must be specified");
 
@@ -184,7 +183,7 @@ public class Research implements Keyed {
         this.id = id;
         this.name = defaultName;
         this.levelCost = levelCost;
-        this.currencyCost = currencyCost;
+        this.moneyCost = moneyCost;
     }
 
     /**
@@ -213,7 +212,7 @@ public class Research implements Keyed {
         this.name = defaultName;
         this.levelCost = defaultCost;
         // By default, we use a fixed rate to convert currency cost from level directly
-        this.currencyCost = defaultCost * Slimefun.getConfigManager().getResearchCurrencyCostConvertRate();
+        this.moneyCost = 0;
     }
 
     @Override
@@ -445,18 +444,14 @@ public class Research implements Keyed {
 
         boolean canUnlock;
 
-        if (VaultIntegration.isEnabled()) {
-            canUnlock = VaultIntegration.getPlayerBalance(p) >= currencyCost;
-        } else {
-            canUnlock = p.getLevel() >= levelCost;
-        }
+        canUnlock = VaultIntegration.getPlayerBalance(p) >= moneyCost && p.getLevel() >= levelCost;
 
         boolean creativeResearch = p.getGameMode() == GameMode.CREATIVE
                 && Slimefun.getConfigManager().isFreeCreativeResearchingEnabled();
 
         Optional<PlayerProfile> profileOptional = PlayerProfile.find(p);
         boolean hasUnlockNeed = true;
-        if (needUnlockedItems.size() > 0) for (SlimefunItem item : needUnlockedItems) {
+        if (!needUnlockedItems.isEmpty()) for (SlimefunItem item : needUnlockedItems) {
             if (profileOptional.isPresent() && !profileOptional.get().hasUnlocked(item.getResearch()) && !item.isDisabled()) {
                 hasUnlockNeed = false;
                 break;
@@ -538,8 +533,8 @@ public class Research implements Keyed {
             return;
         }
 
-        Slimefun.getResearchCfg().setDefaultValue(path + ".cost", getLevelCost());
-        Slimefun.getResearchCfg().setDefaultValue(path + ".currency-cost", getCurrencyCost());
+        Slimefun.getResearchCfg().setDefaultValue(path + ".levelCost", getLevelCost());
+        Slimefun.getResearchCfg().setDefaultValue(path + ".moneyCost", getMoneyCost());
         Slimefun.getResearchCfg().setDefaultValue(path + ".enabled", true);
         Slimefun.getResearchCfg().setDefaultValue(path + ".need-unlocked-items", new ArrayList<String>());
         Slimefun.getResearchCfg().setDefaultValue(path + ".farmingLevelNeed", 0);
@@ -554,15 +549,8 @@ public class Research implements Keyed {
         Slimefun.getResearchCfg().setDefaultValue(path + ".enchantingLevelNeed", 0);
         Slimefun.getResearchCfg().setDefaultValue(path + ".alchemyLevelNeed", 0);
 
-        setLevelCost(Slimefun.getResearchCfg().getInt(path + ".cost"));
+        setLevelCost(Slimefun.getResearchCfg().getInt(path + ".levelCost"));
 
-        List<String> itemsString = Slimefun.getResearchCfg().getStringList(path + ".need-unlocked-items");
-        if (!itemsString.isEmpty()) for (String itemString : itemsString){
-            SlimefunItem item = SlimefunItem.getById(itemString);
-            if (item != null && item.getResearch() != null) {
-                this.addNeedUnlockedItems(item);
-            }
-        }
         this.setMiningLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".miningLevelNeed"));
         this.setAgilityLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".agilityLevelNeed"));
         this.setAlchemyLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".alchemyLevelNeed"));
@@ -575,11 +563,7 @@ public class Research implements Keyed {
         this.setExcavationLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".excavationLevelNeed"));
         this.setFightingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".fightingLevelNeed"));
 
-        if (Slimefun.getConfigManager().isResearchAutoConvert()) {
-            setCurrencyCost(getLevelCost() * Slimefun.getConfigManager().getResearchCurrencyCostConvertRate());
-        } else {
-            setCurrencyCost(Slimefun.getResearchCfg().getInt(path + ".currency-cost"));
-        }
+        setMoneyCost(Slimefun.getResearchCfg().getInt(path + ".moneyCost"));
         enabled = true;
 
         Slimefun.getRegistry().getResearches().add(this);
@@ -635,11 +619,11 @@ public class Research implements Keyed {
         return "Research (" + getKey() + ')';
     }
 
-    public double getCurrencyCost() {
-        return currencyCost;
+    public double getMoneyCost() {
+        return moneyCost;
     }
 
-    public void setCurrencyCost(double currencyCost) {
-        this.currencyCost = currencyCost;
+    public void setMoneyCost(double currencyCost) {
+        this.moneyCost = currencyCost;
     }
 }

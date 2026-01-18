@@ -49,9 +49,6 @@ public class SlimefunConfigManager {
     private boolean talismanActionBarMessages;
 
     @Getter
-    private boolean useMoneyUnlock;
-
-    @Getter
     private boolean showVanillaRecipes;
 
     @Getter
@@ -59,12 +56,6 @@ public class SlimefunConfigManager {
 
     @Getter
     private boolean autoUpdate;
-
-    @Getter
-    private double researchCurrencyCostConvertRate;
-
-    @Getter
-    private boolean researchAutoConvert;
 
     @Getter
     private boolean bypassEnvironmentCheck;
@@ -117,18 +108,12 @@ public class SlimefunConfigManager {
             disableLearningAnimation = pluginConfig.getBoolean("researches.disable-learning-animation");
             logDuplicateBlockEntries = pluginConfig.getBoolean("options.log-duplicate-block-entries");
             talismanActionBarMessages = pluginConfig.getBoolean("talismans.use-actionbar");
-            useMoneyUnlock = pluginConfig.getBoolean("researches.use-money-unlock");
             showVanillaRecipes = pluginConfig.getBoolean("guide.show-vanilla-recipes");
             showHiddenItemGroupsInSearch = pluginConfig.getBoolean("guide.show-hidden-item-groups-in-search");
             autoUpdate = pluginConfig.getBoolean("options.auto-update");
             bypassEnvironmentCheck = pluginConfig.getBoolean("options.bypass-environment-check");
             bypassItemLengthCheck = pluginConfig.getBoolean("options.bypass-item-length-check");
 
-            pluginConfig.setDefaultValue("researches.currency-cost-convert-rate", 25.0);
-            researchCurrencyCostConvertRate = pluginConfig.getDouble("researches.currency-cost-convert-rate");
-
-            pluginConfig.setDefaultValue("researches.auto-convert", false);
-            researchAutoConvert = pluginConfig.getBoolean("researches.auto-convert");
         } catch (Exception x) {
             plugin.getLogger()
                     .log(
@@ -149,14 +134,29 @@ public class SlimefunConfigManager {
         for (Research research : researchSnapshot) {
             try {
                 NamespacedKey key = research.getKey();
-                int cost = researchesConfig.getInt(key.getNamespace() + '.' + key.getKey() + ".cost");
-                research.setLevelCost(cost);
+                int levelCost = researchesConfig.getInt(key.getNamespace() + '.' + key.getKey() + ".levelCost");
 
-                if (researchAutoConvert) {
-                    research.setCurrencyCost(researchCurrencyCostConvertRate * cost);
-                } else {
-                    research.setCurrencyCost(
-                            researchesConfig.getDouble(key.getNamespace() + '.' + key.getKey() + ".currency-cost"));
+                research.setLevelCost(levelCost);
+                research.setMoneyCost(researchesConfig.getDouble(key.getNamespace() + '.' + key.getKey() + ".moneyCost"));
+
+                research.setMiningLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".miningLevelNeed"));
+                research.setAgilityLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".agilityLevelNeed"));
+                research.setAlchemyLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".alchemyLevelNeed"));
+                research.setArcheryLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".archeryLevelNeed"));
+                research.setDefenseLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".defenseLevelNeed"));
+                research.setEnchantingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".enchantingLevelNeed"));
+                research.setFarmingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".farmingLevelNeed"));
+                research.setFishingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".fishingLevelNeed"));
+                research.setForagingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".foragingLevelNeed"));
+                research.setExcavationLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".excavationLevelNeed"));
+                research.setFightingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".fightingLevelNeed"));
+
+                List<String> itemsString = Slimefun.getResearchCfg().getStringList(key.getNamespace() + '.' + key.getKey() + ".need-unlocked-items");
+                if (!itemsString.isEmpty()) for (String itemString : itemsString){
+                    SlimefunItem item = SlimefunItem.getById(itemString);
+                    if (item != null && item.getResearch() != null) {
+                        research.addNeedUnlockedItems(item);
+                    }
                 }
 
                 var status = researchesConfig.getBoolean(key.getNamespace() + '.' + key.getKey() + ".enabled");
