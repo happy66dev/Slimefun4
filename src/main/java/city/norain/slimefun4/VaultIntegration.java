@@ -23,7 +23,6 @@ public class VaultIntegration {
                 plugin.getLogger().log(Level.INFO, "成功接入 Vault");
             } else {
                 plugin.getLogger().log(Level.WARNING, "无法接入 Vault.");
-                plugin.onDisable();
             }
         } else {
             plugin.getLogger().log(Level.WARNING, "服务端未安装 Vault!");

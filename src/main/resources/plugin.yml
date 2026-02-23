@@ -18,11 +18,12 @@ softdepend:
   - ClearLag
   - mcMMO
   - ItemsAdder
-  - Vault
   - Orebfuscator
+  - XConomy
 
 depend:
   - AuraSkills
+  - Vault
 
 # We hook into these plugins too, but they depend on Slimefun.
 loadBefore:
