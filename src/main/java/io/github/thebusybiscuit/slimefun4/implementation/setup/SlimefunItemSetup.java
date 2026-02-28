@@ -4582,7 +4582,7 @@ public final class SlimefunItemSetup {
 
         new SolarGenerator(
                         itemGroups.electricity,
-                        2,
+                        1,
                         0,
                         SlimefunItems.SOLAR_GENERATOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
@@ -4601,8 +4601,8 @@ public final class SlimefunItemSetup {
 
         new SolarGenerator(
                         itemGroups.electricity,
-                        10,
-                        2,
+                        4,
+                        0,
                         SlimefunItems.SOLAR_GENERATOR_2,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {
@@ -4620,8 +4620,8 @@ public final class SlimefunItemSetup {
 
         new SolarGenerator(
                         itemGroups.electricity,
-                        60,
-                        12,
+                        20,
+                        2,
                         SlimefunItems.SOLAR_GENERATOR_3,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {
@@ -4639,8 +4639,8 @@ public final class SlimefunItemSetup {
 
         new SolarGenerator(
                         itemGroups.electricity,
-                        250,
-                        64,
+                        100,
+                        12,
                         SlimefunItems.SOLAR_GENERATOR_4,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {

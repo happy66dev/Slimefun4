@@ -1661,33 +1661,31 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.BASIC, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(0),
-            LoreBuilder.powerPerSecond(4),
+            LoreBuilder.powerPerSecond(2),
             " (日间)");
     public static final SlimefunItemStack SOLAR_GENERATOR_2 = new SlimefunItemStack(
             "SOLAR_GENERATOR_2",
             Material.DAYLIGHT_DETECTOR,
             "&c高级太阳能发电机",
             "",
-            "&9可以在夜间工作,尽管效率不高",
+            "&9叠加的太阳能发电机",
             "",
             LoreBuilder.machine(MachineTier.MEDIUM, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(0),
-            LoreBuilder.powerPerSecond(20),
-            " (日间)",
-            LoreBuilder.powerPerSecond(4),
-            " (夜间)");
+            LoreBuilder.powerPerSecond(8),
+            " (日间)"  );
     public static final SlimefunItemStack SOLAR_GENERATOR_3 = new SlimefunItemStack(
             "SOLAR_GENERATOR_3",
             Material.DAYLIGHT_DETECTOR,
             "&4黑金刚石太阳能发电机",
             "",
-            "&9可以在夜间工作",
+            "&9可以在夜间工作,尽管效率不高",
             "",
             LoreBuilder.machine(MachineTier.END_GAME, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(0),
-            LoreBuilder.powerPerSecond(120),
+            LoreBuilder.powerPerSecond(40),
             " (日间)",
-            LoreBuilder.powerPerSecond(24),
+            LoreBuilder.powerPerSecond(4),
             " (夜间)");
     public static final SlimefunItemStack SOLAR_GENERATOR_4 = new SlimefunItemStack(
             "SOLAR_GENERATOR_4",
@@ -1698,9 +1696,9 @@ public final class SlimefunItems {
             "",
             LoreBuilder.machine(MachineTier.END_GAME, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(0),
-            LoreBuilder.powerPerSecond(500),
+            LoreBuilder.powerPerSecond(200),
             " (日间)",
-            LoreBuilder.powerPerSecond(128),
+            LoreBuilder.powerPerSecond(24),
             " (夜间)");
 
     public static final SlimefunItemStack COAL_GENERATOR = new SlimefunItemStack(
