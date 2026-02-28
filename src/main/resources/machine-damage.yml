@@ -1,0 +1,35 @@
+# 机器损坏配置文件
+# 此文件用于配置电力机器的损坏机制
+
+# 全局默认配置
+defaults:
+  # 是否启用机器损坏机制
+  enabled: true
+  # 损坏概率缩放倍率 (用于调整损坏概率的大小)
+  damage_chance_scale: 1.0e-8
+  # 损坏概率增长指数 (次方增长的指数)
+  damage_chance_exponent: 1.5
+  # 最大损坏概率 (0.0-1.0)
+  max_damage_chance: 0.01
+  # 损坏后是否停止工作
+  stop_on_damage: true
+
+# 具体机器配置
+# 格式: 机器ID: {配置项}
+# 配置项可以覆盖默认值
+machines:
+  # 电力碎矿机
+  ELECTRIC_ORE_GRINDER:
+    damage_chance_scale: 1.0e-8
+    damage_chance_exponent: 1.5
+  # 电力冶炼炉
+  ELECTRIC_SMELTERY:
+    damage_chance_scale: 1.5e-8
+    damage_chance_exponent: 1.5
+  # 充电台
+  CHARGING_BENCH:
+    damage_chance_scale: 5.0e-9
+    damage_chance_exponent: 1.4
+  # 示例: 禁用特定机器的损坏机制
+  # ELECTRIC_FURNACE:
+  #   enabled: false

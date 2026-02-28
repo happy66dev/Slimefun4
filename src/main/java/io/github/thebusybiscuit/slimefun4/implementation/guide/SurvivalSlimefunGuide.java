@@ -16,8 +16,11 @@ import io.github.thebusybiscuit.slimefun4.api.items.groups.LockedItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.player.PlayerProfile;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.api.researches.Research;
+import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
+import io.github.thebusybiscuit.slimefun4.core.config.SlimefunMachineDamageManager;
 import io.github.thebusybiscuit.slimefun4.core.guide.GuideHistory;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuide;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuideImplementation;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuideMode;
@@ -55,6 +58,7 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Recipe;
 import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.RecipeChoice.MaterialChoice;
+import org.bukkit.inventory.meta.ItemMeta;
 
 /**
  * The {@link SurvivalSlimefunGuide} is the standard version of our {@link SlimefunGuide}.
@@ -920,14 +924,48 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
             String lore = hasPermission(p, slimefunItem)
                 ? "&f需要在 " + slimefunItem.getItemGroup().getDisplayName(p) + " 中解锁"
                 : "&f无权限";
-            return slimefunItem.canUse(p, false)
-                ? item
-                : new CustomItemStack(
-                Material.BARRIER,
-                ItemUtils.getItemName(item),
-                "&4&l" + Slimefun.getLocalization().getMessage(p, "guide.locked"),
-                "",
-                lore);
+            
+            if (slimefunItem.canUse(p, false)) {
+                // 检查是否是电力用电器
+                if (slimefunItem instanceof EnergyNetComponent component && component.getEnergyComponentType() == EnergyNetComponentType.CONSUMER) {
+                    // 添加损坏率信息到 lore
+                    ItemStack clonedItem = item.clone();
+                    ItemMeta meta = clonedItem.getItemMeta();
+                    if (meta != null) {
+                        List<String> loreList = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
+                        
+                        // 移除已有的损坏机制相关 lore
+                        loreList.removeIf(line -> line.contains("损坏几率") || line.contains("损坏机制") || line.contains("缩放倍率") || line.contains("增长指数") || line.contains("增长公式"));
+                        
+                        // 添加损坏率信息
+                        SlimefunMachineDamageManager damageManager = Slimefun.getMachineDamageManager();
+                        var config = damageManager.getMachineConfig(slimefunItem.getId());
+                        boolean enabled = config.isEnabled();
+                        
+                        loreList.add("");
+                        loreList.add(ChatColor.GRAY + "损坏机制: " + (enabled ? ChatColor.GREEN + "启用" : ChatColor.RED + "禁用"));
+                        if (enabled) {
+                            double scale = config.getDamageChanceScale();
+                            double exponent = config.getDamageChanceExponent();
+                            loreList.add(ChatColor.GRAY + "缩放倍率: " + ChatColor.RED + String.format("%.8f", scale));
+                            loreList.add(ChatColor.GRAY + "增长指数: " + ChatColor.RED + String.format("%.2f", exponent));
+                            loreList.add(ChatColor.GRAY + "增长公式: 缩放倍率 × (工作刻或电容充放电/电容量*100^增长指数)");
+                        }
+                        
+                        meta.setLore(loreList);
+                        clonedItem.setItemMeta(meta);
+                    }
+                    return clonedItem;
+                }
+                return item;
+            } else {
+                return new CustomItemStack(
+                    Material.BARRIER,
+                    ItemUtils.getItemName(item),
+                    "&4&l" + Slimefun.getLocalization().getMessage(p, "guide.locked"),
+                    "",
+                    lore);
+            }
         } else {
             return item;
         }

@@ -23,6 +23,7 @@ import com.xzavier0722.mc.plugin.slimefun4.storage.util.InvStorageUtils;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.LocationUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -349,13 +350,14 @@ public class BlockDataController extends ADataController {
 
         if (removed == null) {
             removeUniversalBlockData(l);
-
             return;
         }
         // fix issue # 992 # 1099
         invSnapshots.remove(removed.getKey());
 
         if (!removed.isDataLoaded()) {
+            // 即使数据未加载，也要从数据库中删除
+            removeBlockDirectly(l);
             return;
         }
 
@@ -367,6 +369,9 @@ public class BlockDataController extends ADataController {
         if (menu != null) {
             menu.lock();
         }
+        
+        // 从数据库中删除方块数据
+        removeBlockDirectly(l);
     }
 
     /**
@@ -1515,7 +1520,11 @@ public class BlockDataController extends ADataController {
 
     private void executeAllDelayedTasks() {
         synchronized (delayedWriteTasks) {
-            delayedWriteTasks.values().forEach(DelayedTask::runUnsafely);
+            List<DelayedTask> tasks = new ArrayList<>(delayedWriteTasks.values());
+            delayedWriteTasks.clear();
+            for (DelayedTask task : tasks) {
+                task.runUnsafely();
+            }
         }
     }
 

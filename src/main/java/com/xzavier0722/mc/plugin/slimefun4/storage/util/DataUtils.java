@@ -12,13 +12,10 @@ import java.util.Base64;
 import java.util.logging.Level;
 import javax.annotation.Nullable;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.util.io.BukkitObjectInputStream;
-import org.bukkit.util.io.BukkitObjectOutputStream;
 
 public class DataUtils {
     /**
-     * 使用 {@link BukkitObjectOutputStream} 序列化 {@link ItemStack}
-     * 为 Base64 字符串，用于数据库存储.
+     * 使用 ItemStack 的 serialize() 方法将物品序列化为 Base64 字符串，用于数据库存储.
      *
      * @param itemStack 要序列化的 {@link ItemStack}
      * @return 序列化后的 Base64 字符串
@@ -30,10 +27,14 @@ public class DataUtils {
             return "";
         }
 
-        try (var stream = new ByteArrayOutputStream();
-                var bs = new BukkitObjectOutputStream(stream)) {
-            bs.writeObject(itemStack);
-            var itemStr = Base64.getEncoder().encodeToString(stream.toByteArray());
+        try {
+            // 使用 Bukkit 的内置序列化方法
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            org.bukkit.util.io.BukkitObjectOutputStream bukkitOutputStream = new org.bukkit.util.io.BukkitObjectOutputStream(outputStream);
+            bukkitOutputStream.writeObject(itemStack);
+            bukkitOutputStream.close();
+            byte[] bytes = outputStream.toByteArray();
+            var itemStr = Base64.getEncoder().encodeToString(bytes);
 
             if (!Slimefun.getConfigManager().isBypassItemLengthCheck()
                     && Slimefun.getDatabaseManager().getBlockDataStorageType() == StorageType.MYSQL
@@ -51,8 +52,7 @@ public class DataUtils {
     }
 
     /**
-     * 使用 {@link BukkitObjectInputStream} 反序列化 Base64 字符串
-     * 为 {@link ItemStack} 对象.
+     * 使用 Bukkit 的内置反序列化方法将 Base64 字符串反序列化为物品对象.
      *
      * @param base64Str 要反序列化的 Base64 字符串
      * @return 反序列化后的 {@link ItemStack} 对象
@@ -64,19 +64,26 @@ public class DataUtils {
 
         Debug.log(TestCase.BACKPACK, "Deserializing itemstack: " + base64Str);
 
-        try (var stream = new ByteArrayInputStream(Base64.getMimeDecoder().decode(base64Str));
-                var bs = new BukkitObjectInputStream(stream)) {
-            var result = (ItemStack) bs.readObject();
+        try {
+            // 解码 Base64 字符串
+            byte[] bytes = Base64.getDecoder().decode(base64Str);
+            // 使用 Bukkit 的内置反序列化方法
+            ByteArrayInputStream inputStream = new ByteArrayInputStream(bytes);
+            org.bukkit.util.io.BukkitObjectInputStream bukkitInputStream = new org.bukkit.util.io.BukkitObjectInputStream(inputStream);
+            var result = (ItemStack) bukkitInputStream.readObject();
+            bukkitInputStream.close();
 
             Debug.log(TestCase.BACKPACK, "Deserialized itemstack: " + result);
 
-            if (result.getType().isAir()) {
+            if (result == null || result.getType().isAir()) {
                 Slimefun.logger().log(Level.SEVERE, "反序列化数据库中的物品失败! 对应物品无法显示.");
+                return null;
             }
 
             return result;
-        } catch (Exception ex) {
-            throw new RuntimeException("反序列化物品时出现错误, 对应物品无法显示", ex);
+        } catch (Throwable ex) {
+            Slimefun.logger().log(Level.SEVERE, "反序列化物品时出现错误, 对应物品无法显示", ex);
+            return null;
         }
     }
 

@@ -104,13 +104,23 @@ public class TickerTask implements Runnable {
                 }
 
                 for (Map.Entry<ChunkPosition, Set<TickLocation>> entry : loc) {
-                    tickChunk(entry.getKey(), tickers, new HashSet<>(entry.getValue()));
+                    try {
+                        tickChunk(entry.getKey(), tickers, new HashSet<>(entry.getValue()));
+                    } catch (Exception e) {
+                        // 忽略关闭过程中的错误
+                        Slimefun.logger().log(Level.FINE, "Error during ticking while shutting down: {0}", e.getMessage());
+                    }
                 }
             }
 
             // Start a new tick cycle for every BlockTicker
             for (BlockTicker ticker : tickers) {
-                ticker.startNewTick();
+                try {
+                    ticker.startNewTick();
+                } catch (Exception e) {
+                    // 忽略关闭过程中的错误
+                    Slimefun.logger().log(Level.FINE, "Error starting new tick while shutting down: {0}", e.getMessage());
+                }
             }
 
             reset();
@@ -227,6 +237,11 @@ public class TickerTask implements Runnable {
     @ParametersAreNonnullByDefault
     private void tickBlock(Location l, SlimefunItem item, ASlimefunDataContainer data, long timestamp) {
         try {
+            // 检查机器是否损坏，如果损坏则跳过处理
+            if (Slimefun.getMachineDamageService().isMachineDamaged(data)) {
+                return;
+            }
+            
             if (item.getBlockTicker().isUniversal()) {
                 if (data instanceof SlimefunUniversalData universalData) {
                     item.getBlockTicker().tick(l.getBlock(), item, universalData);
@@ -241,7 +256,13 @@ public class TickerTask implements Runnable {
                 }
             }
         } catch (Exception | LinkageError x) {
-            reportErrors(l, item, x);
+            // 检查是否是服务器关闭过程中的错误
+            if (Slimefun.instance() != null && !Slimefun.instance().isEnabled()) {
+                // 服务器正在关闭，忽略错误
+                Slimefun.logger().log(Level.FINE, "Error during ticking while shutting down: {0}", x.getMessage());
+            } else {
+                reportErrors(l, item, x);
+            }
         } finally {
             Slimefun.getProfiler().closeEntry(l, item, timestamp);
         }

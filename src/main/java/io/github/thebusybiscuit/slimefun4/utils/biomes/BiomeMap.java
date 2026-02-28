@@ -62,13 +62,15 @@ public class BiomeMap<T> implements Keyed {
         this.namespacedKey = namespacedKey;
     }
 
-    public @Nullable T get(@Nonnull Biome biome) {
+    @Nullable
+    public T get(@Nonnull Biome biome) {
         Validate.notNull(biome, "The biome shall not be null.");
 
         return dataMap.get(biome);
     }
 
-    public @Nonnull T getOrDefault(@Nonnull Biome biome, T defaultValue) {
+    @Nonnull
+    public T getOrDefault(@Nonnull Biome biome, T defaultValue) {
         Validate.notNull(biome, "The biome should not be null.");
 
         return dataMap.getOrDefault(biome, defaultValue);
@@ -137,8 +139,8 @@ public class BiomeMap<T> implements Keyed {
         return "BiomeMap " + dataMap.toString();
     }
 
-    @ParametersAreNonnullByDefault
-    public static <T> @Nonnull BiomeMap<T> fromJson(
+    @Nonnull
+    public static <T> BiomeMap<T> fromJson(
             NamespacedKey key, String json, BiomeDataConverter<T> valueConverter) throws BiomeMapException {
         // All parameters are validated by the Parser.
         BiomeMapParser<T> parser = new BiomeMapParser<>(key, valueConverter);
@@ -146,8 +148,8 @@ public class BiomeMap<T> implements Keyed {
         return parser.buildBiomeMap();
     }
 
-    @ParametersAreNonnullByDefault
-    public static <T> @Nonnull BiomeMap<T> fromJson(
+    @Nonnull
+    public static <T> BiomeMap<T> fromJson(
             NamespacedKey key, String json, BiomeDataConverter<T> valueConverter, boolean isLenient)
             throws BiomeMapException {
         // All parameters are validated by the Parser.
@@ -157,8 +159,8 @@ public class BiomeMap<T> implements Keyed {
         return parser.buildBiomeMap();
     }
 
-    @ParametersAreNonnullByDefault
-    public static <T> @Nonnull BiomeMap<T> fromResource(
+    @Nonnull
+    public static <T> BiomeMap<T> fromResource(
             NamespacedKey key, JavaPlugin plugin, String path, BiomeDataConverter<T> valueConverter)
             throws BiomeMapException {
         Validate.notNull(key, "The key shall not be null.");

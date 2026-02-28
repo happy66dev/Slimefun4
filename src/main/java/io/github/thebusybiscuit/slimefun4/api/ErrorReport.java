@@ -120,9 +120,13 @@ public class ErrorReport<T extends Throwable> {
                                         stream.println("  数据加载状态: " + universalData.isDataLoaded());
                                         stream.println("  物品栏: " + (universalData.getMenu() != null));
                                         stream.println("  数据: ");
-                                        universalData
-                                                .getAllData()
-                                                .forEach((k, v) -> stream.println("    " + k + ": " + v));
+                                        if (universalData.isDataLoaded()) {
+                                            universalData
+                                                    .getAllData()
+                                                    .forEach((k, v) -> stream.println("    " + k + ": " + v));
+                                        } else {
+                                            stream.println("    数据未加载，无法显示");
+                                        }
                                     } else {
                                         stream.println("该方块没有任何数据.");
                                     }
@@ -132,7 +136,11 @@ public class ErrorReport<T extends Throwable> {
                 stream.println("  数据加载状态: " + blockData.isDataLoaded());
                 stream.println("  物品栏: " + (blockData.getBlockMenu() != null));
                 stream.println("  数据: ");
-                blockData.getAllData().forEach((k, v) -> stream.println("    " + k + ": " + v));
+                if (blockData.isDataLoaded()) {
+                    blockData.getAllData().forEach((k, v) -> stream.println("    " + k + ": " + v));
+                } else {
+                    stream.println("    数据未加载，无法显示");
+                }
             }
             stream.println();
         });

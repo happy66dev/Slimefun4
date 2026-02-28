@@ -22,9 +22,12 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.utils.compatibility.VersionedEnchantment;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
+import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -62,6 +65,9 @@ public class BlockListener implements Listener {
     private static final BlockFace[] CARDINAL_BLOCKFACES = new BlockFace[] {
         BlockFace.WEST, BlockFace.EAST, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.DOWN, BlockFace.UP
     };
+    
+    // 存储玩家第一次挖掘损坏机器的时间戳
+    private final Map<Player, Map<Location, Long>> damagedMachineBreakAttempts = new HashMap<>();
 
     public BlockListener(@Nonnull Slimefun plugin) {
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
@@ -88,17 +94,36 @@ public class BlockListener implements Listener {
                     }
                 }
 
+                // 清理机器数据和处理器数据
                 Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
-
-                if (SlimefunItem.getByItem(e.getItemInHand()) != null) {
-                    // Due to the delay of #clearBlockInfo, new sf block info will also be cleared. Set
-                    // cancelled.
-                    e.setCancelled(true);
+                
+                // 清理处理器操作数据
+                if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                    container.getMachineProcessor().endOperation(block);
+                } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                    generator.getMachineProcessor().endOperation(block);
                 }
+
+                // 不要取消放置事件，因为我们已经清理了旧机器数据
+                // 新机器会在 onBlockPlace 方法中正确初始化
             }
         } else if (StorageCacheUtils.hasSlimefunBlock(loc)) {
             // If there is no air (e.g. grass) then don't let the block be placed
             e.setCancelled(true);
+        } else {
+            // 清理该位置可能存在的旧机器数据，防止新机器继承旧机器的工作状态
+            var blockData = StorageCacheUtils.getDataContainer(loc);
+            if (blockData != null) {
+                Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
+                
+                // 清理处理器操作数据
+                SlimefunItem sfItem = SlimefunItem.getById(blockData.getSfId());
+                if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                    container.getMachineProcessor().endOperation(block);
+                } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                    generator.getMachineProcessor().endOperation(block);
+                }
+            }
         }
     }
 
@@ -141,13 +166,17 @@ public class BlockListener implements Listener {
                     }
 
                     if (sfItem instanceof UniversalBlock) {
-                        Slimefun.getDatabaseManager()
+                        var universalBlock = Slimefun.getDatabaseManager()
                                 .getBlockDataController()
                                 .createUniversalBlock(block.getLocation(), sfItem.getId());
+                        // 存储放置玩家的UUID
+                        universalBlock.setData("machine_owner_uuid", e.getPlayer().getUniqueId().toString());
                     } else {
-                        Slimefun.getDatabaseManager()
+                        var blockData = Slimefun.getDatabaseManager()
                                 .getBlockDataController()
                                 .createBlock(block.getLocation(), sfItem.getId());
+                        // 存储放置玩家的UUID
+                        blockData.setData("machine_owner_uuid", e.getPlayer().getUniqueId().toString());
                     }
 
                     sfItem.callItemHandler(BlockPlaceHandler.class, handler -> handler.onPlayerPlace(e));
@@ -168,15 +197,115 @@ public class BlockListener implements Listener {
             return;
         }
 
-        var heldItem = e.getPlayer().getInventory().getItemInMainHand();
+        var player = e.getPlayer();
+        var heldItem = player.getInventory().getItemInMainHand();
         var block = e.getBlock();
-        var blockData = StorageCacheUtils.getDataContainer(block.getLocation());
+        var location = block.getLocation();
+        var blockData = StorageCacheUtils.getDataContainer(location);
         var sfItem = blockData == null ? null : SlimefunItem.getById(blockData.getSfId());
+        
+        // 处理损坏机器的挖掘逻辑
+        if (blockData != null && Slimefun.getMachineDamageService().isMachineDamaged(blockData)) {
+            if (e.getPlayer() != null) {
+                // 玩家主动挖掘
+                // 获取玩家的挖掘记录
+                damagedMachineBreakAttempts.putIfAbsent(player, new HashMap<>());
+                Map<Location, Long> playerAttempts = damagedMachineBreakAttempts.get(player);
+                Long lastAttemptTime = playerAttempts.get(location);
+                long currentTime = System.currentTimeMillis();
+                
+                if (lastAttemptTime == null) {
+                    // 第一次挖掘，提示玩家
+                    e.setCancelled(true);
+                    player.sendMessage("§c机器损坏！如果你硬是要挖掘这个机器，则不会掉落任何东西！");
+                    player.sendMessage("§c10秒内再次挖掘就会直接破坏机器");
+                    playerAttempts.put(location, currentTime);
+                } else if (currentTime - lastAttemptTime < 10000) {
+                    // 10秒内二次挖掘，直接破坏机器且不掉落物品
+                    e.setDropItems(false);
+                    // 掉落机器内容物
+                    BlockMenu inv = StorageCacheUtils.getMenu(location);
+                    if (inv != null) {
+                        // 尝试获取所有可能的 slots 并掉落内容物
+                        if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                            inv.dropItems(location, container.getInputSlots());
+                            inv.dropItems(location, container.getOutputSlots());
+                        } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                            inv.dropItems(location, generator.getInputSlots());
+                            inv.dropItems(location, generator.getOutputSlots());
+                        } else {
+                            // 对于其他类型的机器，尝试掉落所有可能的 slots
+                            for (int i = 0; i < inv.getSize(); i++) {
+                                ItemStack item = inv.getItemInSlot(i);
+                                if (item != null) {
+                                    location.getWorld().dropItemNaturally(location, item);
+                                    inv.replaceExistingItem(i, null);
+                                }
+                            }
+                        }
+                    }
+                    // 清理处理器操作数据
+                    if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                        container.getMachineProcessor().endOperation(block);
+                    } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                        generator.getMachineProcessor().endOperation(block);
+                    }
+                    // 移除机器数据
+                    Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
+                    // 移除悬浮字
+                    Location hologramLocation = location.clone().add(0.5, 1.5, 0.5);
+                    Slimefun.getHologramsService().removeHologram(hologramLocation);
+                    // 清理记录
+                    playerAttempts.remove(location);
+                } else {
+                    // 超过10秒，视为第一次挖掘
+                    e.setCancelled(true);
+                    player.sendMessage("§c机器损坏！如果你硬是要挖掘这个机器，则不会掉落任何东西！");
+                    player.sendMessage("§c10秒内再次挖掘就会直接破坏机器");
+                    playerAttempts.put(location, currentTime);
+                }
+                return;
+            } else {
+                // 非可抗因素破坏（如爆炸），直接破坏机器且不掉落物品
+                e.setDropItems(false);
+                // 掉落机器内容物
+                BlockMenu inv = StorageCacheUtils.getMenu(location);
+                if (inv != null) {
+                    // 尝试获取所有可能的 slots 并掉落内容物
+                    if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                        inv.dropItems(location, container.getInputSlots());
+                        inv.dropItems(location, container.getOutputSlots());
+                    } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                        inv.dropItems(location, generator.getInputSlots());
+                        inv.dropItems(location, generator.getOutputSlots());
+                    } else {
+                        // 对于其他类型的机器，尝试掉落所有可能的 slots
+                        for (int i = 0; i < inv.getSize(); i++) {
+                            ItemStack item = inv.getItemInSlot(i);
+                            if (item != null) {
+                                location.getWorld().dropItemNaturally(location, item);
+                                inv.replaceExistingItem(i, null);
+                            }
+                        }
+                    }
+                }
+                // 清理处理器操作数据
+                if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                    container.getMachineProcessor().endOperation(block);
+                }
+                // 移除机器数据
+                Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
+                // 移除悬浮字
+                Location hologramLocation = location.clone().add(0.5, 1.5, 0.5);
+                Slimefun.getHologramsService().removeHologram(hologramLocation);
+                return;
+            }
+        }
 
         // If there is a Slimefun Block here, call our BreakEvent and, if cancelled, cancel this event
         // and return
         if (blockData != null) {
-            SlimefunBlockBreakEvent breakEvent =
+            SlimefunBlockBreakEvent breakEvent = 
                     new SlimefunBlockBreakEvent(e.getPlayer(), heldItem, e.getBlock(), sfItem);
             Bukkit.getPluginManager().callEvent(breakEvent);
 
@@ -203,6 +332,9 @@ public class BlockListener implements Listener {
                 return;
             }
 
+            // 保存sfItem引用，因为callBlockHandler会删除blockData
+            SlimefunItem finalSfItem = sfItem;
+
             blockData.setPendingRemove(true);
 
             if (!blockData.isDataLoaded()) {
@@ -218,7 +350,7 @@ public class BlockListener implements Listener {
                                 return;
                             }
                             e.setDropItems(true);
-                            dropItems(e, heldItem, block, sfItem, drops);
+                            dropItems(e, heldItem, block, finalSfItem, drops);
                         },
                         true);
                 return;
@@ -228,7 +360,7 @@ public class BlockListener implements Listener {
             if (e.isCancelled()) {
                 blockData.setPendingRemove(false);
             }
-            dropItems(e, heldItem, block, sfItem, drops);
+            dropItems(e, heldItem, block, finalSfItem, drops);
 
             // Checks for vanilla sensitive blocks everywhere
             // checkForSensitiveBlocks(e.getBlock(), 0, e.isDropItems());
@@ -260,8 +392,41 @@ public class BlockListener implements Listener {
                 return;
             }
 
+            // 掉落机器内容物
+            BlockMenu inv = StorageCacheUtils.getMenu(loc);
+            if (inv != null) {
+                // 尝试获取所有可能的 slots 并掉落内容物
+                if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                    inv.dropItems(loc, container.getInputSlots());
+                    inv.dropItems(loc, container.getOutputSlots());
+                } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                    inv.dropItems(loc, generator.getInputSlots());
+                    inv.dropItems(loc, generator.getOutputSlots());
+                } else {
+                    // 对于其他类型的机器，尝试掉落所有可能的 slots
+                    for (int i = 0; i < inv.getSize(); i++) {
+                        ItemStack slotItem = inv.getItemInSlot(i);
+                        if (slotItem != null) {
+                            loc.getWorld().dropItemNaturally(loc, slotItem);
+                            inv.replaceExistingItem(i, null);
+                        }
+                    }
+                }
+            }
+
+            // 清理处理器操作数据
+            if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                container.getMachineProcessor().endOperation(e.getBlock());
+            } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                generator.getMachineProcessor().endOperation(e.getBlock());
+            }
+
             drops.addAll(sfItem.getDrops());
             Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
+            
+            // 移除机器上方的悬浮字
+            Location hologramLocation = loc.clone().add(0, 1.5, 0);
+            Slimefun.getHologramsService().removeHologram(hologramLocation);
         }
     }
 

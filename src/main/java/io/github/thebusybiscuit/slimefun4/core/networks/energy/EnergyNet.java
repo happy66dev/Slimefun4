@@ -165,6 +165,11 @@ public class EnergyNet extends Network implements HologramOwner {
                     if (data == null || data.isPendingRemove()) {
                         continue;
                     }
+                    
+                    // 检查机器是否损坏，如果损坏则跳过处理
+                    if (Slimefun.getMachineDamageService().isMachineDamaged(data)) {
+                        continue;
+                    }
 
                     EnergyNetComponent component = entry.getValue();
                     if (!((SlimefunItem) component).getId().equals(data.getSfId())) {
@@ -190,16 +195,19 @@ public class EnergyNet extends Network implements HologramOwner {
                         demand = NumberUtils.flowSafeAddition(demand, availableSpace);
 
                         if (remainingEnergy > 0) {
-                            if (remainingEnergy > availableSpace) {
-                                component.setCharge(loc, capacity);
-                                remainingEnergy -= availableSpace;
-                            } else {
-                                long curCharge = NumberUtils.flowSafeAddition(charge, remainingEnergy);
-                                component.setCharge(loc, (long) curCharge);
+                                if (remainingEnergy > availableSpace) {
+                                    component.setCharge(loc, capacity);
+                                    remainingEnergy -= availableSpace;
+                                } else {
+                                    long curCharge = NumberUtils.flowSafeAddition(charge, remainingEnergy);
+                                    component.setCharge(loc, (long) curCharge);
 
-                                remainingEnergy = 0;
+                                    remainingEnergy = 0;
+                                }
+                                
+                                // 注意：此处不处理机器损坏，因为充电过程不应计入工作刻
+                                // 只有当机器实际消耗能量进行工作时才应计入工作刻
                             }
-                        }
                     }
                 }
                 storeRemainingEnergy(remainingEnergy);
@@ -220,8 +228,15 @@ public class EnergyNet extends Network implements HologramOwner {
             if (data == null || data.isPendingRemove() || !data.isDataLoaded()) {
                 continue;
             }
+            
+            // 检查机器是否损坏，如果损坏则跳过处理
+            if (Slimefun.getMachineDamageService().isMachineDamaged(data)) {
+                continue;
+            }
 
             EnergyNetComponent component = entry.getValue();
+            SlimefunItem item = (SlimefunItem) component;
+            long oldCharge = component.getChargeLong(loc);
 
             if (remainingEnergy > 0) {
                 long capacity = component.getCapacityLong();
@@ -235,6 +250,42 @@ public class EnergyNet extends Network implements HologramOwner {
                 }
             } else {
                 component.setCharge(loc, 0L);
+            }
+            
+            // 计算充放电量
+            long newCharge = component.getChargeLong(loc);
+            long chargeDiff = Math.abs(newCharge - oldCharge);
+            long capacity = component.getCapacityLong();
+            
+            if (capacity > 0 && chargeDiff > 0) {
+                // 获取当前计数器值
+                double chargeCounter = 0.0;
+                String counterValue = data.getData("machine_damage_charge_counter");
+                if (counterValue != null) {
+                    try {
+                        chargeCounter = Double.parseDouble(counterValue);
+                    } catch (NumberFormatException e) {
+                        chargeCounter = 0.0;
+                    }
+                }
+                
+                // 累加充放电量
+                chargeCounter += chargeDiff;
+                
+                // 计算电容量的1%
+                double capacityPercent = capacity * 0.01;
+                
+                // 当累计充放电量达到电容量的1%时执行报废检查
+                if (chargeCounter >= capacityPercent) {
+                    // 处理机器损坏 - 电容充放电时尝试触发报废检查
+                    Slimefun.getMachineDamageService().processMachineWork(loc, item);
+                    
+                    // 计数器减少电容量的1%
+                    chargeCounter -= capacityPercent;
+                }
+                
+                // 保存计数器值
+                data.setData("machine_damage_charge_counter", String.valueOf(chargeCounter));
             }
         }
 
@@ -278,6 +329,11 @@ public class EnergyNet extends Network implements HologramOwner {
                 if (data == null || data.isPendingRemove()) {
                     continue;
                 }
+                
+                // 检查机器是否损坏，如果损坏则跳过处理
+                if (Slimefun.getMachineDamageService().isMachineDamaged(data)) {
+                    continue;
+                }
 
                 if (!item.getId().equals(data.getSfId())) {
                     var newItem = SlimefunItem.getById(data.getSfId());
@@ -309,6 +365,8 @@ public class EnergyNet extends Network implements HologramOwner {
                     });
                 } else {
                     supply = NumberUtils.flowSafeAddition(supply, energy);
+                    // 处理机器损坏 - 发电机工作时尝试触发报废检查
+                    Slimefun.getMachineDamageService().processMachineWork(loc, item);
                 }
             } catch (Exception | LinkageError throwable) {
                 explodedBlocks.add(loc);
@@ -331,6 +389,12 @@ public class EnergyNet extends Network implements HologramOwner {
         long supply = 0;
 
         for (Map.Entry<Location, EnergyNetComponent> entry : capacitors.entrySet()) {
+            Location loc = entry.getKey();
+            var data = StorageCacheUtils.getDataContainer(loc);
+            // 检查电容是否损坏，如果损坏则跳过处理
+            if (data == null || Slimefun.getMachineDamageService().isMachineDamaged(data)) {
+                continue;
+            }
             supply = NumberUtils.flowSafeAddition(supply, entry.getValue().getChargeLong(entry.getKey()));
         }
 

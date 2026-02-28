@@ -116,6 +116,17 @@ public class SlimefunItemInteractListener implements Listener {
 
         if (optional.isPresent()) {
             SlimefunItem sfItem = optional.get();
+            
+            // 检查机器是否损坏
+            if (event.getClickedBlock().isPresent()) {
+                var location = event.getClickedBlock().get().getLocation();
+                var blockData = StorageCacheUtils.getDataContainer(location);
+                if (blockData != null && Slimefun.getMachineDamageService().isMachineDamaged(blockData)) {
+                    event.getPlayer().sendMessage("§c机器损坏！无法交互");
+                    event.getInteractEvent().setCancelled(true);
+                    return false;
+                }
+            }
 
             if (!sfItem.canUse(event.getPlayer(), true)) {
                 event.getInteractEvent().setCancelled(true);

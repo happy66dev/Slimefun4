@@ -20,6 +20,7 @@ import io.github.thebusybiscuit.slimefun4.core.SlimefunRegistry;
 import io.github.thebusybiscuit.slimefun4.core.commands.SlimefunCommand;
 import io.github.thebusybiscuit.slimefun4.core.config.SlimefunConfigManager;
 import io.github.thebusybiscuit.slimefun4.core.config.SlimefunDatabaseManager;
+import io.github.thebusybiscuit.slimefun4.core.config.SlimefunMachineDamageManager;
 import io.github.thebusybiscuit.slimefun4.core.networks.NetworkManager;
 import io.github.thebusybiscuit.slimefun4.core.services.AnalyticsService;
 import io.github.thebusybiscuit.slimefun4.core.services.AutoSavingService;
@@ -28,6 +29,7 @@ import io.github.thebusybiscuit.slimefun4.core.services.BlockDataService;
 import io.github.thebusybiscuit.slimefun4.core.services.CustomItemDataService;
 import io.github.thebusybiscuit.slimefun4.core.services.CustomTextureService;
 import io.github.thebusybiscuit.slimefun4.core.services.LocalizationService;
+import io.github.thebusybiscuit.slimefun4.core.services.MachineDamageService;
 import io.github.thebusybiscuit.slimefun4.core.services.MetricsService;
 import io.github.thebusybiscuit.slimefun4.core.services.MinecraftRecipeService;
 import io.github.thebusybiscuit.slimefun4.core.services.PerWorldSettingsService;
@@ -46,6 +48,8 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.tools.GrapplingHo
 import io.github.thebusybiscuit.slimefun4.implementation.items.weapons.SeismicAxe;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.AncientAltarListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.AutoCrafterListener;
+import io.github.thebusybiscuit.slimefun4.implementation.listeners.MachineDamageListener;
+import io.github.thebusybiscuit.slimefun4.implementation.listeners.MachineDamageNotificationListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.BackpackListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.BeeWingsListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.BlockListener;
@@ -215,11 +219,13 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     // Important config files for Slimefun
     private final Config items = new Config(this, "Items.yml");
     private final Config researches = new Config(this, "Researches.yml");
+    private SlimefunMachineDamageManager machineDamageManager;
 
     // Listeners that need to be accessed elsewhere
     private final GrapplingHookListener grapplingHookListener = new GrapplingHookListener();
     private final BackpackListener backpackListener = new BackpackListener();
     private final SlimefunBowListener bowListener = new SlimefunBowListener();
+    private MachineDamageService machineDamageService;
 
     /**
      * Our default constructor for {@link Slimefun}.
@@ -325,6 +331,11 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         // Load various config settings into our cache
         cfgManager.load();
         registry.load(this);
+        
+        // 初始化机器损坏管理器
+        machineDamageManager = new SlimefunMachineDamageManager(this);
+        machineDamageService = new MachineDamageService(this);
+        machineDamageService.start();
 
         logger.log(Level.INFO, "正在加载数据库...");
         if (PlayerProfileMigrator.getInstance().hasOldData()
@@ -482,6 +493,11 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
 
         SlimefunExtended.shutdown();
         getSQLProfiler().shutdown();
+        
+        // 停止机器损坏服务
+        if (machineDamageService != null) {
+            machineDamageService.stop();
+        }
 
         // Cancel all tasks from this plugin immediately
         Bukkit.getScheduler().cancelTasks(this);
@@ -743,6 +759,11 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
 
         // Clear the Slimefun Guide History upon Player Leaving
         new PlayerProfileListener(this);
+        
+        // Machine damage listener for item lore updates
+        new MachineDamageListener(this);
+        // Machine damage notification listener for player notifications
+        new MachineDamageNotificationListener(this);
     }
 
     /**
@@ -952,6 +973,28 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     public static @Nonnull NetworkManager getNetworkManager() {
         validateInstance();
         return instance.networkManager;
+    }
+    
+    /**
+     * This returns our {@link SlimefunMachineDamageManager} which is responsible
+     * for managing machine damage configurations.
+     *
+     * @return Our {@link SlimefunMachineDamageManager} instance
+     */
+    public static @Nonnull SlimefunMachineDamageManager getMachineDamageManager() {
+        validateInstance();
+        return instance.machineDamageManager;
+    }
+    
+    /**
+     * This returns our {@link MachineDamageService} which is responsible
+     * for handling machine damage logic.
+     *
+     * @return Our {@link MachineDamageService} instance
+     */
+    public static @Nonnull MachineDamageService getMachineDamageService() {
+        validateInstance();
+        return instance.machineDamageService;
     }
 
     /**

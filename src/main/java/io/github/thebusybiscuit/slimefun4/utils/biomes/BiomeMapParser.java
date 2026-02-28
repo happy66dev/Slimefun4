@@ -157,7 +157,8 @@ public class BiomeMapParser<T> {
         }
     }
 
-    private @Nonnull Set<Biome> readBiomes(@Nonnull JsonArray array) throws BiomeMapException {
+    @Nonnull
+    private Set<Biome> readBiomes(@Nonnull JsonArray array) throws BiomeMapException {
         Validate.notNull(array, "The JSON array should not be null!");
         Set<Biome> biomes = new HashSet<>();
 
