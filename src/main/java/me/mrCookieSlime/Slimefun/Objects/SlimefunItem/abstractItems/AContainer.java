@@ -380,6 +380,8 @@ public abstract class AContainer extends SlimefunItem
 
         if (currentOperation != null) {
             if (takeCharge(b.getLocation())) {
+                // 处理机器损坏 - 用电器工作时尝试触发报废检查
+                Slimefun.getMachineDamageService().processMachineWork(b.getLocation(), this);
 
                 if (!currentOperation.isFinished()) {
                     processor.updateProgressBar(inv, 22, currentOperation);

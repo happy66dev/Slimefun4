@@ -363,6 +363,9 @@ public class MachineDamageService {
 
         var config = damageManager.getMachineConfig(item.getId());
         double maxChance = config.getMaxDamageChance();
+        boolean enabled = config.isEnabled();
+        double scale = config.getDamageChanceScale();
+        double exponent = config.getDamageChanceExponent();
 
         StringBuilder info = new StringBuilder();
         info.append("§a机器名称: §f").append(item.getItemName()).append("\n");
@@ -370,6 +373,13 @@ public class MachineDamageService {
         info.append("§a当前报废几率: §f").append(String.format("%.6f%%", damageChance * 100)).append("\n");
         info.append("§a最大报废几率: §f").append(String.format("%.6f%%", maxChance * 100)).append("\n");
         info.append("§a状态: §f").append(isDamaged ? "已损坏" : (isEnabled ? "正常运行" : "已停止")).append("\n");
+        info.append("§a损坏机制: §f").append(enabled ? "启用" : "禁用").append("\n");
+        if (enabled) {
+            info.append("§a缩放倍率: §f").append(String.format("%.8f", scale)).append("\n");
+            info.append("§a增长指数: §f").append(String.format("%.2f", exponent)).append("\n");
+            info.append("§a增长公式: §f缩放倍率 × (工作刻或电容充放电/电容量*100^增长指数)").append("\n");
+        }
+        info.append("§a物品lore显示: §c已注释化").append("\n");
 
         // 添加修复物品信息
         if (isDamaged) {

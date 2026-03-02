@@ -276,7 +276,8 @@ public class EnergyNet extends Network implements HologramOwner {
                 double capacityPercent = capacity * 0.01;
                 
                 // 当累计充放电量达到电容量的1%时执行报废检查
-                if (chargeCounter >= capacityPercent) {
+                // 使用循环处理充放电量大于1%容量的情况
+                while (chargeCounter >= capacityPercent) {
                     // 处理机器损坏 - 电容充放电时尝试触发报废检查
                     Slimefun.getMachineDamageService().processMachineWork(loc, item);
                     
@@ -349,11 +350,14 @@ public class EnergyNet extends Network implements HologramOwner {
                     continue;
                 }
 
-                long energy = provider.getGeneratedOutputLong(loc, data);
-
+                long generatedEnergy = provider.getGeneratedOutputLong(loc, data);
+                long storedEnergy = 0;
+                
                 if (provider.isChargeable()) {
-                    energy = NumberUtils.flowSafeAddition(energy, (long) provider.getChargeLong(loc));
+                    storedEnergy = provider.getChargeLong(loc);
                 }
+                
+                long totalEnergy = NumberUtils.flowSafeAddition(generatedEnergy, storedEnergy);
 
                 if (provider.willExplode(loc, data)) {
                     explodedBlocks.add(loc);
@@ -364,9 +368,11 @@ public class EnergyNet extends Network implements HologramOwner {
                         loc.getWorld().createExplosion(loc, 0F, false);
                     });
                 } else {
-                    supply = NumberUtils.flowSafeAddition(supply, energy);
-                    // 处理机器损坏 - 发电机工作时尝试触发报废检查
-                    Slimefun.getMachineDamageService().processMachineWork(loc, item);
+                    supply = NumberUtils.flowSafeAddition(supply, totalEnergy);
+                    // 处理机器损坏 - 只有当发电机实际产生能量时才触发报废检查
+                    if (generatedEnergy > 0) {
+                        Slimefun.getMachineDamageService().processMachineWork(loc, item);
+                    }
                 }
             } catch (Exception | LinkageError throwable) {
                 explodedBlocks.add(loc);

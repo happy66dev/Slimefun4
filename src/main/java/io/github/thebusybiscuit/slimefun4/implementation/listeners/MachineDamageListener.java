@@ -58,6 +58,8 @@ public class MachineDamageListener implements Listener {
     }
 
     private void updateItemLore(ItemStack item) {
+        // 物品lore显示损坏机制的功能已被注释化
+        /*
         SlimefunItem slimefunItem = SlimefunItem.getByItem(item);
         if (slimefunItem instanceof EnergyNetComponent component) {
 
@@ -97,6 +99,7 @@ public class MachineDamageListener implements Listener {
                 }
             }
         }
+        */
     }
 
     private final java.util.Set<String> interactedBlocks = new java.util.HashSet<>();
