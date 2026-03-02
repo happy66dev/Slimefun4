@@ -94,11 +94,8 @@ public class MachineDamageService {
         long workTicks = getWorkTicks(data) + 1;
         data.setData(WORK_TICKS_KEY, String.valueOf(workTicks));
 
-        // 计算当前损坏概率 (次方增长)
-        double damageChance = Math.min(
-            config.getDamageChanceScale() * Math.pow(workTicks, config.getDamageChanceExponent()),
-            config.getMaxDamageChance()
-        );
+        // 计算当前损坏概率
+        double damageChance = calculateDamageRate(workTicks);
         data.setData(DAMAGE_CHANCE_KEY, String.valueOf(damageChance));
 
         // 检测是否损坏
@@ -342,6 +339,28 @@ public class MachineDamageService {
         }
     }
 
+    /** 
+      * 计算机器在连续工作指定粘液刻数后的损坏概率（每个粘液刻独立判定）。 
+      * 公式设计目标：平均工作寿命约为 500,000 粘液刻。 
+      * 
+      * @param continuousTicks 当前连续工作的粘液刻数（从1开始） 
+      * @return 损坏概率（介于 0 到 1 之间的 double 值） 
+      */ 
+     public static double calculateDamageRate(long continuousTicks) { 
+         // 常量定义 
+         final double A = 7.5e-6;          // 最大损坏率渐近值 
+         final double B = 2.5e11;          // 半饱和参数，控制曲线形状 
+         
+         // 将 ticks 转换为 double 进行计算，避免整数溢出 
+         double ticks = (double) continuousTicks; 
+         
+         // 应用公式：rate = A * (ticks^2) / (B + ticks^2) 
+         double ticksSquared = ticks * ticks; 
+         double rate = A * ticksSquared / (B + ticksSquared); 
+         
+         return rate; 
+     } 
+
     public String getMachineInfo(@Nonnull Location location, @Nonnull SlimefunItem item) {
         var data = StorageCacheUtils.getDataContainer(location);
         if (data == null) {
@@ -362,24 +381,14 @@ public class MachineDamageService {
         }
 
         var config = damageManager.getMachineConfig(item.getId());
-        double maxChance = config.getMaxDamageChance();
         boolean enabled = config.isEnabled();
-        double scale = config.getDamageChanceScale();
-        double exponent = config.getDamageChanceExponent();
 
         StringBuilder info = new StringBuilder();
         info.append("§a机器名称: §f").append(item.getItemName()).append("\n");
         info.append("§a工作刻数: §f").append(workTicks).append("\n");
-        info.append("§a当前报废几率: §f").append(String.format("%.6f%%", damageChance * 100)).append("\n");
-        info.append("§a最大报废几率: §f").append(String.format("%.6f%%", maxChance * 100)).append("\n");
+        info.append("§a当前报废几率: §f").append(String.format("%.10f%%", damageChance * 100)).append("\n");
         info.append("§a状态: §f").append(isDamaged ? "已损坏" : (isEnabled ? "正常运行" : "已停止")).append("\n");
         info.append("§a损坏机制: §f").append(enabled ? "启用" : "禁用").append("\n");
-        if (enabled) {
-            info.append("§a缩放倍率: §f").append(String.format("%.8f", scale)).append("\n");
-            info.append("§a增长指数: §f").append(String.format("%.2f", exponent)).append("\n");
-            info.append("§a增长公式: §f缩放倍率 × (工作刻或电容充放电/电容量*100^增长指数)").append("\n");
-        }
-        info.append("§a物品lore显示: §c已注释化").append("\n");
 
         // 添加修复物品信息
         if (isDamaged) {
