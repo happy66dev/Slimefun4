@@ -27,10 +27,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ThreadLocalRandom;
-import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
+import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
@@ -65,7 +65,7 @@ public class BlockListener implements Listener {
     private static final BlockFace[] CARDINAL_BLOCKFACES = new BlockFace[] {
         BlockFace.WEST, BlockFace.EAST, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.DOWN, BlockFace.UP
     };
-    
+
     // 存储玩家第一次挖掘损坏机器的时间戳
     private final Map<Player, Map<Location, Long>> damagedMachineBreakAttempts = new HashMap<>();
 
@@ -99,11 +99,13 @@ public class BlockListener implements Listener {
 
                 // 清理机器数据和处理器数据
                 Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
-                
+
                 // 清理处理器操作数据
-                if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                if (sfItem
+                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
                     container.getMachineProcessor().endOperation(block);
-                } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                } else if (sfItem
+                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
                     generator.getMachineProcessor().endOperation(block);
                 }
 
@@ -118,12 +120,14 @@ public class BlockListener implements Listener {
             var blockData = StorageCacheUtils.getDataContainer(loc);
             if (blockData != null) {
                 Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
-                
+
                 // 清理处理器操作数据
                 SlimefunItem sfItem = SlimefunItem.getById(blockData.getSfId());
-                if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                if (sfItem
+                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
                     container.getMachineProcessor().endOperation(block);
-                } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                } else if (sfItem
+                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
                     generator.getMachineProcessor().endOperation(block);
                 }
             }
@@ -176,13 +180,17 @@ public class BlockListener implements Listener {
                                 .getBlockDataController()
                                 .createUniversalBlock(block.getLocation(), sfItem.getId());
                         // 存储放置玩家的UUID
-                        universalBlock.setData("machine_owner_uuid", e.getPlayer().getUniqueId().toString());
+                        universalBlock.setData(
+                                "machine_owner_uuid",
+                                e.getPlayer().getUniqueId().toString());
                     } else {
                         var blockData = Slimefun.getDatabaseManager()
                                 .getBlockDataController()
                                 .createBlock(block.getLocation(), sfItem.getId());
                         // 存储放置玩家的UUID
-                        blockData.setData("machine_owner_uuid", e.getPlayer().getUniqueId().toString());
+                        blockData.setData(
+                                "machine_owner_uuid",
+                                e.getPlayer().getUniqueId().toString());
                     }
 
                     sfItem.callItemHandler(BlockPlaceHandler.class, handler -> handler.onPlayerPlace(e));
@@ -209,7 +217,7 @@ public class BlockListener implements Listener {
         var location = block.getLocation();
         var blockData = StorageCacheUtils.getDataContainer(location);
         var sfItem = blockData == null ? null : SlimefunItem.getById(blockData.getSfId());
-        
+
         // 处理损坏机器的挖掘逻辑
         if (blockData != null && Slimefun.getMachineDamageService().isMachineDamaged(blockData)) {
             if (e.getPlayer() != null) {
@@ -219,7 +227,7 @@ public class BlockListener implements Listener {
                 Map<Location, Long> playerAttempts = damagedMachineBreakAttempts.get(player);
                 Long lastAttemptTime = playerAttempts.get(location);
                 long currentTime = System.currentTimeMillis();
-                
+
                 if (lastAttemptTime == null) {
                     // 第一次挖掘，提示玩家
                     e.setCancelled(true);
@@ -233,10 +241,16 @@ public class BlockListener implements Listener {
                     BlockMenu inv = StorageCacheUtils.getMenu(location);
                     if (inv != null) {
                         // 尝试获取所有可能的 slots 并掉落内容物
-                        if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                        if (sfItem
+                                instanceof
+                                me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer
+                                container) {
                             inv.dropItems(location, container.getInputSlots());
                             inv.dropItems(location, container.getOutputSlots());
-                        } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                        } else if (sfItem
+                                instanceof
+                                me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator
+                                generator) {
                             inv.dropItems(location, generator.getInputSlots());
                             inv.dropItems(location, generator.getOutputSlots());
                         } else {
@@ -251,9 +265,15 @@ public class BlockListener implements Listener {
                         }
                     }
                     // 清理处理器操作数据
-                    if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                    if (sfItem
+                            instanceof
+                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer
+                            container) {
                         container.getMachineProcessor().endOperation(block);
-                    } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                    } else if (sfItem
+                            instanceof
+                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator
+                            generator) {
                         generator.getMachineProcessor().endOperation(block);
                     }
                     // 移除机器数据
@@ -278,10 +298,16 @@ public class BlockListener implements Listener {
                 BlockMenu inv = StorageCacheUtils.getMenu(location);
                 if (inv != null) {
                     // 尝试获取所有可能的 slots 并掉落内容物
-                    if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                    if (sfItem
+                            instanceof
+                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer
+                            container) {
                         inv.dropItems(location, container.getInputSlots());
                         inv.dropItems(location, container.getOutputSlots());
-                    } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                    } else if (sfItem
+                            instanceof
+                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator
+                            generator) {
                         inv.dropItems(location, generator.getInputSlots());
                         inv.dropItems(location, generator.getOutputSlots());
                     } else {
@@ -296,7 +322,8 @@ public class BlockListener implements Listener {
                     }
                 }
                 // 清理处理器操作数据
-                if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                if (sfItem
+                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
                     container.getMachineProcessor().endOperation(block);
                 }
                 // 移除机器数据
@@ -311,7 +338,7 @@ public class BlockListener implements Listener {
         // If there is a Slimefun Block here, call our BreakEvent and, if cancelled, cancel this event
         // and return
         if (blockData != null) {
-            SlimefunBlockBreakEvent breakEvent = 
+            SlimefunBlockBreakEvent breakEvent =
                     new SlimefunBlockBreakEvent(e.getPlayer(), heldItem, e.getBlock(), sfItem);
             Bukkit.getPluginManager().callEvent(breakEvent);
 
@@ -402,10 +429,12 @@ public class BlockListener implements Listener {
             BlockMenu inv = StorageCacheUtils.getMenu(loc);
             if (inv != null) {
                 // 尝试获取所有可能的 slots 并掉落内容物
-                if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+                if (sfItem
+                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
                     inv.dropItems(loc, container.getInputSlots());
                     inv.dropItems(loc, container.getOutputSlots());
-                } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+                } else if (sfItem
+                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
                     inv.dropItems(loc, generator.getInputSlots());
                     inv.dropItems(loc, generator.getOutputSlots());
                 } else {
@@ -423,13 +452,14 @@ public class BlockListener implements Listener {
             // 清理处理器操作数据
             if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
                 container.getMachineProcessor().endOperation(e.getBlock());
-            } else if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+            } else if (sfItem
+                    instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
                 generator.getMachineProcessor().endOperation(e.getBlock());
             }
 
             drops.addAll(sfItem.getDrops());
             Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
-            
+
             // 移除机器上方的悬浮字
             Location hologramLocation = loc.clone().add(0, 1.5, 0);
             Slimefun.getHologramsService().removeHologram(hologramLocation);

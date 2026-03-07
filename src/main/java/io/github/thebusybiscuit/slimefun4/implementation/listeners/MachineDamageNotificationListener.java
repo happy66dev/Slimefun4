@@ -2,7 +2,6 @@ package io.github.thebusybiscuit.slimefun4.implementation.listeners;
 
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
-import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.services.MachineDamageService;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -66,13 +65,18 @@ public class MachineDamageNotificationListener implements Listener {
         // 由于 loadedUniversalData 是私有字段，我们需要通过其他方式获取通用方块数据
         // 暂时注释掉这部分，因为需要修改 BlockDataController 来提供访问方法
         // for (var universalData : controller.loadedUniversalData.values()) {
-        //     if (universalData instanceof com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunUniversalBlockData ubd) {
+        //     if (universalData instanceof
+        // com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunUniversalBlockData ubd) {
         //         checkMachineDamage(ubd, player, playerUUID, damageService);
         //     }
         // }
     }
 
-    private void checkMachineDamage(ASlimefunDataContainer data, org.bukkit.entity.Player player, String playerUUID, MachineDamageService damageService) {
+    private void checkMachineDamage(
+            ASlimefunDataContainer data,
+            org.bukkit.entity.Player player,
+            String playerUUID,
+            MachineDamageService damageService) {
         if (!data.isDataLoaded()) {
             return;
         }
@@ -92,7 +96,8 @@ public class MachineDamageNotificationListener implements Listener {
             if (data instanceof SlimefunBlockData blockData) {
                 item = SlimefunItem.getById(blockData.getSfId());
                 location = blockData.getLocation();
-            } else if (data instanceof com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunUniversalBlockData ubd) {
+            } else if (data
+                    instanceof com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunUniversalBlockData ubd) {
                 item = SlimefunItem.getById(ubd.getSfId());
                 if (ubd.getLastPresent() != null) {
                     location = ubd.getLastPresent().toLocation();
@@ -100,14 +105,33 @@ public class MachineDamageNotificationListener implements Listener {
             }
 
             if (item != null && location != null) {
-                // 获取修复物品
-                var repairItem = damageService.getRepairItem(data);
-                if (repairItem != null) {
-                    String itemName = repairItem.getItemMeta() != null && repairItem.getItemMeta().getDisplayName() != null && !repairItem.getItemMeta().getDisplayName().isEmpty() ? repairItem.getItemMeta().getDisplayName() : city.norain.slimefun4.utils.LocalizationUtils.getItemName(repairItem.getType());
+                // 获取修复物品列表
+                var repairItems = damageService.getRepairItems(data);
+                if (!repairItems.isEmpty()) {
                     player.sendMessage("§c你的机器损坏了！");
                     player.sendMessage("§c机器名称: §f" + item.getItemName());
-                    player.sendMessage("§c位置: §f" + getFriendlyWorldName(location.getWorld().getName()) + " (" + location.getBlockX() + ", " + location.getBlockY() + ", " + location.getBlockZ() + ")");
-                    player.sendMessage("§c需要的修复物品: §f" + repairItem.getAmount() + "x " + itemName);
+                    player.sendMessage("§c位置: §f"
+                            + getFriendlyWorldName(location.getWorld().getName()) + " (" + location.getBlockX() + ", "
+                            + location.getBlockY() + ", " + location.getBlockZ() + ")");
+                    player.sendMessage("§c需要以下修复物品:");
+                    for (var itemInfo : repairItems) {
+                        org.bukkit.inventory.ItemStack itemStack = (org.bukkit.inventory.ItemStack) itemInfo.get("item");
+                        Integer submitted = (Integer) itemInfo.get("submitted");
+                        
+                        if (itemStack != null) {
+                            String itemName = itemStack.getItemMeta() != null
+                                    && itemStack.getItemMeta().getDisplayName() != null
+                                    && !itemStack.getItemMeta().getDisplayName().isEmpty()
+                                    ? itemStack.getItemMeta().getDisplayName()
+                                    : city.norain.slimefun4.utils.LocalizationUtils.getItemName(itemStack.getType());
+                            
+                            if (submitted != null && submitted > 0) {
+                                player.sendMessage("§a✓ " + itemName + " (已提交: " + submitted + "/1)");
+                            } else {
+                                player.sendMessage("§c✗ " + itemName + " (需要: 1)");
+                            }
+                        }
+                    }
                 }
             }
         }

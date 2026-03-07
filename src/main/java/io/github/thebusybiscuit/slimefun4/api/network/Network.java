@@ -31,14 +31,14 @@ public abstract class Network {
     /**
      * Our {@link NetworkManager} instance.
      */
-    private final NetworkManager manager;
+    protected final NetworkManager manager;
 
     /**
      * The {@link Location} of the regulator of this {@link Network}.
      */
     protected Location regulator;
 
-    private final Queue<Location> nodeQueue = new ArrayDeque<>();
+    protected final Queue<Location> nodeQueue = new ArrayDeque<>();
     protected final Set<Location> connectedLocations = new HashSet<>();
     protected final Set<Location> regulatorNodes = new HashSet<>();
     protected final Set<Location> connectorNodes = new HashSet<>();

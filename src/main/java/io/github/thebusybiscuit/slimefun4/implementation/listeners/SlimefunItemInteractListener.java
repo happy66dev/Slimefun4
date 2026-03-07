@@ -116,7 +116,7 @@ public class SlimefunItemInteractListener implements Listener {
 
         if (optional.isPresent()) {
             SlimefunItem sfItem = optional.get();
-            
+
             // 检查机器是否损坏
             if (event.getClickedBlock().isPresent()) {
                 var location = event.getClickedBlock().get().getLocation();

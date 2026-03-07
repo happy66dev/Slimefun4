@@ -369,7 +369,7 @@ public class BlockDataController extends ADataController {
         if (menu != null) {
             menu.lock();
         }
-        
+
         // 从数据库中删除方块数据
         removeBlockDirectly(l);
     }

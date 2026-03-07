@@ -62,8 +62,7 @@ public class BiomeMap<T> implements Keyed {
         this.namespacedKey = namespacedKey;
     }
 
-    @Nullable
-    public T get(@Nonnull Biome biome) {
+    @Nullable public T get(@Nonnull Biome biome) {
         Validate.notNull(biome, "The biome shall not be null.");
 
         return dataMap.get(biome);
@@ -140,8 +139,8 @@ public class BiomeMap<T> implements Keyed {
     }
 
     @Nonnull
-    public static <T> BiomeMap<T> fromJson(
-            NamespacedKey key, String json, BiomeDataConverter<T> valueConverter) throws BiomeMapException {
+    public static <T> BiomeMap<T> fromJson(NamespacedKey key, String json, BiomeDataConverter<T> valueConverter)
+            throws BiomeMapException {
         // All parameters are validated by the Parser.
         BiomeMapParser<T> parser = new BiomeMapParser<>(key, valueConverter);
         parser.read(json);

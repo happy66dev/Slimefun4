@@ -15,8 +15,8 @@ import io.github.thebusybiscuit.slimefun4.core.attributes.MachineProcessHolder;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineProcessor;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
-import io.github.thebusybiscuit.slimefun4.implementation.handlers.SimpleBlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import io.github.thebusybiscuit.slimefun4.implementation.handlers.SimpleBlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.implementation.operations.CraftingOperation;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
@@ -374,7 +374,7 @@ public abstract class AContainer extends SlimefunItem
         if (data != null && Slimefun.getMachineDamageService().isMachineDamaged(data)) {
             return;
         }
-        
+
         BlockMenu inv = StorageCacheUtils.getMenu(b.getLocation());
         CraftingOperation currentOperation = processor.getOperation(b);
 

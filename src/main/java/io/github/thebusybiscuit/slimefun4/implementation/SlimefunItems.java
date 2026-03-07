@@ -1673,7 +1673,7 @@ public final class SlimefunItems {
             LoreBuilder.machine(MachineTier.MEDIUM, MachineType.GENERATOR),
             LoreBuilder.powerBuffer(0),
             LoreBuilder.powerPerSecond(8),
-            " (日间)"  );
+            " (日间)");
     public static final SlimefunItemStack SOLAR_GENERATOR_3 = new SlimefunItemStack(
             "SOLAR_GENERATOR_3",
             Material.DAYLIGHT_DETECTOR,
@@ -2324,6 +2324,46 @@ public final class SlimefunItems {
             "ENERGY_CONNECTOR",
             HeadTexture.ENERGY_CONNECTOR,
             "&c能源连接器",
+            LoreBuilder.range(6),
+            "",
+            "&f用于连接机器和发电机",
+            "&f可以连接到附近的能源网络");
+    public static final SlimefunItemStack BASIC_ENERGY_CONNECTOR = new SlimefunItemStack(
+            "BASIC_ENERGY_CONNECTOR",
+            Material.WHITE_CONCRETE,
+            "&f简易能源连接器",
+            LoreBuilder.range(6),
+            "",
+            "&f用于连接机器和发电机",
+            "&f可以连接到附近的能源网络");
+    public static final SlimefunItemStack POWERFUL_ENERGY_CONNECTOR = new SlimefunItemStack(
+            "POWERFUL_ENERGY_CONNECTOR",
+            Material.RED_CONCRETE,
+            "&c大功率能源连接器",
+            LoreBuilder.range(6),
+            "",
+            "&f用于连接机器和发电机",
+            "&f可以连接到附近的能源网络");
+    public static final SlimefunItemStack GILDED_ENERGY_CONNECTOR = new SlimefunItemStack(
+            "GILDED_ENERGY_CONNECTOR",
+            Material.YELLOW_CONCRETE,
+            "&6镶金能源连接器",
+            LoreBuilder.range(6),
+            "",
+            "&f用于连接机器和发电机",
+            "&f可以连接到附近的能源网络");
+    public static final SlimefunItemStack REINFORCED_ENERGY_CONNECTOR = new SlimefunItemStack(
+            "REINFORCED_ENERGY_CONNECTOR",
+            Material.BLUE_CONCRETE,
+            "&b强化能源连接器",
+            LoreBuilder.range(6),
+            "",
+            "&f用于连接机器和发电机",
+            "&f可以连接到附近的能源网络");
+    public static final SlimefunItemStack CARBONADO_ENERGY_CONNECTOR = new SlimefunItemStack(
+            "CARBONADO_ENERGY_CONNECTOR",
+            Material.BLACK_CONCRETE,
+            "&8黑钻能源连接器",
             LoreBuilder.range(6),
             "",
             "&f用于连接机器和发电机",

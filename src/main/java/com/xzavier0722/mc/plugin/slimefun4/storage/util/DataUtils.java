@@ -30,7 +30,8 @@ public class DataUtils {
         try {
             // 使用 Bukkit 的内置序列化方法
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            org.bukkit.util.io.BukkitObjectOutputStream bukkitOutputStream = new org.bukkit.util.io.BukkitObjectOutputStream(outputStream);
+            org.bukkit.util.io.BukkitObjectOutputStream bukkitOutputStream =
+                    new org.bukkit.util.io.BukkitObjectOutputStream(outputStream);
             bukkitOutputStream.writeObject(itemStack);
             bukkitOutputStream.close();
             byte[] bytes = outputStream.toByteArray();
@@ -69,7 +70,8 @@ public class DataUtils {
             byte[] bytes = Base64.getDecoder().decode(base64Str);
             // 使用 Bukkit 的内置反序列化方法
             ByteArrayInputStream inputStream = new ByteArrayInputStream(bytes);
-            org.bukkit.util.io.BukkitObjectInputStream bukkitInputStream = new org.bukkit.util.io.BukkitObjectInputStream(inputStream);
+            org.bukkit.util.io.BukkitObjectInputStream bukkitInputStream =
+                    new org.bukkit.util.io.BukkitObjectInputStream(inputStream);
             var result = (ItemStack) bukkitInputStream.readObject();
             bukkitInputStream.close();
 

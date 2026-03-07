@@ -49,20 +49,20 @@ public class Research implements Keyed {
     private double moneyCost;
     private List<SlimefunItem> needUnlockedItems = new ArrayList<>();
     private int farmingLevelNeed;
-    //axe use
+    // axe use
     private int foragingLevelNeed;
     private int miningLevelNeed;
     private int fishingLevelNeed;
-    //shovel use
+    // shovel use
     private int excavationLevelNeed;
-    //bow use
+    // bow use
     private int archeryLevelNeed;
     private int defenseLevelNeed;
     private int fightingLevelNeed;
-    //敏捷
+    // 敏捷
     private int agilityLevelNeed;
     private int enchantingLevelNeed;
-    //药水
+    // 药水
     private int alchemyLevelNeed;
 
     public int getMiningLevelNeed() {
@@ -174,8 +174,7 @@ public class Research implements Keyed {
      *            The Cost in economy to unlock this {@link Research}
      *
      */
-    public Research(
-            @Nonnull NamespacedKey key, int id, @Nonnull String defaultName, int levelCost, double moneyCost) {
+    public Research(@Nonnull NamespacedKey key, int id, @Nonnull String defaultName, int levelCost, double moneyCost) {
         Validate.notNull(key, "A NamespacedKey must be provided");
         Validate.notNull(defaultName, "A default name must be specified");
 
@@ -227,10 +226,13 @@ public class Research implements Keyed {
      *
      * @return Whether this {@link Research} is enabled or not
      */
+    public void addNeedUnlockedItems(SlimefunItem item) {
+        needUnlockedItems.add(item);
+    }
 
-    public void addNeedUnlockedItems(SlimefunItem item) {needUnlockedItems.add(item);}
-
-    public void clearNeedUnlockedItems() {needUnlockedItems.clear();}
+    public void clearNeedUnlockedItems() {
+        needUnlockedItems.clear();
+    }
 
     public boolean isEnabled() {
         return Slimefun.getConfigManager().isResearchingEnabled() && enabled;
@@ -451,28 +453,30 @@ public class Research implements Keyed {
 
         Optional<PlayerProfile> profileOptional = PlayerProfile.find(p);
         boolean hasUnlockNeed = true;
-        if (!needUnlockedItems.isEmpty()) for (SlimefunItem item : needUnlockedItems) {
-            if (profileOptional.isPresent() && !profileOptional.get().hasUnlocked(item.getResearch()) && !item.isDisabled()) {
-                hasUnlockNeed = false;
-                break;
+        if (!needUnlockedItems.isEmpty())
+            for (SlimefunItem item : needUnlockedItems) {
+                if (profileOptional.isPresent()
+                        && !profileOptional.get().hasUnlocked(item.getResearch())
+                        && !item.isDisabled()) {
+                    hasUnlockNeed = false;
+                    break;
+                }
             }
-        }
 
         AuraSkillsApi skillApi = AuraSkillsApi.get();
         SkillsUser playerSkill = skillApi.getUser(p.getUniqueId());
 
         if (playerSkill.getSkillLevel(Skills.ARCHERY) < this.getArcheryLevelNeed()
-             || playerSkill.getSkillLevel(Skills.FARMING) < this.getFarmingLevelNeed()
-             || playerSkill.getSkillLevel(Skills.FIGHTING) < this.getFightingLevelNeed()
-             || playerSkill.getSkillLevel(Skills.FISHING) < this.getFishingLevelNeed()
-             || playerSkill.getSkillLevel(Skills.FORAGING) < this.getForagingLevelNeed()
-             || playerSkill.getSkillLevel(Skills.MINING) < this.getMiningLevelNeed()
-             || playerSkill.getSkillLevel(Skills.AGILITY) < this.getAgilityLevelNeed()
-             || playerSkill.getSkillLevel(Skills.DEFENSE) < this.getDefenseLevelNeed()
-             || playerSkill.getSkillLevel(Skills.EXCAVATION) < this.getExcavationLevelNeed()
-             || playerSkill.getSkillLevel(Skills.ALCHEMY) < this.getAlchemyLevelNeed()
-             || playerSkill.getSkillLevel(Skills.ENCHANTING) < this.getEnchantingLevelNeed()
-        ) {
+                || playerSkill.getSkillLevel(Skills.FARMING) < this.getFarmingLevelNeed()
+                || playerSkill.getSkillLevel(Skills.FIGHTING) < this.getFightingLevelNeed()
+                || playerSkill.getSkillLevel(Skills.FISHING) < this.getFishingLevelNeed()
+                || playerSkill.getSkillLevel(Skills.FORAGING) < this.getForagingLevelNeed()
+                || playerSkill.getSkillLevel(Skills.MINING) < this.getMiningLevelNeed()
+                || playerSkill.getSkillLevel(Skills.AGILITY) < this.getAgilityLevelNeed()
+                || playerSkill.getSkillLevel(Skills.DEFENSE) < this.getDefenseLevelNeed()
+                || playerSkill.getSkillLevel(Skills.EXCAVATION) < this.getExcavationLevelNeed()
+                || playerSkill.getSkillLevel(Skills.ALCHEMY) < this.getAlchemyLevelNeed()
+                || playerSkill.getSkillLevel(Skills.ENCHANTING) < this.getEnchantingLevelNeed()) {
             Slimefun.getLocalization().sendMessage(p, "messages.not-enough-skill", true);
             return false;
         }
@@ -482,7 +486,7 @@ public class Research implements Keyed {
             return false;
         }
 
-        if (!(creativeResearch || canUnlock)){
+        if (!(creativeResearch || canUnlock)) {
             Slimefun.getLocalization().sendMessage(p, "messages.not-enough-xp", true);
         }
         return creativeResearch || canUnlock;
@@ -551,17 +555,28 @@ public class Research implements Keyed {
 
         setLevelCost(Slimefun.getResearchCfg().getInt(path + ".levelCost"));
 
-        this.setMiningLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".miningLevelNeed"));
-        this.setAgilityLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".agilityLevelNeed"));
-        this.setAlchemyLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".alchemyLevelNeed"));
-        this.setArcheryLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".archeryLevelNeed"));
-        this.setDefenseLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".defenseLevelNeed"));
-        this.setEnchantingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".enchantingLevelNeed"));
-        this.setFarmingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".farmingLevelNeed"));
-        this.setFishingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".fishingLevelNeed"));
-        this.setForagingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".foragingLevelNeed"));
-        this.setExcavationLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".excavationLevelNeed"));
-        this.setFightingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".fightingLevelNeed"));
+        this.setMiningLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".miningLevelNeed"));
+        this.setAgilityLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".agilityLevelNeed"));
+        this.setAlchemyLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".alchemyLevelNeed"));
+        this.setArcheryLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".archeryLevelNeed"));
+        this.setDefenseLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".defenseLevelNeed"));
+        this.setEnchantingLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".enchantingLevelNeed"));
+        this.setFarmingLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".farmingLevelNeed"));
+        this.setFishingLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".fishingLevelNeed"));
+        this.setForagingLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".foragingLevelNeed"));
+        this.setExcavationLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".excavationLevelNeed"));
+        this.setFightingLevelNeed(
+                Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".fightingLevelNeed"));
 
         setMoneyCost(Slimefun.getResearchCfg().getInt(path + ".moneyCost"));
         enabled = true;

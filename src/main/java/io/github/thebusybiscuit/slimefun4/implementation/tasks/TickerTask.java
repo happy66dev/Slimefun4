@@ -108,7 +108,8 @@ public class TickerTask implements Runnable {
                         tickChunk(entry.getKey(), tickers, new HashSet<>(entry.getValue()));
                     } catch (Exception e) {
                         // 忽略关闭过程中的错误
-                        Slimefun.logger().log(Level.FINE, "Error during ticking while shutting down: {0}", e.getMessage());
+                        Slimefun.logger()
+                                .log(Level.FINE, "Error during ticking while shutting down: {0}", e.getMessage());
                     }
                 }
             }
@@ -119,7 +120,8 @@ public class TickerTask implements Runnable {
                     ticker.startNewTick();
                 } catch (Exception e) {
                     // 忽略关闭过程中的错误
-                    Slimefun.logger().log(Level.FINE, "Error starting new tick while shutting down: {0}", e.getMessage());
+                    Slimefun.logger()
+                            .log(Level.FINE, "Error starting new tick while shutting down: {0}", e.getMessage());
                 }
             }
 
@@ -241,7 +243,7 @@ public class TickerTask implements Runnable {
             if (Slimefun.getMachineDamageService().isMachineDamaged(data)) {
                 return;
             }
-            
+
             if (item.getBlockTicker().isUniversal()) {
                 if (data instanceof SlimefunUniversalData universalData) {
                     item.getBlockTicker().tick(l.getBlock(), item, universalData);

@@ -4438,6 +4438,14 @@ public final class SlimefunItemSetup {
 
         new EnergyConnector(
                         itemGroups.electricity,
+                        SlimefunItems.BASIC_ENERGY_CONNECTOR,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
+                        null)
+                .register(plugin);
+
+        new EnergyConnector(
+                        itemGroups.electricity,
                         SlimefunItems.ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {
@@ -4452,6 +4460,38 @@ public final class SlimefunItemSetup {
                             SlimefunItems.CARBON
                         },
                         new SlimefunItemStack(SlimefunItems.ENERGY_CONNECTOR, 8))
+                .register(plugin);
+
+        new EnergyConnector(
+                        itemGroups.electricity,
+                        SlimefunItems.POWERFUL_ENERGY_CONNECTOR,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
+                        null)
+                .register(plugin);
+
+        new EnergyConnector(
+                        itemGroups.electricity,
+                        SlimefunItems.GILDED_ENERGY_CONNECTOR,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
+                        null)
+                .register(plugin);
+
+        new EnergyConnector(
+                        itemGroups.electricity,
+                        SlimefunItems.REINFORCED_ENERGY_CONNECTOR,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
+                        null)
+                .register(plugin);
+
+        new EnergyConnector(
+                        itemGroups.electricity,
+                        SlimefunItems.CARBONADO_ENERGY_CONNECTOR,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
+                        null)
                 .register(plugin);
 
         new SlimefunItem(

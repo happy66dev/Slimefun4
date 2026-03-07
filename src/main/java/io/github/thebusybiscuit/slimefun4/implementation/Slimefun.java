@@ -48,8 +48,6 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.tools.GrapplingHo
 import io.github.thebusybiscuit.slimefun4.implementation.items.weapons.SeismicAxe;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.AncientAltarListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.AutoCrafterListener;
-import io.github.thebusybiscuit.slimefun4.implementation.listeners.MachineDamageListener;
-import io.github.thebusybiscuit.slimefun4.implementation.listeners.MachineDamageNotificationListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.BackpackListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.BeeWingsListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.BlockListener;
@@ -69,6 +67,8 @@ import io.github.thebusybiscuit.slimefun4.implementation.listeners.HopperListene
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.ItemDropListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.ItemPickupListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.JoinListener;
+import io.github.thebusybiscuit.slimefun4.implementation.listeners.MachineDamageListener;
+import io.github.thebusybiscuit.slimefun4.implementation.listeners.MachineDamageNotificationListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.MiddleClickListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.MiningAndroidListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.MultiBlockListener;
@@ -167,7 +167,6 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     /**
      * This is the instance of {@link AuraSkillsApi}
      */
-
     private static AuraSkillsApi auraSkills;
 
     /**
@@ -260,7 +259,7 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     @Override
     public void onEnable() {
         setInstance(this);
-        auraSkills  = AuraSkillsApi.get();
+        auraSkills = AuraSkillsApi.get();
 
         if (isUnitTest()) {
             // We handle Unit Tests seperately.
@@ -331,7 +330,7 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         // Load various config settings into our cache
         cfgManager.load();
         registry.load(this);
-        
+
         // 初始化机器损坏管理器
         machineDamageManager = new SlimefunMachineDamageManager(this);
         machineDamageService = new MachineDamageService(this);
@@ -493,7 +492,7 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
 
         SlimefunExtended.shutdown();
         getSQLProfiler().shutdown();
-        
+
         // 停止机器损坏服务
         if (machineDamageService != null) {
             machineDamageService.stop();
@@ -759,7 +758,7 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
 
         // Clear the Slimefun Guide History upon Player Leaving
         new PlayerProfileListener(this);
-        
+
         // Machine damage listener for item lore updates
         new MachineDamageListener(this);
         // Machine damage notification listener for player notifications
@@ -974,7 +973,7 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         validateInstance();
         return instance.networkManager;
     }
-    
+
     /**
      * This returns our {@link SlimefunMachineDamageManager} which is responsible
      * for managing machine damage configurations.
@@ -985,7 +984,7 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         validateInstance();
         return instance.machineDamageManager;
     }
-    
+
     /**
      * This returns our {@link MachineDamageService} which is responsible
      * for handling machine damage logic.

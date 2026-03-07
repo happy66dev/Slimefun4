@@ -137,27 +137,41 @@ public class SlimefunConfigManager {
                 int levelCost = researchesConfig.getInt(key.getNamespace() + '.' + key.getKey() + ".levelCost");
 
                 research.setLevelCost(levelCost);
-                research.setMoneyCost(researchesConfig.getDouble(key.getNamespace() + '.' + key.getKey() + ".moneyCost"));
+                research.setMoneyCost(
+                        researchesConfig.getDouble(key.getNamespace() + '.' + key.getKey() + ".moneyCost"));
 
-                research.setMiningLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".miningLevelNeed"));
-                research.setAgilityLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".agilityLevelNeed"));
-                research.setAlchemyLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".alchemyLevelNeed"));
-                research.setArcheryLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".archeryLevelNeed"));
-                research.setDefenseLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".defenseLevelNeed"));
-                research.setEnchantingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".enchantingLevelNeed"));
-                research.setFarmingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".farmingLevelNeed"));
-                research.setFishingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".fishingLevelNeed"));
-                research.setForagingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".foragingLevelNeed"));
-                research.setExcavationLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".excavationLevelNeed"));
-                research.setFightingLevelNeed(Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".fightingLevelNeed"));
+                research.setMiningLevelNeed(
+                        Slimefun.getResearchCfg().getInt(key.getNamespace() + '.' + key.getKey() + ".miningLevelNeed"));
+                research.setAgilityLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".agilityLevelNeed"));
+                research.setAlchemyLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".alchemyLevelNeed"));
+                research.setArcheryLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".archeryLevelNeed"));
+                research.setDefenseLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".defenseLevelNeed"));
+                research.setEnchantingLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".enchantingLevelNeed"));
+                research.setFarmingLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".farmingLevelNeed"));
+                research.setFishingLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".fishingLevelNeed"));
+                research.setForagingLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".foragingLevelNeed"));
+                research.setExcavationLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".excavationLevelNeed"));
+                research.setFightingLevelNeed(Slimefun.getResearchCfg()
+                        .getInt(key.getNamespace() + '.' + key.getKey() + ".fightingLevelNeed"));
 
-                List<String> itemsString = Slimefun.getResearchCfg().getStringList(key.getNamespace() + '.' + key.getKey() + ".need-unlocked-items");
-                if (!itemsString.isEmpty()) for (String itemString : itemsString){
-                    SlimefunItem item = SlimefunItem.getById(itemString);
-                    if (item != null && item.getResearch() != null) {
-                        research.addNeedUnlockedItems(item);
+                List<String> itemsString = Slimefun.getResearchCfg()
+                        .getStringList(key.getNamespace() + '.' + key.getKey() + ".need-unlocked-items");
+                if (!itemsString.isEmpty())
+                    for (String itemString : itemsString) {
+                        SlimefunItem item = SlimefunItem.getById(itemString);
+                        if (item != null && item.getResearch() != null) {
+                            research.addNeedUnlockedItems(item);
+                        }
                     }
-                }
 
                 var status = researchesConfig.getBoolean(key.getNamespace() + '.' + key.getKey() + ".enabled");
 

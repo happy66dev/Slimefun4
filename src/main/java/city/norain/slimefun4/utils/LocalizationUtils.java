@@ -4,13 +4,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
-import org.bukkit.Material;
-
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import org.bukkit.Material;
 
 public class LocalizationUtils {
 
@@ -24,8 +23,10 @@ public class LocalizationUtils {
 
         try (InputStream inputStream = LocalizationUtils.class.getResourceAsStream("/zh_cn.json")) {
             if (inputStream != null) {
-                JsonObject jsonObject = JsonParser.parseReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8)).getAsJsonObject();
-                
+                JsonObject jsonObject = JsonParser.parseReader(
+                                new InputStreamReader(inputStream, StandardCharsets.UTF_8))
+                        .getAsJsonObject();
+
                 int count = 0;
                 for (Map.Entry<String, JsonElement> entry : jsonObject.entrySet()) {
                     String key = entry.getKey();
@@ -34,11 +35,12 @@ public class LocalizationUtils {
                         count++;
                     }
                 }
-                
+
                 Slimefun.logger().info("Loaded " + count + " item localizations from zh_cn.json");
                 // 测试红石粉的本地化
                 if (ITEM_LOCALIZATIONS.containsKey("item.minecraft.redstone")) {
-                    Slimefun.logger().info("Found redstone localization: " + ITEM_LOCALIZATIONS.get("item.minecraft.redstone"));
+                    Slimefun.logger()
+                            .info("Found redstone localization: " + ITEM_LOCALIZATIONS.get("item.minecraft.redstone"));
                 } else {
                     Slimefun.logger().info("No redstone localization found");
                 }

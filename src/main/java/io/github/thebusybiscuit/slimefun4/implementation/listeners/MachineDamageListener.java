@@ -1,13 +1,9 @@
 package io.github.thebusybiscuit.slimefun4.implementation.listeners;
 
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
-import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
-import io.github.thebusybiscuit.slimefun4.core.config.SlimefunMachineDamageManager;
 import io.github.thebusybiscuit.slimefun4.core.services.MachineDamageService;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
-import java.util.ArrayList;
-import java.util.List;
 import javax.annotation.ParametersAreNonnullByDefault;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -21,7 +17,6 @@ import org.bukkit.event.inventory.InventoryOpenEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerItemHeldEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
 
 @ParametersAreNonnullByDefault
 public class MachineDamageListener implements Listener {
@@ -103,70 +98,101 @@ public class MachineDamageListener implements Listener {
     }
 
     private final java.util.Set<String> interactedBlocks = new java.util.HashSet<>();
-    
+
     @EventHandler
     public void onPlayerInteract(PlayerInteractEvent e) {
         if (e.getAction() == Action.RIGHT_CLICK_BLOCK) {
             Player player = e.getPlayer();
             Location location = e.getClickedBlock().getLocation();
-            String locationKey = location.getWorld().getName() + "_" + location.getBlockX() + "_" + location.getBlockY() + "_" + location.getBlockZ();
-            
+            String locationKey = location.getWorld().getName() + "_" + location.getBlockX() + "_" + location.getBlockY()
+                    + "_" + location.getBlockZ();
+
             // 避免重复提示
             if (interactedBlocks.contains(locationKey)) {
                 return;
             }
-            
+
             interactedBlocks.add(locationKey);
             // 300ms后移除，允许再次交互
-            org.bukkit.Bukkit.getScheduler().runTaskLater(Slimefun.instance(), () -> {
-                interactedBlocks.remove(locationKey);
-            }, 6L);
-            
+            org.bukkit.Bukkit.getScheduler()
+                    .runTaskLater(
+                            Slimefun.instance(),
+                            () -> {
+                                interactedBlocks.remove(locationKey);
+                            },
+                            6L);
+
             // 从位置获取SlimefunItem
-            SlimefunItem slimefunItem = com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils.getSlimefunItem(location);
-            
+            SlimefunItem slimefunItem =
+                    com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils.getSlimefunItem(location);
+
             if (slimefunItem != null) {
                 MachineDamageService damageService = Slimefun.getMachineDamageService();
-                var data = com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils.getDataContainer(location);
-                
+                var data =
+                        com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils.getDataContainer(location);
+
                 if (data != null && data.isDataLoaded() && damageService.isMachineDamaged(data)) {
-                    ItemStack repairItem = damageService.getRepairItem(data);
+                    java.util.List<java.util.Map<String, Object>> repairItems = damageService.getRepairItems(data);
                     ItemStack heldItem = player.getInventory().getItemInMainHand();
-                    
-                    if (repairItem != null) {
+
+                    if (!repairItems.isEmpty()) {
                         if (heldItem != null && heldItem.getType() != Material.AIR) {
-                            if (SlimefunUtils.isItemSimilar(heldItem, repairItem, false)) {
-                                // 修复机器
-                                damageService.repairMachine(location);
+                            // 尝试提交修复物品
+                            if (damageService.trySubmitRepairItem((com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData) data, heldItem)) {
                                 // 消耗修复物品
                                 heldItem.setAmount(heldItem.getAmount() - 1);
-                                player.sendMessage(ChatColor.GREEN + "机器已成功修复！");
+                                
+                                // 检查是否所有物品都已提交
+                                if (damageService.canRepair(data)) {
+                                    // 修复机器
+                                    damageService.repairMachine(location);
+                                    player.sendMessage(ChatColor.GREEN + "机器已成功修复！");
+                                } else {
+                                    player.sendMessage(ChatColor.YELLOW + "已提交修复物品，继续提交其他需要的物品...");
+                                    // 显示剩余需要的物品
+                                    displayRepairItems(player, damageService, data);
+                                }
                                 e.setCancelled(true);
                             } else {
                                 // 显示需要的修复物品
-                                String itemName;
-                                if (repairItem.getItemMeta() != null && repairItem.getItemMeta().getDisplayName() != null && !repairItem.getItemMeta().getDisplayName().isEmpty()) {
-                                    itemName = repairItem.getItemMeta().getDisplayName();
-                                } else {
-                                    // 使用物品类型的本地化名称
-                                    itemName = city.norain.slimefun4.utils.LocalizationUtils.getItemName(repairItem.getType());
-                                }
-                                player.sendMessage(ChatColor.RED + "此机器需要 " + ChatColor.GOLD + repairItem.getAmount() + "x " + itemName + ChatColor.RED + " 来修复！");
+                                displayRepairItems(player, damageService, data);
                                 e.setCancelled(true);
                             }
                         } else {
                             // 显示需要的修复物品
-                            String itemName;
-                            if (repairItem.getItemMeta() != null && repairItem.getItemMeta().getDisplayName() != null && !repairItem.getItemMeta().getDisplayName().isEmpty()) {
-                                itemName = repairItem.getItemMeta().getDisplayName();
-                            } else {
-                                // 使用物品类型的本地化名称
-                                itemName = city.norain.slimefun4.utils.LocalizationUtils.getItemName(repairItem.getType());
-                            }
-                            player.sendMessage(ChatColor.RED + "此机器需要 " + ChatColor.GOLD + repairItem.getAmount() + "x " + itemName + ChatColor.RED + " 来修复！");
+                            displayRepairItems(player, damageService, data);
                             e.setCancelled(true);
                         }
                     }
+                }
+            }
+        }
+    }
+    
+    private void displayRepairItems(Player player, MachineDamageService damageService, com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer data) {
+        java.util.List<java.util.Map<String, Object>> repairItems = damageService.getRepairItems(data);
+        if (repairItems.isEmpty()) {
+            return;
+        }
+        
+        player.sendMessage(ChatColor.RED + "此机器需要以下修复物品:");
+        for (java.util.Map<String, Object> itemInfo : repairItems) {
+            ItemStack item = (ItemStack) itemInfo.get("item");
+            Integer submitted = (Integer) itemInfo.get("submitted");
+            
+            if (item != null) {
+                String itemName;
+                if (item.getItemMeta() != null && item.getItemMeta().getDisplayName() != null 
+                        && !item.getItemMeta().getDisplayName().isEmpty()) {
+                    itemName = item.getItemMeta().getDisplayName();
+                } else {
+                    itemName = city.norain.slimefun4.utils.LocalizationUtils.getItemName(item.getType());
+                }
+                
+                if (submitted != null && submitted > 0) {
+                    player.sendMessage(ChatColor.GREEN + "✓ " + itemName + ChatColor.GRAY + " (已提交: " + submitted + "/1)");
+                } else {
+                    player.sendMessage(ChatColor.RED + "✗ " + itemName + ChatColor.GRAY + " (需要: 1)");
                 }
             }
         }

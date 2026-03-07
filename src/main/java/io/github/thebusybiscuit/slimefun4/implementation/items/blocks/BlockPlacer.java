@@ -152,11 +152,22 @@ public class BlockPlacer extends SlimefunItem {
      * @return Whether placing this {@link Material} is allowed
      */
     private boolean isAllowed(@Nonnull Block facedBlock, @Nonnull Material type) {
-        if ((type == Material.RED_MUSHROOM || type == Material.BROWN_MUSHROOM || type == Material.CRIMSON_FUNGUS || type == Material.WARPED_FUNGUS ||
-                type == Material.OAK_SAPLING || type == Material.SPRUCE_SAPLING || type == Material.BIRCH_SAPLING || type == Material.JUNGLE_SAPLING ||
-                type == Material.ACACIA_SAPLING || type == Material.DARK_OAK_SAPLING || type == Material.MANGROVE_PROPAGULE || type == Material.CHERRY_SAPLING) &&
-                (facedBlock.getRelative(BlockFace.DOWN).getType() == Material.DIRT || facedBlock.getRelative(BlockFace.DOWN).getType() == Material.GRASS_BLOCK ||
-                        facedBlock.getRelative(BlockFace.DOWN).getType() == Material.PODZOL || facedBlock.getRelative(BlockFace.DOWN).getType() == Material.MYCELIUM)) {
+        if ((type == Material.RED_MUSHROOM
+                        || type == Material.BROWN_MUSHROOM
+                        || type == Material.CRIMSON_FUNGUS
+                        || type == Material.WARPED_FUNGUS
+                        || type == Material.OAK_SAPLING
+                        || type == Material.SPRUCE_SAPLING
+                        || type == Material.BIRCH_SAPLING
+                        || type == Material.JUNGLE_SAPLING
+                        || type == Material.ACACIA_SAPLING
+                        || type == Material.DARK_OAK_SAPLING
+                        || type == Material.MANGROVE_PROPAGULE
+                        || type == Material.CHERRY_SAPLING)
+                && (facedBlock.getRelative(BlockFace.DOWN).getType() == Material.DIRT
+                        || facedBlock.getRelative(BlockFace.DOWN).getType() == Material.GRASS_BLOCK
+                        || facedBlock.getRelative(BlockFace.DOWN).getType() == Material.PODZOL
+                        || facedBlock.getRelative(BlockFace.DOWN).getType() == Material.MYCELIUM)) {
             return true;
         }
         if (!type.isBlock()) {

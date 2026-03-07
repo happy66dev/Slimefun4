@@ -7,7 +7,6 @@ import io.github.thebusybiscuit.slimefun4.core.services.MachineDamageService;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.Slimefun.api.BlockStorage;
-
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.command.CommandSender;
@@ -53,7 +52,12 @@ public class MachineDamageCommand extends SubCommand {
         MachineDamageService damageService = Slimefun.getMachineDamageService();
 
         if (args.length == 1) {
-            Slimefun.getLocalization().sendMessage(player, "messages.usage", true, msg -> msg.replace("%usage%", "/sf machine-damage <scrap|repair|info>"));
+            Slimefun.getLocalization()
+                    .sendMessage(
+                            player,
+                            "messages.usage",
+                            true,
+                            msg -> msg.replace("%usage%", "/sf machine-damage <scrap|repair|info>"));
             return;
         }
 
