@@ -4438,6 +4438,7 @@ public final class SlimefunItemSetup {
 
         new EnergyConnector(
                         itemGroups.electricity,
+                        3,
                         SlimefunItems.BASIC_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {null, null, null, null, null, null, null, null, null},
@@ -4446,6 +4447,7 @@ public final class SlimefunItemSetup {
 
         new EnergyConnector(
                         itemGroups.electricity,
+                        5,
                         SlimefunItems.ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {
@@ -4464,6 +4466,7 @@ public final class SlimefunItemSetup {
 
         new EnergyConnector(
                         itemGroups.electricity,
+                        4,
                         SlimefunItems.POWERFUL_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {null, null, null, null, null, null, null, null, null},
@@ -4472,6 +4475,7 @@ public final class SlimefunItemSetup {
 
         new EnergyConnector(
                         itemGroups.electricity,
+                        6,
                         SlimefunItems.GILDED_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {null, null, null, null, null, null, null, null, null},
@@ -4480,6 +4484,7 @@ public final class SlimefunItemSetup {
 
         new EnergyConnector(
                         itemGroups.electricity,
+                        10,
                         SlimefunItems.REINFORCED_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {null, null, null, null, null, null, null, null, null},
@@ -4488,6 +4493,7 @@ public final class SlimefunItemSetup {
 
         new EnergyConnector(
                         itemGroups.electricity,
+                        18,
                         SlimefunItems.CARBONADO_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
                         new ItemStack[] {null, null, null, null, null, null, null, null, null},

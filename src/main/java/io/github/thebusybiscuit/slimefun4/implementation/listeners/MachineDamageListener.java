@@ -3,7 +3,6 @@ package io.github.thebusybiscuit.slimefun4.implementation.listeners;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.services.MachineDamageService;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
-import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import javax.annotation.ParametersAreNonnullByDefault;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
@@ -138,10 +137,12 @@ public class MachineDamageListener implements Listener {
                     if (!repairItems.isEmpty()) {
                         if (heldItem != null && heldItem.getType() != Material.AIR) {
                             // 尝试提交修复物品
-                            if (damageService.trySubmitRepairItem((com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData) data, heldItem)) {
+                            if (damageService.trySubmitRepairItem(
+                                    (com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData) data,
+                                    heldItem)) {
                                 // 消耗修复物品
                                 heldItem.setAmount(heldItem.getAmount() - 1);
-                                
+
                                 // 检查是否所有物品都已提交
                                 if (damageService.canRepair(data)) {
                                     // 修复机器
@@ -168,29 +169,34 @@ public class MachineDamageListener implements Listener {
             }
         }
     }
-    
-    private void displayRepairItems(Player player, MachineDamageService damageService, com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer data) {
+
+    private void displayRepairItems(
+            Player player,
+            MachineDamageService damageService,
+            com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer data) {
         java.util.List<java.util.Map<String, Object>> repairItems = damageService.getRepairItems(data);
         if (repairItems.isEmpty()) {
             return;
         }
-        
+
         player.sendMessage(ChatColor.RED + "此机器需要以下修复物品:");
         for (java.util.Map<String, Object> itemInfo : repairItems) {
             ItemStack item = (ItemStack) itemInfo.get("item");
             Integer submitted = (Integer) itemInfo.get("submitted");
-            
+
             if (item != null) {
                 String itemName;
-                if (item.getItemMeta() != null && item.getItemMeta().getDisplayName() != null 
+                if (item.getItemMeta() != null
+                        && item.getItemMeta().getDisplayName() != null
                         && !item.getItemMeta().getDisplayName().isEmpty()) {
                     itemName = item.getItemMeta().getDisplayName();
                 } else {
                     itemName = city.norain.slimefun4.utils.LocalizationUtils.getItemName(item.getType());
                 }
-                
+
                 if (submitted != null && submitted > 0) {
-                    player.sendMessage(ChatColor.GREEN + "✓ " + itemName + ChatColor.GRAY + " (已提交: " + submitted + "/1)");
+                    player.sendMessage(
+                            ChatColor.GREEN + "✓ " + itemName + ChatColor.GRAY + " (已提交: " + submitted + "/1)");
                 } else {
                     player.sendMessage(ChatColor.RED + "✗ " + itemName + ChatColor.GRAY + " (需要: 1)");
                 }

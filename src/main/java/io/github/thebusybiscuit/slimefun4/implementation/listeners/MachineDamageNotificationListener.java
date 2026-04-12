@@ -115,16 +115,20 @@ public class MachineDamageNotificationListener implements Listener {
                             + location.getBlockY() + ", " + location.getBlockZ() + ")");
                     player.sendMessage("§c需要以下修复物品:");
                     for (var itemInfo : repairItems) {
-                        org.bukkit.inventory.ItemStack itemStack = (org.bukkit.inventory.ItemStack) itemInfo.get("item");
+                        org.bukkit.inventory.ItemStack itemStack =
+                                (org.bukkit.inventory.ItemStack) itemInfo.get("item");
                         Integer submitted = (Integer) itemInfo.get("submitted");
-                        
+
                         if (itemStack != null) {
                             String itemName = itemStack.getItemMeta() != null
-                                    && itemStack.getItemMeta().getDisplayName() != null
-                                    && !itemStack.getItemMeta().getDisplayName().isEmpty()
+                                            && itemStack.getItemMeta().getDisplayName() != null
+                                            && !itemStack
+                                                    .getItemMeta()
+                                                    .getDisplayName()
+                                                    .isEmpty()
                                     ? itemStack.getItemMeta().getDisplayName()
                                     : city.norain.slimefun4.utils.LocalizationUtils.getItemName(itemStack.getType());
-                            
+
                             if (submitted != null && submitted > 0) {
                                 player.sendMessage("§a✓ " + itemName + " (已提交: " + submitted + "/1)");
                             } else {

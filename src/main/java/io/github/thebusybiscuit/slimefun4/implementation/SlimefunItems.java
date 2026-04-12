@@ -1890,7 +1890,8 @@ public final class SlimefunItems {
             "SMALL_CAPACITOR",
             HeadTexture.CAPACITOR_25,
             "&a小型储能电容",
-            LoreBuilder.range(6),
+            LoreBuilder.range(1),
+            "&8\u21E8 &7只能连接其他电容",
             "",
             LoreBuilder.machine(MachineTier.BASIC, MachineType.CAPACITOR),
             "&8\u21E8 &e\u26A1 &7256 J 可储存");
@@ -1898,7 +1899,8 @@ public final class SlimefunItems {
             "MEDIUM_CAPACITOR",
             HeadTexture.CAPACITOR_25,
             "&a中型储能电容",
-            LoreBuilder.range(6),
+            LoreBuilder.range(1),
+            "&8\u21E8 &7只能连接其他电容",
             "",
             LoreBuilder.machine(MachineTier.AVERAGE, MachineType.CAPACITOR),
             LoreBuilder.powerBuffer(1024));
@@ -1906,7 +1908,8 @@ public final class SlimefunItems {
             "BIG_CAPACITOR",
             HeadTexture.CAPACITOR_25,
             "&a大型储能电容",
-            LoreBuilder.range(6),
+            LoreBuilder.range(1),
+            "&8\u21E8 &7只能连接其他电容",
             "",
             LoreBuilder.machine(MachineTier.MEDIUM, MachineType.CAPACITOR),
             LoreBuilder.powerBuffer(4096));
@@ -1914,7 +1917,8 @@ public final class SlimefunItems {
             "LARGE_CAPACITOR",
             HeadTexture.CAPACITOR_25,
             "&a巨型储能电容",
-            LoreBuilder.range(6),
+            LoreBuilder.range(1),
+            "&8\u21E8 &7只能连接其他电容",
             "",
             LoreBuilder.machine(MachineTier.GOOD, MachineType.CAPACITOR),
             LoreBuilder.powerBuffer(16384));
@@ -1922,7 +1926,8 @@ public final class SlimefunItems {
             "CARBONADO_EDGED_CAPACITOR",
             HeadTexture.CAPACITOR_25,
             "&a黑金刚石镶边储能电容",
-            LoreBuilder.range(6),
+            LoreBuilder.range(1),
+            "&8\u21E8 &7只能连接其他电容",
             "",
             LoreBuilder.machine(MachineTier.END_GAME, MachineType.CAPACITOR),
             LoreBuilder.powerBuffer(65536));
@@ -1930,7 +1935,8 @@ public final class SlimefunItems {
             "ENERGIZED_CAPACITOR",
             HeadTexture.CAPACITOR_25,
             "&a终极储能电容",
-            LoreBuilder.range(6),
+            LoreBuilder.range(1),
+            "&8\u21E8 &7只能连接其他电容",
             "",
             LoreBuilder.machine(MachineTier.END_GAME, MachineType.CAPACITOR),
             LoreBuilder.powerBuffer(524288));
@@ -2324,7 +2330,7 @@ public final class SlimefunItems {
             "ENERGY_CONNECTOR",
             HeadTexture.ENERGY_CONNECTOR,
             "&c能源连接器",
-            LoreBuilder.range(6),
+            LoreBuilder.range(5),
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2332,7 +2338,7 @@ public final class SlimefunItems {
             "BASIC_ENERGY_CONNECTOR",
             Material.WHITE_CONCRETE,
             "&f简易能源连接器",
-            LoreBuilder.range(6),
+            LoreBuilder.range(3),
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2340,7 +2346,7 @@ public final class SlimefunItems {
             "POWERFUL_ENERGY_CONNECTOR",
             Material.RED_CONCRETE,
             "&c大功率能源连接器",
-            LoreBuilder.range(6),
+            LoreBuilder.range(4),
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2356,7 +2362,7 @@ public final class SlimefunItems {
             "REINFORCED_ENERGY_CONNECTOR",
             Material.BLUE_CONCRETE,
             "&b强化能源连接器",
-            LoreBuilder.range(6),
+            LoreBuilder.range(10),
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2364,7 +2370,7 @@ public final class SlimefunItems {
             "CARBONADO_ENERGY_CONNECTOR",
             Material.BLACK_CONCRETE,
             "&8黑钻能源连接器",
-            LoreBuilder.range(6),
+            LoreBuilder.range(18),
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");

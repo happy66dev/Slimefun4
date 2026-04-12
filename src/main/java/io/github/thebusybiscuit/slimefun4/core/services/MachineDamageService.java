@@ -124,17 +124,18 @@ public class MachineDamageService {
                 // 计算需要的修复物品数量：非空区域的格子数量的30%，存在小数时进一位
                 int nonEmptySlots = validItems.size();
                 int repairItemCount = (int) Math.ceil(nonEmptySlots * 0.3);
-                
+
                 // 随机抽取修复物品
                 java.util.List<java.util.Map<String, String>> repairItemsList = new java.util.ArrayList<>();
                 for (int i = 0; i < repairItemCount; i++) {
                     // 随机选择一个物品
-                    ItemStack repairItem = validItems.get(ThreadLocalRandom.current().nextInt(validItems.size()));
-                    
+                    ItemStack repairItem =
+                            validItems.get(ThreadLocalRandom.current().nextInt(validItems.size()));
+
                     // 检查是否是Slimefun物品
                     SlimefunItem slimefunItem = SlimefunItem.getByItem(repairItem);
                     java.util.Map<String, String> itemData = new java.util.HashMap<>();
-                    
+
                     if (slimefunItem != null) {
                         itemData.put("id", slimefunItem.getId());
                         itemData.put("type", "slimefun");
@@ -149,7 +150,7 @@ public class MachineDamageService {
                 String repairItemsJson = new com.google.gson.Gson().toJson(repairItemsList);
                 data.setData(REPAIR_ITEMS_KEY, repairItemsJson);
                 data.setData(REPAIR_ITEM_COUNT_KEY, String.valueOf(repairItemsList.size()));
-                
+
                 // 初始化已提交物品（空JSON数组）
                 data.setData(SUBMITTED_ITEMS_KEY, "[]");
 
@@ -161,7 +162,8 @@ public class MachineDamageService {
 
                 // 输出信息
                 Slimefun.logger()
-                        .info("Machine damaged: " + item.getId() + " at " + location + ", need " + repairItemsList.size() + " items to repair");
+                        .info("Machine damaged: " + item.getId() + " at " + location + ", need "
+                                + repairItemsList.size() + " items to repair");
 
                 // 在机器上面显示悬浮字
                 Location hologramLocation = location.clone().add(0.5, 1.5, 0.5);
@@ -262,10 +264,12 @@ public class MachineDamageService {
                 return null;
             }
 
-            java.util.List<java.util.Map<String, String>> repairItemsList = 
-                new com.google.gson.Gson().fromJson(repairItemsJson, 
-                    new com.google.gson.reflect.TypeToken<java.util.List<java.util.Map<String, String>>>(){}.getType());
-            
+            java.util.List<java.util.Map<String, String>> repairItemsList = new com.google.gson.Gson()
+                    .fromJson(
+                            repairItemsJson,
+                            new com.google.gson.reflect.TypeToken<
+                                    java.util.List<java.util.Map<String, String>>>() {}.getType());
+
             if (repairItemsList == null || repairItemsList.isEmpty()) {
                 return null;
             }
@@ -297,7 +301,10 @@ public class MachineDamageService {
                 try {
                     String itemName = repairItem.getItemMeta() != null
                                     && repairItem.getItemMeta().getDisplayName() != null
-                                    && !repairItem.getItemMeta().getDisplayName().isEmpty()
+                                    && !repairItem
+                                            .getItemMeta()
+                                            .getDisplayName()
+                                            .isEmpty()
                             ? repairItem.getItemMeta().getDisplayName()
                             : city.norain.slimefun4.utils.LocalizationUtils.getItemName(repairItem.getType());
                     Slimefun.logger().info("Retrieved repair item: " + itemName);
@@ -315,7 +322,7 @@ public class MachineDamageService {
 
     public java.util.List<java.util.Map<String, Object>> getRepairItems(@Nonnull ASlimefunDataContainer data) {
         java.util.List<java.util.Map<String, Object>> result = new java.util.ArrayList<>();
-        
+
         try {
             if (!data.isDataLoaded()) {
                 return result;
@@ -323,19 +330,23 @@ public class MachineDamageService {
 
             String repairItemsJson = data.getData(REPAIR_ITEMS_KEY);
             String submittedItemsJson = data.getData(SUBMITTED_ITEMS_KEY);
-            
+
             if (repairItemsJson == null || repairItemsJson.isEmpty()) {
                 return result;
             }
 
-            java.util.List<java.util.Map<String, String>> repairItemsList = 
-                new com.google.gson.Gson().fromJson(repairItemsJson, 
-                    new com.google.gson.reflect.TypeToken<java.util.List<java.util.Map<String, String>>>(){}.getType());
-            
+            java.util.List<java.util.Map<String, String>> repairItemsList = new com.google.gson.Gson()
+                    .fromJson(
+                            repairItemsJson,
+                            new com.google.gson.reflect.TypeToken<
+                                    java.util.List<java.util.Map<String, String>>>() {}.getType());
+
             java.util.Map<String, Integer> submittedItemsMap = new java.util.HashMap<>();
             if (submittedItemsJson != null && !submittedItemsJson.isEmpty()) {
-                java.util.Map<String, Number> tempMap = new com.google.gson.Gson().fromJson(submittedItemsJson, 
-                    new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>(){}.getType());
+                java.util.Map<String, Number> tempMap = new com.google.gson.Gson()
+                        .fromJson(
+                                submittedItemsJson,
+                                new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>() {}.getType());
                 for (java.util.Map.Entry<String, Number> entry : tempMap.entrySet()) {
                     submittedItemsMap.put(entry.getKey(), entry.getValue().intValue());
                 }
@@ -346,7 +357,7 @@ public class MachineDamageService {
                     java.util.Map<String, Object> itemInfo = new java.util.HashMap<>();
                     String itemId = itemData.get("id");
                     String itemType = itemData.get("type");
-                    
+
                     ItemStack repairItem = null;
                     if ("slimefun".equals(itemType)) {
                         SlimefunItem slimefunItem = SlimefunItem.getById(itemId);
@@ -361,7 +372,7 @@ public class MachineDamageService {
                             // ignore
                         }
                     }
-                    
+
                     itemInfo.put("id", itemId);
                     itemInfo.put("type", itemType);
                     itemInfo.put("item", repairItem);
@@ -373,7 +384,7 @@ public class MachineDamageService {
             Slimefun.logger().info("Error getting repair items: " + e.getMessage());
             e.printStackTrace();
         }
-        
+
         return result;
     }
 
@@ -414,46 +425,51 @@ public class MachineDamageService {
         if (!data.isDataLoaded() || !isMachineDamaged(data)) {
             return false;
         }
-        
+
         try {
             String repairItemsJson = data.getData(REPAIR_ITEMS_KEY);
             String submittedItemsJson = data.getData(SUBMITTED_ITEMS_KEY);
-            
+
             if (repairItemsJson == null || repairItemsJson.isEmpty()) {
                 return false;
             }
-            
-            java.util.List<java.util.Map<String, String>> repairItemsList = 
-                new com.google.gson.Gson().fromJson(repairItemsJson, 
-                    new com.google.gson.reflect.TypeToken<java.util.List<java.util.Map<String, String>>>(){}.getType());
-            
+
+            java.util.List<java.util.Map<String, String>> repairItemsList = new com.google.gson.Gson()
+                    .fromJson(
+                            repairItemsJson,
+                            new com.google.gson.reflect.TypeToken<
+                                    java.util.List<java.util.Map<String, String>>>() {}.getType());
+
             java.util.Map<String, Integer> submittedItemsMap = new java.util.HashMap<>();
             if (submittedItemsJson != null && !submittedItemsJson.isEmpty()) {
-                java.util.Map<String, Number> tempMap = new com.google.gson.Gson().fromJson(submittedItemsJson, 
-                    new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>(){}.getType());
+                java.util.Map<String, Number> tempMap = new com.google.gson.Gson()
+                        .fromJson(
+                                submittedItemsJson,
+                                new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>() {}.getType());
                 for (java.util.Map.Entry<String, Number> entry : tempMap.entrySet()) {
                     submittedItemsMap.put(entry.getKey(), entry.getValue().intValue());
                 }
             }
-            
+
             SlimefunItem slimefunItem = SlimefunItem.getByItem(item);
-            String itemId = slimefunItem != null ? slimefunItem.getId() : item.getType().name();
+            String itemId =
+                    slimefunItem != null ? slimefunItem.getId() : item.getType().name();
             String itemType = slimefunItem != null ? "slimefun" : "vanilla";
-            
+
             for (java.util.Map<String, String> repairItemData : repairItemsList) {
                 String repairId = repairItemData.get("id");
                 String repairType = repairItemData.get("type");
-                
+
                 if (repairId.equals(itemId) && repairType.equals(itemType)) {
                     int currentSubmitted = submittedItemsMap.getOrDefault(itemId, 0);
                     currentSubmitted++;
                     submittedItemsMap.put(itemId, currentSubmitted);
-                    
+
                     String newSubmittedJson = new com.google.gson.Gson().toJson(submittedItemsMap);
                     data.setData(SUBMITTED_ITEMS_KEY, newSubmittedJson);
-                    
+
                     Slimefun.logger().info("Submitted repair item: " + itemId + ", count: " + currentSubmitted);
-                    
+
                     return true;
                 }
             }
@@ -461,7 +477,7 @@ public class MachineDamageService {
             Slimefun.logger().info("Error submitting repair item: " + e.getMessage());
             e.printStackTrace();
         }
-        
+
         return false;
     }
 
@@ -469,32 +485,36 @@ public class MachineDamageService {
         if (!data.isDataLoaded() || !isMachineDamaged(data)) {
             return false;
         }
-        
+
         try {
             String repairItemsJson = data.getData(REPAIR_ITEMS_KEY);
             String submittedItemsJson = data.getData(SUBMITTED_ITEMS_KEY);
-            
+
             if (repairItemsJson == null || repairItemsJson.isEmpty()) {
                 return false;
             }
-            
-            java.util.List<java.util.Map<String, String>> repairItemsList = 
-                new com.google.gson.Gson().fromJson(repairItemsJson, 
-                    new com.google.gson.reflect.TypeToken<java.util.List<java.util.Map<String, String>>>(){}.getType());
-            
+
+            java.util.List<java.util.Map<String, String>> repairItemsList = new com.google.gson.Gson()
+                    .fromJson(
+                            repairItemsJson,
+                            new com.google.gson.reflect.TypeToken<
+                                    java.util.List<java.util.Map<String, String>>>() {}.getType());
+
             java.util.Map<String, Integer> submittedItemsMap = new java.util.HashMap<>();
             if (submittedItemsJson != null && !submittedItemsJson.isEmpty()) {
-                java.util.Map<String, Number> tempMap = new com.google.gson.Gson().fromJson(submittedItemsJson, 
-                    new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>(){}.getType());
+                java.util.Map<String, Number> tempMap = new com.google.gson.Gson()
+                        .fromJson(
+                                submittedItemsJson,
+                                new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>() {}.getType());
                 for (java.util.Map.Entry<String, Number> entry : tempMap.entrySet()) {
                     submittedItemsMap.put(entry.getKey(), entry.getValue().intValue());
                 }
             }
-            
+
             if (repairItemsList == null) {
                 return false;
             }
-            
+
             for (java.util.Map<String, String> repairItemData : repairItemsList) {
                 String repairId = repairItemData.get("id");
                 int submitted = submittedItemsMap.getOrDefault(repairId, 0);
@@ -502,7 +522,7 @@ public class MachineDamageService {
                     return false;
                 }
             }
-            
+
             return true;
         } catch (Exception e) {
             Slimefun.logger().info("Error checking if can repair: " + e.getMessage());
@@ -590,16 +610,23 @@ public class MachineDamageService {
                 for (java.util.Map<String, Object> itemInfo : repairItemsList) {
                     ItemStack repairItem = (ItemStack) itemInfo.get("item");
                     Integer submitted = (Integer) itemInfo.get("submitted");
-                    
+
                     if (repairItem != null) {
                         String itemName = repairItem.getItemMeta() != null
                                         && repairItem.getItemMeta().getDisplayName() != null
-                                        && !repairItem.getItemMeta().getDisplayName().isEmpty()
+                                        && !repairItem
+                                                .getItemMeta()
+                                                .getDisplayName()
+                                                .isEmpty()
                                 ? repairItem.getItemMeta().getDisplayName()
                                 : city.norain.slimefun4.utils.LocalizationUtils.getItemName(repairItem.getType());
-                        
+
                         if (submitted != null && submitted > 0) {
-                            info.append("§a✓ ").append(itemName).append(" (已提交: ").append(submitted).append("/1)\n");
+                            info.append("§a✓ ")
+                                    .append(itemName)
+                                    .append(" (已提交: ")
+                                    .append(submitted)
+                                    .append("/1)\n");
                         } else {
                             info.append("§c✗ ").append(itemName).append(" (需要: 1)\n");
                         }

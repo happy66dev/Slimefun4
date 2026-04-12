@@ -66,6 +66,8 @@ commands:
     description: 为你手持的物品充电
     charge-success: 充电完成!
     not-rechargeable: 这个物品不能充电!
+  getinfo:
+    description: 获取电网信息和运输详情
   timings:
     description: Slimefun 及其附属插件的性能报告
     please-wait: '&e请稍等一会...结果马上就来!'
