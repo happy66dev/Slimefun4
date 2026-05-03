@@ -57,6 +57,10 @@ public interface EnergyNetComponent extends ItemAttribute {
     @Deprecated
     int getCapacity();
 
+    default int getRange() {
+        return 6;
+    }
+
     /**
      * This returns whether this {@link EnergyNetComponent} can hold energy charges.
      * It returns true if {@link #getCapacity()} returns a number greater than zero.

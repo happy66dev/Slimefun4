@@ -5,6 +5,7 @@ import io.github.thebusybiscuit.slimefun4.api.events.SlimefunBlockBreakEvent;
 import io.github.thebusybiscuit.slimefun4.api.events.SlimefunBlockPlaceEvent;
 import io.github.thebusybiscuit.slimefun4.api.network.Network;
 import io.github.thebusybiscuit.slimefun4.core.networks.NetworkManager;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import javax.annotation.Nonnull;
 import org.bukkit.block.Block;
@@ -42,6 +43,7 @@ public class NetworkListener implements Listener {
     @EventHandler
     public void onBlockPlace(SlimefunBlockPlaceEvent e) {
         manager.updateAllNetworks(e.getBlockPlaced().getLocation());
+        EnergyNet.onMachinePlaced(e.getBlockPlaced().getLocation());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)

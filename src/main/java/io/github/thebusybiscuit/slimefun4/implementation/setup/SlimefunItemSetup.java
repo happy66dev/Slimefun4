@@ -4441,8 +4441,18 @@ public final class SlimefunItemSetup {
                         3,
                         SlimefunItems.BASIC_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
-                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
-                        null)
+                        new ItemStack[] {
+                            new ItemStack(Material.COBBLESTONE),
+                            new ItemStack(Material.REDSTONE),
+                            new ItemStack(Material.COBBLESTONE),
+                            new ItemStack(Material.REDSTONE),
+                            new ItemStack(Material.IRON_INGOT),
+                            new ItemStack(Material.REDSTONE),
+                            new ItemStack(Material.COBBLESTONE),
+                            new ItemStack(Material.REDSTONE),
+                            new ItemStack(Material.COBBLESTONE)
+                        },
+                        new SlimefunItemStack(SlimefunItems.BASIC_ENERGY_CONNECTOR, 4))
                 .register(plugin);
 
         new EnergyConnector(
@@ -4469,8 +4479,18 @@ public final class SlimefunItemSetup {
                         4,
                         SlimefunItems.POWERFUL_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
-                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
-                        null)
+                        new ItemStack[] {
+                            new ItemStack(Material.NETHER_BRICK),
+                            SlimefunItems.COPPER_WIRE,
+                            new ItemStack(Material.NETHER_BRICK),
+                            SlimefunItems.COPPER_WIRE,
+                            SlimefunItems.BASIC_ENERGY_CONNECTOR,
+                            SlimefunItems.COPPER_WIRE,
+                            new ItemStack(Material.NETHER_BRICK),
+                            SlimefunItems.COPPER_WIRE,
+                            new ItemStack(Material.NETHER_BRICK)
+                        },
+                        new SlimefunItemStack(SlimefunItems.POWERFUL_ENERGY_CONNECTOR, 2))
                 .register(plugin);
 
         new EnergyConnector(
@@ -4478,8 +4498,18 @@ public final class SlimefunItemSetup {
                         6,
                         SlimefunItems.GILDED_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
-                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
-                        null)
+                        new ItemStack[] {
+                            new ItemStack(Material.GOLD_INGOT),
+                            SlimefunItems.COPPER_WIRE,
+                            new ItemStack(Material.GOLD_INGOT),
+                            SlimefunItems.COPPER_WIRE,
+                            SlimefunItems.POWERFUL_ENERGY_CONNECTOR,
+                            SlimefunItems.COPPER_WIRE,
+                            new ItemStack(Material.GOLD_INGOT),
+                            SlimefunItems.COPPER_WIRE,
+                            new ItemStack(Material.GOLD_INGOT)
+                        },
+                        new SlimefunItemStack(SlimefunItems.GILDED_ENERGY_CONNECTOR, 2))
                 .register(plugin);
 
         new EnergyConnector(
@@ -4487,8 +4517,18 @@ public final class SlimefunItemSetup {
                         10,
                         SlimefunItems.REINFORCED_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
-                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
-                        null)
+                        new ItemStack[] {
+                            new ItemStack(Material.OBSIDIAN),
+                            SlimefunItems.REINFORCED_ALLOY_INGOT,
+                            new ItemStack(Material.OBSIDIAN),
+                            SlimefunItems.REINFORCED_ALLOY_INGOT,
+                            SlimefunItems.GILDED_ENERGY_CONNECTOR,
+                            SlimefunItems.REINFORCED_ALLOY_INGOT,
+                            new ItemStack(Material.OBSIDIAN),
+                            SlimefunItems.REINFORCED_ALLOY_INGOT,
+                            new ItemStack(Material.OBSIDIAN)
+                        },
+                        new SlimefunItemStack(SlimefunItems.REINFORCED_ENERGY_CONNECTOR, 2))
                 .register(plugin);
 
         new EnergyConnector(
@@ -4496,8 +4536,18 @@ public final class SlimefunItemSetup {
                         18,
                         SlimefunItems.CARBONADO_ENERGY_CONNECTOR,
                         RecipeType.ENHANCED_CRAFTING_TABLE,
-                        new ItemStack[] {null, null, null, null, null, null, null, null, null},
-                        null)
+                        new ItemStack[] {
+                            new ItemStack(Material.DIAMOND_BLOCK),
+                            SlimefunItems.CARBONADO,
+                            new ItemStack(Material.DIAMOND_BLOCK),
+                            SlimefunItems.CARBONADO,
+                            SlimefunItems.REINFORCED_ENERGY_CONNECTOR,
+                            SlimefunItems.CARBONADO,
+                            new ItemStack(Material.DIAMOND_BLOCK),
+                            SlimefunItems.CARBONADO,
+                            new ItemStack(Material.DIAMOND_BLOCK)
+                        },
+                        new SlimefunItemStack(SlimefunItems.CARBONADO_ENERGY_CONNECTOR, 2))
                 .register(plugin);
 
         new SlimefunItem(

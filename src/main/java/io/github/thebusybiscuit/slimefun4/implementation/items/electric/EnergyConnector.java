@@ -28,14 +28,18 @@ import org.bukkit.inventory.ItemStack;
  */
 public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> implements EnergyNetComponent, NotRotatable {
 
+    private final int range;
+
     @ParametersAreNonnullByDefault
     public EnergyConnector(
             ItemGroup itemGroup,
+            int tier,
             SlimefunItemStack item,
             RecipeType recipeType,
             ItemStack[] recipe,
             ItemStack recipeOutput) {
         super(itemGroup, item, recipeType, recipe, recipeOutput);
+        this.range = tier;
     }
 
     @Override
@@ -64,5 +68,10 @@ public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> impleme
     @Override
     public int getCapacity() {
         return 0;
+    }
+
+    @Override
+    public int getRange() {
+        return range;
     }
 }
