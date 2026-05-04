@@ -388,6 +388,8 @@ public abstract class Reactor extends AbstractEnergyProvider
 
         if (space >= produced) {
             return getEnergyProduction();
+        } else if (space > 0) {
+            return space;
         } else {
             return 0;
         }

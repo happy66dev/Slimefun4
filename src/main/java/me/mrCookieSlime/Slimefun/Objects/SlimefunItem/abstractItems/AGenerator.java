@@ -160,10 +160,15 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
 
                 if (isChargeable()) {
                     long charge = getChargeLong(l, data);
+                    long capacity = getCapacityLong();
+                    long canStore = capacity - charge;
 
-                    if (getCapacityLong() - charge >= getEnergyProduction()) {
+                    if (canStore >= getEnergyProduction()) {
                         operation.addProgress(1);
                         return getEnergyProduction();
+                    } else if (canStore > 0) {
+                        operation.addProgress(1);
+                        return (int) canStore;
                     }
 
                     return 0;
