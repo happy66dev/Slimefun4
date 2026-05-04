@@ -878,6 +878,21 @@ public class EnergyNet extends Network implements HologramOwner {
     }
 
     /**
+     * 检查目标是否在源位置的同一轴线上且距离不超过range
+     * 与processConnector的6轴向搜索一致：两个坐标轴差为0，第三个≤range
+     */
+    private static boolean isWithinRangeAxial(Location source, Location target, int range) {
+        int dx = Math.abs(source.getBlockX() - target.getBlockX());
+        int dy = Math.abs(source.getBlockY() - target.getBlockY());
+        int dz = Math.abs(source.getBlockZ() - target.getBlockZ());
+        // 两个轴向差为0(A)，第三个轴向差≤range且>0(B)
+        // 注意：完全相同的坐标（全0）返回false
+        return (dx == 0 && dy == 0 && dz <= range && dz > 0)
+                || (dx == 0 && dz == 0 && dy <= range && dy > 0)
+                || (dy == 0 && dz == 0 && dx <= range && dx > 0);
+    }
+
+    /**
      * 计算两个位置的最大轴向距离（用于调试显示）
      */
     private static int getDistance(Location loc1, Location loc2) {
@@ -885,6 +900,16 @@ public class EnergyNet extends Network implements HologramOwner {
         int dy = Math.abs(loc1.getBlockY() - loc2.getBlockY());
         int dz = Math.abs(loc1.getBlockZ() - loc2.getBlockZ());
         return Math.max(dx, Math.max(dy, dz));
+    }
+
+    /**
+     * 计算两个位置的轴向距离（两个坐标相同轴的差值）
+     */
+    private static int getAxialDistance(Location loc1, Location loc2) {
+        int dx = Math.abs(loc1.getBlockX() - loc2.getBlockX());
+        int dy = Math.abs(loc1.getBlockY() - loc2.getBlockY());
+        int dz = Math.abs(loc1.getBlockZ() - loc2.getBlockZ());
+        return dx + dy + dz;
     }
 
     /**
@@ -941,8 +966,8 @@ public class EnergyNet extends Network implements HologramOwner {
         // 正向验证：type1(发送方)能否发送到type2(接收方)
         boolean forwardValid = false;
         if (type1 == EnergyNetComponentType.CONNECTOR) {
-            // 连接器用自身范围覆盖目标
-            forwardValid = isWithinRange(loc1, loc2, comp1.getRange());
+            // 连接器用自身范围沿轴向覆盖目标（与processConnector轴向搜索一致）
+            forwardValid = isWithinRangeAxial(loc1, loc2, comp1.getRange());
         } else if (type1 == EnergyNetComponentType.GENERATOR) {
             // 发电机不需要正向验证，只需连接器能覆盖它即可（在反向中检查）
             forwardValid = true;
@@ -954,15 +979,15 @@ public class EnergyNet extends Network implements HologramOwner {
             return false;
         }
 
-        // 反向验证：type2(连接器)能否接收到type1的信号
+        // 反向验证：type2(连接器)能否接收到type1的信号（连接器需沿轴向覆盖）
         // 连接器之间不需要反向验证（允许单向连接，高范围→低范围）
         if (type2 == EnergyNetComponentType.CONNECTOR && type1 != EnergyNetComponentType.CONNECTOR) {
-            boolean reverseValid = isWithinRange(loc2, loc1, comp2.getRange());
+            boolean reverseValid = isWithinRangeAxial(loc2, loc1, comp2.getRange());
             if (DEBUG_PATHS && type1 == EnergyNetComponentType.GENERATOR) {
                 debugPathLog("validateConnection: 反向验证 连接器=" + formatLocation(loc2)
                         + " range=" + comp2.getRange()
                         + " 到发电机=" + formatLocation(loc1)
-                        + " 距离=" + getDistance(loc2, loc1)
+                        + " 轴向距离=" + getAxialDistance(loc2, loc1)
                         + " 结果=" + reverseValid);
             }
             return reverseValid;
@@ -1342,7 +1367,7 @@ public class EnergyNet extends Network implements HologramOwner {
                         int connRange = connComp != null ? connComp.getRange() : -1;
                         debugPathLog("getNeighbors(GENERATOR): 检查连接器 " + formatLocation(connectorLoc)
                                 + " range=" + connRange
-                                + " 距离=" + getDistance(location, connectorLoc)
+                                + " 轴向距离=" + getAxialDistance(location, connectorLoc)
                                 + " 结果=" + valid);
                     }
                     if (valid) {
@@ -1384,7 +1409,7 @@ public class EnergyNet extends Network implements HologramOwner {
 
             case CONNECTOR:
                 int connRange = getComponent(location).getRange();
-                // 连接器到连接器：双向范围覆盖
+                // 连接器到连接器：沿轴向双向范围覆盖（与processConnector一致）
                 if (DEBUG_PATHS) {
                     debugPathLog(
                             "getNeighbors(CONNECTOR): 当前=" + formatLocation(location) + " 连接器总数=" + connectors.size());
@@ -1400,7 +1425,7 @@ public class EnergyNet extends Network implements HologramOwner {
                                         EnergyNetComponentType.CONNECTOR);
                         if (DEBUG_PATHS) {
                             debugPathLog("getNeighbors(CONNECTOR): 检查连接器 " + formatLocation(otherConnector)
-                                    + " 距离=" + getDistance(location, otherConnector)
+                                    + " 轴向距离=" + getAxialDistance(location, otherConnector)
                                     + " 结果=" + valid);
                         }
                         if (valid) {
@@ -1408,9 +1433,9 @@ public class EnergyNet extends Network implements HologramOwner {
                         }
                     }
                 }
-                // 连接器到发电机：连接器范围覆盖发电机即可
+                // 连接器到发电机：连接器沿轴向覆盖发电机即可
                 for (Location terminus : generators.keySet()) {
-                    if (isWithinRange(location, terminus, connRange)) {
+                    if (isWithinRangeAxial(location, terminus, connRange)) {
                         if (validateConnection(
                                 location,
                                 terminus,
@@ -1420,22 +1445,22 @@ public class EnergyNet extends Network implements HologramOwner {
                         }
                     }
                 }
-                // 连接器到调节器：连接器范围覆盖调节器即可
-                if (!location.equals(regulator) && isWithinRange(location, regulator, connRange)) {
+                // 连接器到调节器：连接器沿轴向覆盖调节器即可
+                if (!location.equals(regulator) && isWithinRangeAxial(location, regulator, connRange)) {
                     neighbors.add(regulator);
                 }
-                // 连接器到用电器：连接器范围覆盖用电器即可
+                // 连接器到用电器：连接器沿轴向覆盖用电器即可
                 if (DEBUG_PATHS) {
                     debugPathLog("getNeighbors(CONNECTOR): 当前=" + formatLocation(location)
                             + " range=" + connRange
                             + " 用电器总数=" + consumers.size());
                 }
                 for (Location consumer : consumers.keySet()) {
-                    boolean inRange = isWithinRange(location, consumer, connRange);
+                    boolean inRange = isWithinRangeAxial(location, consumer, connRange);
                     EnergyNetComponent consumerComp = getComponent(consumer);
                     if (DEBUG_PATHS) {
                         debugPathLog("getNeighbors(CONNECTOR): 检查用电器 " + formatLocation(consumer)
-                                + " 距离=" + getDistance(location, consumer)
+                                + " 轴向距离=" + getAxialDistance(location, consumer)
                                 + " 在范围内=" + inRange
                                 + " getComponent="
                                 + (consumerComp != null ? consumerComp.getEnergyComponentType() : "null"));
@@ -1451,9 +1476,9 @@ public class EnergyNet extends Network implements HologramOwner {
                         }
                     }
                 }
-                // 连接器到电容：连接器范围覆盖电容即可
+                // 连接器到电容：连接器沿轴向覆盖电容即可
                 for (Location capacitor : capacitors.keySet()) {
-                    if (isWithinRange(location, capacitor, connRange)) {
+                    if (isWithinRangeAxial(location, capacitor, connRange)) {
                         if (validateConnection(
                                 location,
                                 capacitor,

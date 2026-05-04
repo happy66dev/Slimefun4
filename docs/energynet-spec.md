@@ -177,7 +177,7 @@ for each axis:
 | GENERATOR | 调节器 + 所有连接器（`validateConnection`） |
 | CONSUMER | **无出边**（不能作为发送方） |
 | CAPACITOR | 相邻电容(曼哈顿=1) + 调节器(26邻居) + 连接器(26邻居+`validateConnection`) |
-| CONNECTOR | 其他连接器 + 发电机 + 调节器 + 用电器 + 电容 |
+| CONNECTOR | 其他连接器 + 发电机 + 调节器 + 用电器 + 电容（**全部使用轴向范围检查** `isWithinRangeAxial`） |
 
 ---
 
@@ -247,16 +247,20 @@ else:
 |------|------|------|
 | `isAdjacent(loc1, loc2)` | `\|dx\|+\|dy\|+\|dz\| == 1` | **曼哈顿距离=1**（6方向：前后上下左右） |
 | `isWithinRange(src, tgt, range)` | `\|dx\|≤range && \|dy\|≤range && \|dz\|≤range` | **切比雪夫距离**（26邻居含对角线） |
+| `isWithinRangeAxial(src, tgt, range)` | (两个轴差=0, 第三个轴差≤range且>0) | **轴向距离**（6轴向，与processConnector一致） |
+| `getAxialDistance(loc1, loc2)` | `\|dx\|+\|dy\|+\|dz\|` | **曼哈顿距离**（调试显示用） |
+
+> **注意**：连接器的范围检查始终使用 `isWithinRangeAxial`（轴向），与 `processConnector` 的6轴向搜索保持一致，确保BFS路径计算和成员收集阶段行为一致。
 
 ### 7.2 `validateConnection()` [L876](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L876)
 
 | 发送方→接收方 | 正向验证 | 反向验证 |
 |--------------|---------|---------|
-| CAPACITOR→CAPACITOR | `isAdjacent`（直接返回，不走范围） | 不需要 |
-| CONNECTOR→* | `isWithinRange(loc1, loc2, comp1.range)` | 不需要 |
-| GENERATOR→CONNECTOR | `true`（发电机不验证） | `isWithinRange(conn, gen, conn.range)` |
-| CAPACITOR→CONNECTOR | `isWithinRange(cap, conn, 1)` (26邻居) | `isWithinRange(conn, cap, conn.range)` |
-| CONNECTOR↔CONNECTOR | 双向 `isWithinRange` | 不需要 |
+| CAPACITOR↔CAPACITOR | `isAdjacent`（直接返回） | 不需要 |
+| CONNECTOR→* | `isWithinRangeAxial(发送方, 接收方, 发送方.range)` | 不需要 |
+| GENERATOR→CONNECTOR | `true`（发电机不验证） | `isWithinRangeAxial(conn, gen, conn.range)` |
+| CAPACITOR→CONNECTOR | `isWithinRange(cap, conn, 1)` (26邻居) | `isWithinRangeAxial(conn, cap, conn.range)` |
+| CONNECTOR↔CONNECTOR | 默认已在轴向范围内 | 不需要 |
 
 ---
 
