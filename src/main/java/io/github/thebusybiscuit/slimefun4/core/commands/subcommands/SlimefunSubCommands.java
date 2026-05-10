@@ -50,6 +50,7 @@ public final class SlimefunSubCommands {
         commands.add(new ClearDataCommand(plugin, cmd));
         commands.add(new MachineDamageCommand(plugin, cmd));
         commands.add(new GridCommand(plugin, cmd));
+        commands.add(new MultimeterCommand(plugin, cmd));
         return commands;
     }
 }

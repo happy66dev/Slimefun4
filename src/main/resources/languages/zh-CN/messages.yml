@@ -16,6 +16,15 @@ commands:
   open_guide: 使用命令打开 Slimefun 指南
   stats: 查看玩家的统计数据
   id: 获取手持物品的 Slimefun ID
+  multimeter:
+    description: '[管理员] 调试指令，查看电网设备信息并可视化能量路径'
+    inspecting: '&6=== &e万用表 - 电网设备信息 &6==='
+    player-only: '&c只有玩家可以使用此指令'
+    no-target: '&c请看向一个方块'
+    no-slimefun: '&c这个位置没有 Slimefun 物品'
+    not-component: '&c这个物品不是电网组件'
+    no-network: '&c该机器不属于任何电网'
+    no-paths: '&e没有找到要显示的路径'
   cleardata:
     description: 清理世界数据
     success: '&a已清除&c {0} &a的&c {1} &a数据'

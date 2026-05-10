@@ -99,6 +99,9 @@ permissions:
   slimefun.command.unbanitem:
     description: Allows you to do /sf unbanitem
     default: op
+  slimefun.command.multimeter:
+    description: Allows you to use the Multimeter to inspect energy networks
+    default: true
   slimefun.android.bypass:
     description: Allows you to edit other Players Androids
     default: op

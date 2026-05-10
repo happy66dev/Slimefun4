@@ -10,6 +10,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.Radioactivity;
 import io.github.thebusybiscuit.slimefun4.core.handlers.RainbowTickHandler;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager;
 import io.github.thebusybiscuit.slimefun4.core.services.sounds.SoundEffect;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
@@ -66,6 +67,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.cargo.TrashCan;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.Capacitor;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.EnergyConnector;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.EnergyRegulator;
+import io.github.thebusybiscuit.slimefun4.implementation.items.electric.LongRangeConnector;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.gadgets.JetBoots;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.gadgets.Jetpack;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.gadgets.MultiTool;
@@ -4454,6 +4456,8 @@ public final class SlimefunItemSetup {
                         },
                         new SlimefunItemStack(SlimefunItems.BASIC_ENERGY_CONNECTOR, 4))
                 .register(plugin);
+        ConnectorAgingManager.registerConfig(
+                "BASIC_ENERGY_CONNECTOR", 12, 40, 75, 72000, new ItemStack(Material.REDSTONE));
 
         new EnergyConnector(
                         itemGroups.electricity,
@@ -4473,6 +4477,7 @@ public final class SlimefunItemSetup {
                         },
                         new SlimefunItemStack(SlimefunItems.ENERGY_CONNECTOR, 8))
                 .register(plugin);
+        ConnectorAgingManager.registerConfig("ENERGY_CONNECTOR", 24, 72, 160, 576000, SlimefunItems.CARBON.clone());
 
         new EnergyConnector(
                         itemGroups.electricity,
@@ -4492,6 +4497,8 @@ public final class SlimefunItemSetup {
                         },
                         new SlimefunItemStack(SlimefunItems.POWERFUL_ENERGY_CONNECTOR, 2))
                 .register(plugin);
+        ConnectorAgingManager.registerConfig(
+                "POWERFUL_ENERGY_CONNECTOR", 36, 100, 200, 144000, new ItemStack(Material.NETHER_BRICK));
 
         new EnergyConnector(
                         itemGroups.electricity,
@@ -4511,6 +4518,8 @@ public final class SlimefunItemSetup {
                         },
                         new SlimefunItemStack(SlimefunItems.GILDED_ENERGY_CONNECTOR, 2))
                 .register(plugin);
+        ConnectorAgingManager.registerConfig(
+                "GILDED_ENERGY_CONNECTOR", 100, 300, 500, 3456000, new ItemStack(Material.GOLD_INGOT));
 
         new EnergyConnector(
                         itemGroups.electricity,
@@ -4530,6 +4539,8 @@ public final class SlimefunItemSetup {
                         },
                         new SlimefunItemStack(SlimefunItems.REINFORCED_ENERGY_CONNECTOR, 2))
                 .register(plugin);
+        ConnectorAgingManager.registerConfig(
+                "REINFORCED_ENERGY_CONNECTOR", 300, 750, 1200, 6912000, SlimefunItems.REINFORCED_ALLOY_INGOT.clone());
 
         new EnergyConnector(
                         itemGroups.electricity,
@@ -4548,6 +4559,20 @@ public final class SlimefunItemSetup {
                             new ItemStack(Material.DIAMOND_BLOCK)
                         },
                         new SlimefunItemStack(SlimefunItems.CARBONADO_ENERGY_CONNECTOR, 2))
+                .register(plugin);
+        ConnectorAgingManager.registerConfig(
+                "CARBONADO_ENERGY_CONNECTOR", 512, 2000, 8000, 27648000, SlimefunItems.CARBONADO.clone());
+
+        new LongRangeConnector(
+                        itemGroups.electricity,
+                        SlimefunItems.LONG_RANGE_ENERGY_CONNECTOR,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {
+                            null, null, null,
+                            null, null, null,
+                            null, null, null
+                        },
+                        new SlimefunItemStack(SlimefunItems.LONG_RANGE_ENERGY_CONNECTOR, 1))
                 .register(plugin);
 
         new SlimefunItem(

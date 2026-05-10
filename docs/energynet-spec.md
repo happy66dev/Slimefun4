@@ -1,6 +1,6 @@
 # EnergyNet 能源电网技术实现文档
 
-> 最后更新：2026-05-05 | 版本：v2.1
+> 最后更新：2026-05-10 | 版本：v2.2（新增长途连接器）
 
 ---
 
@@ -59,9 +59,9 @@ EnergyNet (extends Network)
 |------|:---:|:---:|------|
 | 发电机 | `GENERATOR` | `TERMINUS` | 发电设备。分可储电（煤机）和不可储电（太阳能） |
 | 用电器 | `CONSUMER` | `TERMINUS` | 耗电设备，**不作为 BFS 发送方**（无出边） |
-| 电容 | `CAPACITOR` | `CONNECTOR` | 储能设备。电容→电容仅6方向相邻，电容↔连接器26邻居 |
-| 连接器 | `CONNECTOR` | `CONNECTOR` | 明文连接器。有 `range` 属性控制覆盖距离 |
-| 调节器 | *（不实现接口）* | `REGULATOR` | **特殊连接器**，RANGE=6。可作为路径跳点 |
+| 电容 | `CAPACITOR` | `CONNECTOR` | 储能设备。电容→电容仅6方向相邻，电容↔连接器/调节器6方向相邻 |
+| 连接器 | `CONNECTOR` | `CONNECTOR` | 明文连接器。有 `range` 属性控制轴向覆盖距离 |
+| 调节器 | *（不实现接口）* | `REGULATOR` | **特殊连接器**，RANGE=6（轴向）。可作为路径跳点 |
 
 > **特殊规则**：能源调节器不实现 `EnergyNetComponent`，但被当作特殊连接器处理——BFS 可以通过它路由，且每过一个调节器计1跳。
 
@@ -157,6 +157,7 @@ for each axis:
 **核心BFS算法**：
 - `List<BFSNode>` + head指针（替代Queue，支持父节点回溯）
 - 遇到 CONSUMER → 记录路径（最短距离优先，等长路径保留多条）
+- **消费者允许多条路径**：消费者不参与 `bfsVisited` 去重，多路径在连接器汇聚后仍能分别到达用电器
 - 遇到 CONNECTOR → 剪枝（跳过已找到更短路径的连接器）
 - 遇到 `regulator`（组件为null） → 调用 `addRegulatorNeighbors()`
 - 遇到 CAPACITOR → `getNeighbors(CAPACITOR)` 获取邻居（包括电容桥接）
@@ -177,7 +178,8 @@ for each axis:
 | GENERATOR | 调节器 + 所有连接器（`validateConnection`） |
 | CONSUMER | **无出边**（不能作为发送方） |
 | CAPACITOR | 相邻电容(曼哈顿=1) + 调节器(26邻居) + 连接器(26邻居+`validateConnection`) |
-| CONNECTOR | 其他连接器 + 发电机 + 调节器 + 用电器 + 电容（**全部使用轴向范围检查** `isWithinRangeAxial`） |
+| CONNECTOR(普通) | 其他连接器 + 发电机 + 调节器 + 用电器 + 电容（**全部使用轴向范围检查** `isWithinRangeAxial`） |
+| CONNECTOR(长途) | **仅其他连接器**（不连接发电机、调节器、用电器、电容） |
 
 ---
 
@@ -250,14 +252,21 @@ else:
 | `isWithinRangeAxial(src, tgt, range)` | (两个轴差=0, 第三个轴差≤range且>0) | **轴向距离**（6轴向，与processConnector一致） |
 | `getAxialDistance(loc1, loc2)` | `\|dx\|+\|dy\|+\|dz\|` | **曼哈顿距离**（调试显示用） |
 
-> **注意**：连接器的范围检查始终使用 `isWithinRangeAxial`（轴向），与 `processConnector` 的6轴向搜索保持一致，确保BFS路径计算和成员收集阶段行为一致。
+> **注意**：连接器**和调节器**的范围检查始终使用 `isWithinRangeAxial`（轴向），与 `processConnector` 和调节器6轴向搜索保持一致，确保BFS路径计算和成员收集阶段行为一致。
+>
+> **长途连接器（LongRangeConnector）特殊规则**：
+> - `LongRangeConnector` 的 range=128，但 `getMaxConnectorRange()` 排除它，不参与调节器/发电机搜索范围计算
+> - 当普通连接器作为发送方且目标为长途连接器时，正向验证使用长途连接器的 range(128)
+> - 长途连接器在 `processConnector()` 中仅将 CONNECTOR 类型加入 BFS 队列
+> - 长途连接器在 `getNeighbors(CONNECTOR)` 中仅生成到其他连接器的边
 
 ### 7.2 `validateConnection()` [L876](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L876)
 
 | 发送方→接收方 | 正向验证 | 反向验证 |
 |--------------|---------|---------|
 | CAPACITOR↔CAPACITOR | `isAdjacent`（直接返回） | 不需要 |
-| CONNECTOR→* | `isWithinRangeAxial(发送方, 接收方, 发送方.range)` | 不需要 |
+| CONNECTOR→普通CONNECTOR | `isWithinRangeAxial(发送方, 接收方, 发送方.range)` | 不需要 |
+| CONNECTOR→长途CONNECTOR | `isWithinRangeAxial(发送方, 接收方, 长途.range=128)` | 不需要 |
 | GENERATOR→CONNECTOR | `true`（发电机不验证） | `isWithinRangeAxial(conn, gen, conn.range)` |
 | CAPACITOR→CONNECTOR | `isWithinRange(cap, conn, 1)` (26邻居) | `isWithinRangeAxial(conn, cap, conn.range)` |
 | CONNECTOR↔CONNECTOR | 默认已在轴向范围内 | 不需要 |
@@ -302,6 +311,161 @@ else:
 
 - 同（源, 目标, 跳数）的多条路径标记 `×N条路线`
 - >1条时逐条展开显示各路线连接器链
+
+### 8.4 万用表 (Multimeter) — 物品 + 管理员指令
+
+万用表是玩家可合成的电网检测工具。同时提供管理员指令 `/sf multimeter` 作为调试替代。
+
+#### 8.4.1 物品Lore及使用方式
+
+**物品Lore：**
+```
+右键 - 查看电网设备详细信息
+潜行+右键 - 切换路线粒子/连接器负载
+
+粒子颜色说明:
+● 白色 = 多目标共享路段
+● 淡蓝 = 电容充电路线
+● 橙●粉 = 用电器供电路线
+```
+
+**使用方式：**
+
+| 操作 | 效果 |
+|------|------|
+| **右键** 机器 | 显示电网设备信息文本（类型、电量/容量、电网信息、路径详情） |
+| **潜行+右键** 发电机/用电器/电容 | **切换**路径显示：路径粒子(15s) + 连接器负载全息 + 端点储能全息(每秒实时刷新) |
+| **潜行+右键** 连接器 | 显示连接器刻负载全息(15s，再次使用重置计时器) |
+| 再次潜行+右键同一路径起始机器 | **关闭**路径显示 |
+
+**激活颜色提示：** 开启路径显示时，物品会额外发送一行颜色说明消息：
+```
+● 白色=共享段 ● 淡蓝=电容 ● 橙●粉=用电器
+```
+
+#### 8.4.2 管理指令 `/sf multimeter`
+
+| 语法 | 效果 |
+|------|------|
+| `/sf multimeter` | 看向机器，显示电网设备信息 |
+| `/sf multimeter -p` | 看向机器，显示信息 + 切换路径显示/连接器负载 |
+
+需要权限 `slimefun.command.multimeter`（默认仅 OP）
+
+#### 8.4.3 粒子颜色方案
+
+粒子颜色根据**目的地类型**赋予语义含义：
+
+| 段类型 | 颜色 | 说明 |
+|--------|------|------|
+| 共享段 | `⬜ 白色` | 多条路径共用的线段 |
+| 电容充电路段 | `🟦 蓝色/淡蓝/深蓝/紫蓝` | 目的地为电容的路线，多个电容时按顺序分配蓝色系变体 |
+| 用电器供电路段 | `🟥🟧🟨🟪 红/橙/黄/粉` | 目的地为用电器的路线，多个用电器时按顺序分配暖色系变体 |
+| 粒子类型 | `DUST` (彩色) | 使用 `Particle.DustOptions` 控制颜色和大小(1.5F) |
+
+**分配逻辑 (`assignConsumerColors`)：** 遍历所有路径，判断 `consumer` 是否属于 `net.getCapacitors()`；是则从 `CAPACITOR_COLORS[]`（蓝色系4色）分配，否则从 `CONSUMER_COLORS[]`（暖色系4色）分配。
+
+#### 8.4.4 显示管理机制 — `MultimeterDisplayManager`
+
+| 组件 | 类 | 说明 |
+|------|---|------|
+| 路径显示 | `PathDisplay` (内部类) | 粒子闪烁(每秒刷新) + 负载全息(实时更新) + **端点储能全息(每秒实时刷新)**，15s自动清除 |
+| 连接器负载 | `ConnectorDisplay` (内部类) | 仅刻负载全息+倒计时，15s清除，再点重置计时器 |
+| 生命周期 | `PlayerQuitEvent` | 玩家退出自动清理所有显示 |
+| 范围控制 | `hasNearbyPlayer()` | 粒子仅在有玩家在32格内时生成（全息不受此限制） |
+
+#### 8.4.5 显示结束时的清理
+
+- 15s倒计时到 0 时：粒子任务取消 + 全息删除 + 从显示映射中移除
+- 玩家退出服务器：通过 `PlayerQuitEvent` 清理该玩家的所有显示
+- 服务器重启：全息服务在内存中，重启后自然清除
+
+#### 8.4.6 合成配方
+
+```
+铜锭  -   铜锭
+ -  红石合金  -
+ -   6K金  -
+```
+增强工作台合成
+
+研究ID：`176`，名称：`Power Measurement`（能量测量），等级：10
+
+### 8.5 连接器老化/损坏机制
+
+#### 8.5.1 核心机制
+
+每个连接器拥有浮点耐久（0.0 ~ 1.0，初始 1.0），重启不丢失（通过 `blockData.setData()` 持久化到数据库）。
+
+每 tick 如果连接器参与了能量传输，根据负载计算老化概率，判定成功则扣除 0.01% 耐久。
+
+耐久降至 0% 时：标记为损坏 → 触发 `EnergyNet.markDirty()` 断开连接 → 显示 "§c连接器损坏" 全息。
+
+#### 8.5.2 各连接器参数
+
+| 连接器 | 甜点功率 | 最大功率 | 峰值功率 | 期望寿命(tick) | 总吞吐容量(J) | 修复物品 |
+|-------|:--------:|:--------:|:--------:|:-------------:|:------------:|---------|
+| 简易能源连接器 | 12 J/t | 40 J/t | 75 J/t | 72,000 | 2.88M J | 红石 |
+| 大功率能源连接器 | 36 J/t | 100 J/t | 200 J/t | 144,000 | 14.40M J | 地狱砖 |
+| 能源连接器 | 24 J/t | 72 J/t | 160 J/t | 576,000 | 41.47M J | 碳 |
+| 镶金能源连接器 | 100 J/t | 300 J/t | 500 J/t | 3,456,000 | 1.04B J | 金锭 |
+| 强化能源连接器 | 300 J/t | 750 J/t | 1,200 J/t | 6,912,000 | 5.18B J | 强化合金锭 |
+| 黑钻能源连接器 | 512 J/t | 2,000 J/t | 8,000 J/t | 27,648,000 | 55.30B J | 黑金刚石 |
+
+#### 8.5.3 老化概率公式
+
+```
+totalProb = baseProb × loadFactor × ageFactor
+```
+
+- **baseProb** = (100 / 0.01) / expectedLifetime（由期望寿命自动校准）
+- **loadFactor**：高次幂分段函数（指数 exp=4）：
+  - load ≤ sweetPower：线性 `0.2 × load/sweetPower`
+  - sweet < load ≤ max：`0.2 + 0.8 × r^4`
+  - max < load ≤ peak：`1 + 9 × r^4`
+  - load > peak：强制过载惩罚
+- **ageFactor** = `1 + (1 - durability) × 4.0`（低耐久加速老化）
+
+#### 8.5.4 过载惩罚
+
+当 load > peakPower 时：
+- 不经过概率判定，强制扣除 `0.5% × (load/peakPower)` 耐久
+- 产生烟雾 + 橙色电火花粒子
+- 连续过载 10 秒直接损坏
+
+#### 8.5.5 耐久状态等级
+
+| 耐久范围 | 状态 | 显示颜色 | 表现 |
+|---------|------|---------|------|
+| >80% | 健康 | 🟢 &a | 满性能 |
+| 50%~80% | 正常 | 🟡 &e | 正常 |
+| 30%~50% | 磨损 | 🟠 &6 | 性能下降 |
+| 15%~30% | 老化 | 🔴 &c | 明显衰减 |
+| 0%~15% | 预计故障 | ⚫ &4 | 濒临损坏 |
+| 0% | 已损坏 | ❌ &c | 断开连接 |
+
+#### 8.5.6 右键修复机制
+
+右键连接器时显示耐久的修复信息：
+- 耐久 >66%：消耗 1 个修复物品修复到 100%
+- 耐久 >33%：消耗 2 个修复物品
+- 耐久 >0%：消耗 3 个修复物品
+- 已损坏(0%)：消耗 4 个修复物品
+
+修复物品为各连接器配方的核心材料（红石/地狱砖/碳/金锭/强化合金锭/黑金刚石）。
+
+#### 8.5.7 显示集成
+
+- **连接器 Lore**：甜点/最大/峰值功率 + 总传输容量
+- **万用表**：点击连接器显示 `耐久: XX.X% (状态)` + `剩余吞吐: X.X J`
+- **路径悬浮字**：负载后增加状态文字，如 `负载: 50 J 健康`
+- **拆除**：耐久 >95% 正常掉落，≤95% 参考损坏机器拆除机制
+
+#### 8.5.8 实现类
+
+- `ConnectorAgingManager` — 核心管理类（`core/networks/energy/`），含配置注册、概率计算、数据存储、修复逻辑
+- `EnergyNet.performEnergyTransfer()` 末尾调用 `ConnectorAgingManager.processAging(this)`
+- `EnergyConnector.BlockUseHandler` 显示耐久信息并处理右键修复
 
 ---
 
@@ -482,6 +646,18 @@ tick()
     ├── transferFromGenerators()
     ├── storeRemainingEnergy()
     └── transferFromCapacitors()
+
+MultimeterDisplayManager (独立于tick)
+├── PathDisplay.start()
+│   ├── spawnParticles()        (每秒刷新粒子)
+│   ├── createHolograms()       (初始全息创建)
+│   └── updateHolograms()       (每秒刷新负载)
+│   └── 15s超时 → cancel() → removeHolograms()
+├── ConnectorDisplay.start()
+│   ├── updateHologram()        (每秒刷新)
+│   └── 15s超时 → cancel()
+└── onPlayerQuit()
+    └── cleanupPlayer()         (清理所有显示)
 ```
 
 ---
@@ -498,13 +674,15 @@ class BFSNode {
 }
 ```
 
-### EnergyPath [L2361](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L2361)
+### EnergyPath [L2361](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L2361) — `public` 类
 
 ```java
-class EnergyPath {
-    Location source;          // 发电机或电容
-    Location consumer;        // 用电器（或电容，用于充电路由）
-    List<Location> connectors; // 路径上的连接器+调节器
-    int length;               // = connectors.size()
+public static class EnergyPath {
+    Location source;          // 发电机或电容 → getSource()
+    Location consumer;        // 用电器（或电容）→ getConsumer()
+    List<Location> connectors; // 路径上的连接器+调节器 → getConnectors()
+    int length;               // = connectors.size() → getLength()
 }
 ```
+
+万用表和 `/sf multimeter` 指令通过 `EnergyNet.getGeneratorPaths()`、`getCapacitorPaths()`、`getGeneratorToCapacitorPaths()` 公开 getter 获取路径数据。

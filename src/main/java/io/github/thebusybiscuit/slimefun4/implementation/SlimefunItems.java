@@ -1883,8 +1883,18 @@ public final class SlimefunItems {
             LoreBuilder.machine(MachineTier.AVERAGE, MachineType.GENERATOR),
             "&8\u21E8 &e\u26A1 &7128 J 可储存",
             LoreBuilder.powerPerSecond(16));
-    public static final SlimefunItemStack MULTIMETER =
-            new SlimefunItemStack("MULTIMETER", Material.CLOCK, "&e万用表", "", "&r查看机器中储存的能量");
+    public static final SlimefunItemStack MULTIMETER = new SlimefunItemStack(
+            "MULTIMETER",
+            Material.CLOCK,
+            "&e万用表",
+            "",
+            "&7[右键] &r查看电网设备详细信息",
+            "&7[潜行+右键] &r切换路线粒子/连接器负载",
+            "",
+            "&e粒子颜色说明:",
+            "&f● &7白色 = 多目标共享路段",
+            "&9● &b淡蓝 = &r电容充电路线",
+            "&c● &6橙 &e● &d粉 = &r用电器供电路线");
 
     public static final SlimefunItemStack SMALL_CAPACITOR = new SlimefunItemStack(
             "SMALL_CAPACITOR",
@@ -2331,6 +2341,8 @@ public final class SlimefunItems {
             HeadTexture.ENERGY_CONNECTOR,
             "&c能源连接器",
             LoreBuilder.range(5),
+            "&8甜点: &e24 J/t  &8最大: &e72 J/t  &8峰值: &e160 J/t",
+            "&8总传输容量: &e41.47M J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2339,6 +2351,8 @@ public final class SlimefunItems {
             Material.WHITE_CONCRETE,
             "&f简易能源连接器",
             LoreBuilder.range(3),
+            "&8甜点: &e12 J/t  &8最大: &e40 J/t  &8峰值: &e75 J/t",
+            "&8总传输容量: &e2.88M J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2347,6 +2361,8 @@ public final class SlimefunItems {
             Material.RED_CONCRETE,
             "&c大功率能源连接器",
             LoreBuilder.range(4),
+            "&8甜点: &e36 J/t  &8最大: &e100 J/t  &8峰值: &e200 J/t",
+            "&8总传输容量: &e14.40M J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2355,6 +2371,8 @@ public final class SlimefunItems {
             Material.YELLOW_CONCRETE,
             "&6镶金能源连接器",
             LoreBuilder.range(6),
+            "&8甜点: &e100 J/t  &8最大: &e300 J/t  &8峰值: &e500 J/t",
+            "&8总传输容量: &e1.04B J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2363,6 +2381,8 @@ public final class SlimefunItems {
             Material.BLUE_CONCRETE,
             "&b强化能源连接器",
             LoreBuilder.range(10),
+            "&8甜点: &e300 J/t  &8最大: &e750 J/t  &8峰值: &e1200 J/t",
+            "&8总传输容量: &e5.18B J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2371,9 +2391,19 @@ public final class SlimefunItems {
             Material.BLACK_CONCRETE,
             "&8黑钻能源连接器",
             LoreBuilder.range(18),
+            "&8甜点: &e512 J/t  &8最大: &e2000 J/t  &8峰值: &e8000 J/t",
+            "&8总传输容量: &e55.30B J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
+    public static final SlimefunItemStack LONG_RANGE_ENERGY_CONNECTOR = new SlimefunItemStack(
+            "LONG_RANGE_ENERGY_CONNECTOR",
+            Material.IRON_BLOCK,
+            "&b长途连接器",
+            LoreBuilder.range(128),
+            "",
+            "&f用于远距离连接能源网络",
+            "&f只能连接到其他连接器");
     public static final SlimefunItemStack DEBUG_FISH = new SlimefunItemStack(
             "DEBUG_FISH",
             Material.SALMON,

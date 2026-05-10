@@ -1,65 +1,84 @@
-package io.github.thebusybiscuit.slimefun4.implementation.items.electric.gadgets;
+package io.github.thebusybiscuit.slimefun4.core.commands.subcommands;
 
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.bakedlibs.dough.common.ChatColors;
-import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
-import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
-import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetProvider;
-import io.github.thebusybiscuit.slimefun4.core.handlers.ItemUseHandler;
+import io.github.thebusybiscuit.slimefun4.core.commands.SlimefunCommand;
+import io.github.thebusybiscuit.slimefun4.core.commands.SubCommand;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet.EnergyPath;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.MultimeterDisplayManager;
-import io.github.thebusybiscuit.slimefun4.implementation.items.SimpleSlimefunItem;
+import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
-import javax.annotation.ParametersAreNonnullByDefault;
+import javax.annotation.Nonnull;
 import org.bukkit.Location;
+import org.bukkit.block.Block;
+import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.inventory.ItemStack;
 
-public class Multimeter extends SimpleSlimefunItem<ItemUseHandler> {
+class MultimeterCommand extends SubCommand {
 
-    @ParametersAreNonnullByDefault
-    public Multimeter(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
-        super(itemGroup, item, recipeType, recipe);
+    protected MultimeterCommand(Slimefun plugin, SlimefunCommand cmd) {
+        super(plugin, cmd, "multimeter", false);
     }
 
     @Override
-    public ItemUseHandler getItemHandler() {
-        return e -> {
-            Optional<SlimefunItem> block = e.getSlimefunBlock();
+    public void onExecute(@Nonnull CommandSender sender, @Nonnull String[] args) {
+        if (!(sender instanceof Player p)) {
+            sender.sendMessage(ChatColors.color("&c只有玩家可以使用此指令"));
+            return;
+        }
 
-            if (e.getClickedBlock().isPresent() && block.isPresent()) {
-                SlimefunItem sfItem = block.get();
+        if (!sender.hasPermission("slimefun.command.multimeter")) {
+            Slimefun.getLocalization().sendMessage(sender, "messages.no-permission", true);
+            return;
+        }
 
-                if (sfItem instanceof EnergyNetComponent component) {
-                    e.cancel();
-                    Player p = e.getPlayer();
-                    Location loc = e.getClickedBlock().get().getLocation();
-                    boolean sneaking = p.isSneaking();
-
-                    String info = buildComponentInfo(loc, component);
-                    p.sendMessage(ChatColors.color(info));
-
-                    if (sneaking) {
-                        handleSneakAction(p, loc, component);
-                    }
-                }
+        boolean showDisplay = false;
+        for (String arg : args) {
+            if (arg.equalsIgnoreCase("-p") || arg.equalsIgnoreCase("--particle")) {
+                showDisplay = true;
+                break;
             }
-        };
+        }
+
+        Block target = p.getTargetBlockExact(10);
+        if (target == null) {
+            sender.sendMessage(ChatColors.color("&c请看向一个方块"));
+            return;
+        }
+
+        Location loc = target.getLocation();
+        SlimefunItem sfItem = StorageCacheUtils.getSlimefunItem(loc);
+
+        if (sfItem == null) {
+            sender.sendMessage(ChatColors.color("&c这个位置没有 Slimefun 物品"));
+            return;
+        }
+
+        if (!(sfItem instanceof EnergyNetComponent component)) {
+            sender.sendMessage(ChatColors.color("&c这个物品不是电网组件"));
+            return;
+        }
+
+        String info = buildComponentInfo(loc, component);
+        sender.sendMessage(ChatColors.color(info));
+
+        if (showDisplay) {
+            handleDisplay(p, loc, component);
+        }
     }
 
-    private void handleSneakAction(Player p, Location loc, EnergyNetComponent component) {
+    private void handleDisplay(Player p, Location loc, EnergyNetComponent component) {
         EnergyNetComponentType type = component.getEnergyComponentType();
 
         if (type == EnergyNetComponentType.CONNECTOR) {

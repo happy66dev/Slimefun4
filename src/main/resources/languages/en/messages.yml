@@ -44,6 +44,16 @@ commands:
     reload-success: "&aReloaded config file successfully."
     reload-failed: "&cReload config failed, you may need restart server to apply change, see console for more info."
 
+  multimeter:
+    description: '[Admin] Inspect energy machines and visualize power paths'
+    inspecting: '&6=== &eMultimeter - Energy Network Info &6==='
+    player-only: '&cOnly players can use this command'
+    no-target: '&cYou are not looking at a block!'
+    no-slimefun: '&cThis location does not contain a Slimefun item'
+    not-component: '&cThis item is not an energy network component'
+    no-network: '&cThis machine does not belong to any energy network'
+    no-paths: '&eNo paths to display'
+
 placeholderapi:
   profile-loading: 'Loading...'
 

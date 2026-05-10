@@ -12,12 +12,15 @@ import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetProvider;
 import io.github.thebusybiscuit.slimefun4.core.attributes.HologramOwner;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
+import io.github.thebusybiscuit.slimefun4.implementation.items.electric.LongRangeConnector;
 import io.github.thebusybiscuit.slimefun4.utils.NumberUtils;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -190,6 +193,78 @@ public class EnergyNet extends Network implements HologramOwner {
      */
     public @Nonnull Map<Location, EnergyNetComponent> getConsumers() {
         return Collections.unmodifiableMap(consumers);
+    }
+
+    /**
+     * This creates an immutable {@link Map} of {@link EnergyNetComponentType#CONNECTOR} {@link EnergyNetComponent}s within this {@link EnergyNet} instance.
+     *
+     * @return An immutable {@link Map} of connectors
+     */
+    public @Nonnull Map<Location, EnergyNetComponent> getConnectors() {
+        return Collections.unmodifiableMap(connectors);
+    }
+
+    /**
+     * This creates an immutable {@link Map} of connector loads within this {@link EnergyNet} instance.
+     *
+     * @return An immutable {@link Map} of connector loads
+     */
+    public @Nonnull Map<Location, Long> getConnectorLoad() {
+        return Collections.unmodifiableMap(connectorLoad);
+    }
+
+    /**
+     * This creates an immutable {@link Map} of generator energy paths within this {@link EnergyNet} instance.
+     *
+     * @return An immutable {@link Map} of generator paths
+     */
+    public @Nonnull Map<Location, Set<EnergyPath>> getGeneratorPaths() {
+        return Collections.unmodifiableMap(generatorPaths);
+    }
+
+    /**
+     * This creates an immutable {@link Map} of capacitor energy paths within this {@link EnergyNet} instance.
+     *
+     * @return An immutable {@link Map} of capacitor paths
+     */
+    public @Nonnull Map<Location, Set<EnergyPath>> getCapacitorPaths() {
+        return Collections.unmodifiableMap(capacitorPaths);
+    }
+
+    /**
+     * This creates an immutable {@link Map} of generator-to-capacitor energy paths within this {@link EnergyNet} instance.
+     *
+     * @return An immutable {@link Map} of generator-to-capacitor paths
+     */
+    public @Nonnull Map<Location, Map<Location, EnergyPath>> getGeneratorToCapacitorPaths() {
+        return Collections.unmodifiableMap(generatorToCapacitorPaths);
+    }
+
+    /**
+     * Gets the {@link Location} of the regulator of this {@link EnergyNet}.
+     *
+     * @return The regulator location
+     */
+    public @Nonnull Location getRegulator() {
+        return regulator;
+    }
+
+    /**
+     * Checks whether this {@link EnergyNet} is currently initializing.
+     *
+     * @return true if initializing
+     */
+    public boolean isInitializing() {
+        return initializing;
+    }
+
+    /**
+     * Checks whether this {@link EnergyNet} has been initialized.
+     *
+     * @return true if initialized
+     */
+    public boolean isInitialized() {
+        return initialized;
     }
 
     @Override
@@ -523,6 +598,27 @@ public class EnergyNet extends Network implements HologramOwner {
 
                 // 保存计数器值
                 data.setData("machine_damage_charge_counter", String.valueOf(chargeCounter));
+
+                // 记录连接器负载：找到所有发电机到此电容的路径，均摊chargeDiff
+                int pathCount = 0;
+                for (Map<Location, EnergyPath> paths : generatorToCapacitorPaths.values()) {
+                    if (paths.containsKey(loc)) pathCount++;
+                }
+                if (pathCount > 0) {
+                    long loadPerPath = chargeDiff / pathCount;
+                    long loadRemainder = chargeDiff % pathCount;
+                    int idx = 0;
+                    for (Map<Location, EnergyPath> paths : generatorToCapacitorPaths.values()) {
+                        EnergyPath path = paths.get(loc);
+                        if (path != null) {
+                            long pathLoad = loadPerPath + (idx < loadRemainder ? 1 : 0);
+                            if (pathLoad > 0) {
+                                recordConnectorLoad(path, pathLoad);
+                            }
+                            idx++;
+                        }
+                    }
+                }
             }
         }
         debugLog("storeRemainingEnergy: 实际存储 " + totalStored + "J");
@@ -836,6 +932,7 @@ public class EnergyNet extends Network implements HologramOwner {
         // 重新添加调节器
         regulatorNodes.add(regulator);
         connectedLocations.add(regulator);
+        connectorLoad.put(regulator, 0L);
     }
 
     /**
@@ -855,7 +952,7 @@ public class EnergyNet extends Network implements HologramOwner {
         }
 
         int connectorRange = connectorComponent.getRange();
-        return isWithinRange(connectorLoc, machineLoc, connectorRange);
+        return isWithinRangeAxial(connectorLoc, machineLoc, connectorRange);
     }
 
     /**
@@ -928,6 +1025,9 @@ public class EnergyNet extends Network implements HologramOwner {
     private int getMaxConnectorRange() {
         int max = RANGE;
         for (EnergyNetComponent comp : connectors.values()) {
+            if (comp instanceof LongRangeConnector) {
+                continue;
+            }
             int range = comp.getRange();
             if (range > max) {
                 max = range;
@@ -966,14 +1066,18 @@ public class EnergyNet extends Network implements HologramOwner {
         // 正向验证：type1(发送方)能否发送到type2(接收方)
         boolean forwardValid = false;
         if (type1 == EnergyNetComponentType.CONNECTOR) {
+            int effectiveRange = comp1.getRange();
+            if (type2 == EnergyNetComponentType.CONNECTOR && comp2 instanceof LongRangeConnector) {
+                effectiveRange = comp2.getRange();
+            }
             // 连接器用自身范围沿轴向覆盖目标（与processConnector轴向搜索一致）
-            forwardValid = isWithinRangeAxial(loc1, loc2, comp1.getRange());
+            forwardValid = isWithinRangeAxial(loc1, loc2, effectiveRange);
         } else if (type1 == EnergyNetComponentType.GENERATOR) {
             // 发电机不需要正向验证，只需连接器能覆盖它即可（在反向中检查）
             forwardValid = true;
         } else if (type1 == EnergyNetComponentType.CAPACITOR) {
-            // 电容到连接器：26邻居内（含对角线），连接器可接收即可
-            forwardValid = isWithinRange(loc1, loc2, 1);
+            // 电容到连接器：相邻（6方向），连接器可接收即可
+            forwardValid = isAdjacent(loc1, loc2);
         }
         if (!forwardValid) {
             return false;
@@ -1164,9 +1268,10 @@ public class EnergyNet extends Network implements HologramOwner {
 
                 if (!bfsVisited.add(neighbor)) {
                     if (isConsumer) {
-                        debugPathLogLimited("BFS邻居: 消费者已被访问，跳过! loc=" + formatLocation(neighbor));
+                        debugPathLogLimited("BFS邻居: 消费者已被访问，但允许重复加入(路径汇聚)! loc=" + formatLocation(neighbor));
+                    } else {
+                        continue;
                     }
-                    continue;
                 }
 
                 if (isConsumer) {
@@ -1309,12 +1414,12 @@ public class EnergyNet extends Network implements HologramOwner {
         // 调节器本身作为特殊连接器，通过它需要+1跳
         int regLength = currentLength + 1;
         for (Location genLoc : generators.keySet()) {
-            if (!genLoc.equals(source) && isWithinRange(regulator, genLoc, regRange) && bfsVisited.add(genLoc)) {
+            if (!genLoc.equals(source) && isWithinRangeAxial(regulator, genLoc, regRange) && bfsVisited.add(genLoc)) {
                 nodes.add(new BFSNode(genLoc, parentIndex, regLength));
             }
         }
         for (Location conLoc : consumers.keySet()) {
-            boolean inRange = isWithinRange(regulator, conLoc, regRange);
+            boolean inRange = isWithinRangeAxial(regulator, conLoc, regRange);
             boolean added = inRange && bfsVisited.add(conLoc);
             if (debugPathLogLimited("addRegulatorNeighbors: 消费者=" + formatLocation(conLoc)
                     + " inRange=" + inRange + " regRange=" + regRange
@@ -1328,12 +1433,12 @@ public class EnergyNet extends Network implements HologramOwner {
             }
         }
         for (Location capLoc : capacitors.keySet()) {
-            if (isWithinRange(regulator, capLoc, regRange) && bfsVisited.add(capLoc)) {
+            if (isWithinRangeAxial(regulator, capLoc, regRange) && bfsVisited.add(capLoc)) {
                 nodes.add(new BFSNode(capLoc, parentIndex, regLength));
             }
         }
         for (Location connLoc : connectors.keySet()) {
-            if (isWithinRange(regulator, connLoc, regRange) && bfsVisited.add(connLoc)) {
+            if (isWithinRangeAxial(regulator, connLoc, regRange) && bfsVisited.add(connLoc)) {
                 nodes.add(new BFSNode(connLoc, parentIndex, regLength + 1));
             }
         }
@@ -1348,10 +1453,10 @@ public class EnergyNet extends Network implements HologramOwner {
 
         switch (type) {
             case GENERATOR:
-                // 调节器作为特殊连接点（范围=RANGE）
+                // 调节器作为特殊连接点（沿轴向搜索范围=RANGE，与collectNetworkMembers一致）
                 if (!location.equals(regulator)
-                        && isWithinRange(location, regulator, getMaxConnectorRange())
-                        && isWithinRange(regulator, location, RANGE)) {
+                        && isWithinRangeAxial(location, regulator, getMaxConnectorRange())
+                        && isWithinRangeAxial(regulator, location, RANGE)) {
                     neighbors.add(regulator);
                 }
                 // 发电机搜索电网内所有连接器，验证连接器范围能否覆盖发电机
@@ -1389,13 +1494,13 @@ public class EnergyNet extends Network implements HologramOwner {
                         neighbors.add(capacitorLoc);
                     }
                 }
-                // 电容到调节器：26邻居内（含对角线），调节器作为特殊连接器
-                if (!location.equals(regulator) && isWithinRange(location, regulator, 1)) {
+                // 电容到调节器：相邻（6方向），调节器作为特殊连接器
+                if (!location.equals(regulator) && isAdjacent(location, regulator)) {
                     neighbors.add(regulator);
                 }
-                // 电容到连接器：26邻居内（含对角线）+ 连接器范围覆盖电容
+                // 电容到连接器：相邻（6方向）+ 连接器范围覆盖电容
                 for (Location connectorLoc : connectors.keySet()) {
-                    if (isWithinRange(location, connectorLoc, 1)) {
+                    if (isAdjacent(location, connectorLoc)) {
                         if (validateConnection(
                                 location,
                                 connectorLoc,
@@ -1408,7 +1513,12 @@ public class EnergyNet extends Network implements HologramOwner {
                 break;
 
             case CONNECTOR:
-                int connRange = getComponent(location).getRange();
+                EnergyNetComponent connComponent = getComponent(location);
+                if (connComponent == null) {
+                    break;
+                }
+                boolean isLongRangeConnector = connComponent instanceof LongRangeConnector;
+                int connRange = connComponent.getRange();
                 // 连接器到连接器：沿轴向双向范围覆盖（与processConnector一致）
                 if (DEBUG_PATHS) {
                     debugPathLog(
@@ -1433,58 +1543,63 @@ public class EnergyNet extends Network implements HologramOwner {
                         }
                     }
                 }
-                // 连接器到发电机：连接器沿轴向覆盖发电机即可
-                for (Location terminus : generators.keySet()) {
-                    if (isWithinRangeAxial(location, terminus, connRange)) {
-                        if (validateConnection(
-                                location,
-                                terminus,
-                                EnergyNetComponentType.CONNECTOR,
-                                EnergyNetComponentType.GENERATOR)) {
-                            neighbors.add(terminus);
+                if (!isLongRangeConnector) {
+                    // 连接器到发电机：连接器沿轴向覆盖发电机即可
+                    for (Location terminus : generators.keySet()) {
+                        if (isWithinRangeAxial(location, terminus, connRange)) {
+                            if (validateConnection(
+                                    location,
+                                    terminus,
+                                    EnergyNetComponentType.CONNECTOR,
+                                    EnergyNetComponentType.GENERATOR)) {
+                                neighbors.add(terminus);
+                            }
                         }
                     }
-                }
-                // 连接器到调节器：连接器沿轴向覆盖调节器即可
-                if (!location.equals(regulator) && isWithinRangeAxial(location, regulator, connRange)) {
-                    neighbors.add(regulator);
-                }
-                // 连接器到用电器：连接器沿轴向覆盖用电器即可
-                if (DEBUG_PATHS) {
-                    debugPathLog("getNeighbors(CONNECTOR): 当前=" + formatLocation(location)
-                            + " range=" + connRange
-                            + " 用电器总数=" + consumers.size());
-                }
-                for (Location consumer : consumers.keySet()) {
-                    boolean inRange = isWithinRangeAxial(location, consumer, connRange);
-                    EnergyNetComponent consumerComp = getComponent(consumer);
+                    // 连接器到调节器：连接器沿轴向覆盖调节器即可
+                    if (!location.equals(regulator) && isWithinRangeAxial(location, regulator, connRange)) {
+                        neighbors.add(regulator);
+                    }
+                    // 连接器到用电器：连接器沿轴向覆盖用电器即可
                     if (DEBUG_PATHS) {
-                        debugPathLog("getNeighbors(CONNECTOR): 检查用电器 " + formatLocation(consumer)
-                                + " 轴向距离=" + getAxialDistance(location, consumer)
-                                + " 在范围内=" + inRange
-                                + " getComponent="
-                                + (consumerComp != null ? consumerComp.getEnergyComponentType() : "null"));
+                        debugPathLog("getNeighbors(CONNECTOR): 当前=" + formatLocation(location)
+                                + " range=" + connRange
+                                + " 用电器总数=" + consumers.size());
                     }
-                    if (inRange) {
-                        boolean valid = validateConnection(
-                                location, consumer, EnergyNetComponentType.CONNECTOR, EnergyNetComponentType.CONSUMER);
+                    for (Location consumer : consumers.keySet()) {
+                        boolean inRange = isWithinRangeAxial(location, consumer, connRange);
+                        EnergyNetComponent consumerComp = getComponent(consumer);
                         if (DEBUG_PATHS) {
-                            debugPathLog("getNeighbors(CONNECTOR): validateConnection结果=" + valid);
+                            debugPathLog("getNeighbors(CONNECTOR): 检查用电器 " + formatLocation(consumer)
+                                    + " 轴向距离=" + getAxialDistance(location, consumer)
+                                    + " 在范围内=" + inRange
+                                    + " getComponent="
+                                    + (consumerComp != null ? consumerComp.getEnergyComponentType() : "null"));
                         }
-                        if (valid) {
-                            neighbors.add(consumer);
+                        if (inRange) {
+                            boolean valid = validateConnection(
+                                    location,
+                                    consumer,
+                                    EnergyNetComponentType.CONNECTOR,
+                                    EnergyNetComponentType.CONSUMER);
+                            if (DEBUG_PATHS) {
+                                debugPathLog("getNeighbors(CONNECTOR): validateConnection结果=" + valid);
+                            }
+                            if (valid) {
+                                neighbors.add(consumer);
+                            }
                         }
                     }
-                }
-                // 连接器到电容：连接器沿轴向覆盖电容即可
-                for (Location capacitor : capacitors.keySet()) {
-                    if (isWithinRangeAxial(location, capacitor, connRange)) {
-                        if (validateConnection(
-                                location,
-                                capacitor,
-                                EnergyNetComponentType.CONNECTOR,
-                                EnergyNetComponentType.CAPACITOR)) {
-                            neighbors.add(capacitor);
+                    // 连接器到电容：连接器沿轴向覆盖电容即可
+                    for (Location capacitor : capacitors.keySet()) {
+                        if (isWithinRangeAxial(location, capacitor, connRange)) {
+                            if (validateConnection(
+                                    location,
+                                    capacitor,
+                                    EnergyNetComponentType.CONNECTOR,
+                                    EnergyNetComponentType.CAPACITOR)) {
+                                neighbors.add(capacitor);
+                            }
                         }
                     }
                 }
@@ -1730,8 +1845,9 @@ public class EnergyNet extends Network implements HologramOwner {
      */
     private boolean processConnector(
             Location connectorLoc, EnergyNetComponent connector, Queue<Location> queue, Set<Location> visited) {
+        boolean isLongRange = connector instanceof LongRangeConnector;
         int range = connector.getRange();
-        debugLog("processConnector: 范围=" + range + " @ " + formatLocation(connectorLoc));
+        debugLog("processConnector: 范围=" + range + " @ " + formatLocation(connectorLoc) + " 长途=" + isLongRange);
 
         // 搜索6个轴向（上下左右前后）range格内的所有可能位置
         int[][] axes = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
@@ -1766,7 +1882,7 @@ public class EnergyNet extends Network implements HologramOwner {
                     debugLog("processConnector: 发现 " + targetType + " @ " + formatLocation(targetLoc));
 
                     if (targetType == EnergyNetComponentType.CONNECTOR
-                            || targetType == EnergyNetComponentType.CAPACITOR) {
+                            || (!isLongRange && targetType == EnergyNetComponentType.CAPACITOR)) {
                         queue.add(targetLoc);
                     }
                     continue;
@@ -1799,7 +1915,7 @@ public class EnergyNet extends Network implements HologramOwner {
                     debugLog("processConnector: 发现(DB) " + targetType + " @ " + formatLocation(targetLoc));
 
                     if (targetType == EnergyNetComponentType.CONNECTOR
-                            || targetType == EnergyNetComponentType.CAPACITOR) {
+                            || (!isLongRange && targetType == EnergyNetComponentType.CAPACITOR)) {
                         queue.add(targetLoc);
                     }
                     continue;
@@ -1923,6 +2039,9 @@ public class EnergyNet extends Network implements HologramOwner {
                 transferFromCapacitors(remainingDemand);
             }
         }
+
+        // 连接器老化处理（在所有负载记录完成后）
+        ConnectorAgingManager.processAging(this);
     }
 
     /**
@@ -1936,8 +2055,8 @@ public class EnergyNet extends Network implements HologramOwner {
         // 按路径长度分组排序
         List<EnergyPath> sortedPaths = getSortedPaths(generatorPaths);
 
-        // 按(源, 目标, 长度)分组路径
-        Map<String, List<EnergyPath>> pathGroups = new HashMap<>();
+        // 按(源, 目标, 长度)分组路径（LinkedHashMap保留排序顺序）
+        Map<String, List<EnergyPath>> pathGroups = new LinkedHashMap<>();
         for (EnergyPath path : sortedPaths) {
             String key = path.source.getBlockX() + "," + path.source.getBlockY() + "," + path.source.getBlockZ() + ","
                     + path.consumer.getBlockX() + "," + path.consumer.getBlockY() + "," + path.consumer.getBlockZ()
@@ -2028,8 +2147,8 @@ public class EnergyNet extends Network implements HologramOwner {
         // 按路径长度分组排序
         List<EnergyPath> sortedPaths = getSortedPaths(capacitorPaths);
 
-        // 按(源, 目标, 长度)分组路径
-        Map<String, List<EnergyPath>> pathGroups = new HashMap<>();
+        // 按(源, 目标, 长度)分组路径（LinkedHashMap保留排序顺序）
+        Map<String, List<EnergyPath>> pathGroups = new LinkedHashMap<>();
         for (EnergyPath path : sortedPaths) {
             String key = path.source.getBlockX() + "," + path.source.getBlockY() + "," + path.source.getBlockZ() + ","
                     + path.consumer.getBlockX() + "," + path.consumer.getBlockY() + "," + path.consumer.getBlockZ()
@@ -2233,10 +2352,10 @@ public class EnergyNet extends Network implements HologramOwner {
                 continue;
             }
 
-            // 检查新机器是否在该电网的调节器RANGE=6范围内
-            if (isWithinRange(energyNet.regulator, newMachineLoc, RANGE)) {
+            // 检查新机器是否在该电网的调节器RANGE=6范围内（轴向）
+            if (isWithinRangeAxial(energyNet.regulator, newMachineLoc, RANGE)) {
                 int dist = getDistance(energyNet.regulator, newMachineLoc);
-                debugLog("  电网@" + formatLocation(energyNet.regulator) + " 调节器距离=" + dist);
+                debugLog("  电网@" + formatLocation(energyNet.regulator) + " 调节器轴向距离=" + dist);
                 if (dist < bestDistance) {
                     bestDistance = dist;
                     bestNetwork = energyNet;
@@ -2244,13 +2363,13 @@ public class EnergyNet extends Network implements HologramOwner {
                 continue;
             }
 
-            // 检查新机器是否在该电网任一连接器的range范围内
+            // 检查新机器是否在该电网任一连接器的range范围内（轴向）
             for (Location connLoc : energyNet.connectors.keySet()) {
                 EnergyNetComponent connComp = energyNet.connectors.get(connLoc);
-                if (isWithinRange(connLoc, newMachineLoc, connComp.getRange())) {
+                if (isWithinRangeAxial(connLoc, newMachineLoc, connComp.getRange())) {
                     int dist = getDistance(connLoc, newMachineLoc);
-                    debugLog("  电网@" + formatLocation(energyNet.regulator) + " 连接器=" + formatLocation(connLoc) + " 距离="
-                            + dist);
+                    debugLog("  电网@" + formatLocation(energyNet.regulator) + " 连接器=" + formatLocation(connLoc)
+                            + " 轴向距离=" + dist);
                     if (dist < bestDistance) {
                         bestDistance = dist;
                         bestNetwork = energyNet;
@@ -2344,7 +2463,7 @@ public class EnergyNet extends Network implements HologramOwner {
                         List<EnergyPath> fromGen = new ArrayList<>();
                         List<EnergyPath> fromCap = new ArrayList<>();
                         for (EnergyPath p : reachingPaths) {
-                            if (generators.containsKey(p.source)) {
+                            if (net.generators.containsKey(p.source)) {
                                 fromGen.add(p);
                             } else {
                                 fromCap.add(p);
@@ -2405,6 +2524,8 @@ public class EnergyNet extends Network implements HologramOwner {
             sb.append("  &7路径总数: &f")
                     .append(countTotalPathsStatic(net.generatorPaths) + countTotalPathsStatic(net.capacitorPaths))
                     .append("\n");
+            long regLoad = net.connectorLoad.getOrDefault(target, 0L);
+            sb.append("  &7调节器本刻负载: &f").append(regLoad).append(" J\n");
         }
 
         return ChatColors.color(sb.toString());
@@ -2475,7 +2596,7 @@ public class EnergyNet extends Network implements HologramOwner {
     /**
      * 格式化位置信息为字符串
      */
-    private static String formatLocation(Location loc) {
+    public static String formatLocation(Location loc) {
         return loc.getWorld().getName() + " (" + loc.getBlockX() + ", " + loc.getBlockY() + ", " + loc.getBlockZ()
                 + ")";
     }
@@ -2627,17 +2748,33 @@ public class EnergyNet extends Network implements HologramOwner {
     /**
      * 表示从发电机/电容到消费者的能量传输路径
      */
-    private static class EnergyPath {
-        final Location source; // 发电机或电容的位置
-        final Location consumer; // 消费者的位置
-        final List<Location> connectors; // 路径经过的连接器位置
-        final int length; // 路径长度（连接器数量）
+    public static class EnergyPath {
+        private final Location source;
+        private final Location consumer;
+        private final List<Location> connectors;
+        private final int length;
 
-        EnergyPath(Location source, Location consumer, List<Location> connectors) {
+        public EnergyPath(Location source, Location consumer, List<Location> connectors) {
             this.source = source;
             this.consumer = consumer;
             this.connectors = Collections.unmodifiableList(new ArrayList<>(connectors));
             this.length = connectors.size();
+        }
+
+        public Location getSource() {
+            return source;
+        }
+
+        public Location getConsumer() {
+            return consumer;
+        }
+
+        public List<Location> getConnectors() {
+            return connectors;
+        }
+
+        public int getLength() {
+            return length;
         }
 
         @Override
