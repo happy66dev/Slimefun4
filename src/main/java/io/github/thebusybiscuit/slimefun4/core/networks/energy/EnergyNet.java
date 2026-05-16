@@ -542,7 +542,7 @@ public class EnergyNet extends Network implements HologramOwner {
             long oldCharge = component.getChargeLong(loc);
 
             if (remainingEnergy > 0) {
-                long capacity = component.getCapacityLong();
+                long capacity = component.getChargeCapacityLong(loc);
                 long canStore = capacity - oldCharge;
                 debugLog("storeRemainingEnergy电容: " + formatLocation(loc) + " old=" + oldCharge + " cap=" + capacity
                         + " canStore=" + canStore + " remaining=" + remainingEnergy);
@@ -566,7 +566,7 @@ public class EnergyNet extends Network implements HologramOwner {
                     + remainingEnergy);
 
             long chargeDiff = Math.abs(newCharge - oldCharge);
-            long capacity = component.getCapacityLong();
+            long capacity = component.getChargeCapacityLong(loc);
 
             if (capacity > 0 && chargeDiff > 0) {
                 // 获取当前计数器值
@@ -2115,7 +2115,7 @@ public class EnergyNet extends Network implements HologramOwner {
                     ? nonChargeableSupply.getOrDefault(generatorLoc, 0L)
                     : generator.getChargeLong(generatorLoc);
             long consumerCharge = consumer.getChargeLong(consumerLoc);
-            long consumerCapacity = consumer.getCapacityLong();
+            long consumerCapacity = consumer.getChargeCapacityLong(consumerLoc);
 
             if (generatorCharge <= 0 || consumerCharge >= consumerCapacity) {
                 continue;
@@ -2204,7 +2204,7 @@ public class EnergyNet extends Network implements HologramOwner {
             // 检查电容是否有电，消费者是否已满
             long capacitorCharge = capacitor.getChargeLong(capacitorLoc);
             long consumerCharge = consumer.getChargeLong(consumerLoc);
-            long consumerCapacity = consumer.getCapacityLong();
+            long consumerCapacity = consumer.getChargeCapacityLong(consumerLoc);
 
             if (capacitorCharge <= 0 || consumerCharge >= consumerCapacity) {
                 continue;
@@ -2268,7 +2268,7 @@ public class EnergyNet extends Network implements HologramOwner {
         for (Map.Entry<Location, EnergyNetComponent> entry : consumers.entrySet()) {
             Location loc = entry.getKey();
             EnergyNetComponent component = entry.getValue();
-            long capacity = component.getCapacityLong();
+            long capacity = component.getChargeCapacityLong(loc);
             long charge = component.getChargeLong(loc);
             if (charge < capacity) {
                 demand = NumberUtils.flowSafeAddition(demand, capacity - charge);

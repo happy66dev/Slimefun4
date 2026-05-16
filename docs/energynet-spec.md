@@ -1,6 +1,6 @@
 # EnergyNet 能源电网技术实现文档
 
-> 最后更新：2026-05-10 | 版本：v2.2（新增长途连接器）
+> 最后更新：2026-05-17 | 版本：v2.4（货运管理器电力接入 + 可变容量用电器支持）
 
 ---
 
@@ -59,6 +59,7 @@ EnergyNet (extends Network)
 |------|:---:|:---:|------|
 | 发电机 | `GENERATOR` | `TERMINUS` | 发电设备。分可储电（煤机）和不可储电（太阳能） |
 | 用电器 | `CONSUMER` | `TERMINUS` | 耗电设备，**不作为 BFS 发送方**（无出边） |
+| 货运管理器 | `CONSUMER` | `REGULATOR` | 特殊用电器，货运网络调节器。可变容量 `128+4×输入节点数` J，每个tick消耗电力 |
 | 电容 | `CAPACITOR` | `CONNECTOR` | 储能设备。电容→电容仅6方向相邻，电容↔连接器/调节器6方向相邻 |
 | 连接器 | `CONNECTOR` | `CONNECTOR` | 明文连接器。有 `range` 属性控制轴向覆盖距离 |
 | 调节器 | *（不实现接口）* | `REGULATOR` | **特殊连接器**，RANGE=6（轴向）。可作为路径跳点 |
@@ -398,20 +399,23 @@ else:
 
 每个连接器拥有浮点耐久（0.0 ~ 1.0，初始 1.0），重启不丢失（通过 `blockData.setData()` 持久化到数据库）。
 
-每 tick 如果连接器参与了能量传输，根据负载计算老化概率，判定成功则扣除 0.01% 耐久。
+每 Slimefun Tick（默认每 10 server tick，即 2 次/秒）如果连接器参与了能量传输，根据负载计算老化概率，判定成功则扣除 0.01% 耐久。
 
 耐久降至 0% 时：标记为损坏 → 触发 `EnergyNet.markDirty()` 断开连接 → 显示 "§c连接器损坏" 全息。
 
 #### 8.5.2 各连接器参数
 
-| 连接器 | 甜点功率 | 最大功率 | 峰值功率 | 期望寿命(tick) | 总吞吐容量(J) | 修复物品 |
+| 连接器 | 甜点功率 | 最大功率 | 峰值功率 | 预期寿命(tick) | 预期总传输(J) | 修复物品 |
 |-------|:--------:|:--------:|:--------:|:-------------:|:------------:|---------|
-| 简易能源连接器 | 12 J/t | 40 J/t | 75 J/t | 72,000 | 2.88M J | 红石 |
-| 大功率能源连接器 | 36 J/t | 100 J/t | 200 J/t | 144,000 | 14.40M J | 地狱砖 |
-| 能源连接器 | 24 J/t | 72 J/t | 160 J/t | 576,000 | 41.47M J | 碳 |
-| 镶金能源连接器 | 100 J/t | 300 J/t | 500 J/t | 3,456,000 | 1.04B J | 金锭 |
-| 强化能源连接器 | 300 J/t | 750 J/t | 1,200 J/t | 6,912,000 | 5.18B J | 强化合金锭 |
-| 黑钻能源连接器 | 512 J/t | 2,000 J/t | 8,000 J/t | 27,648,000 | 55.30B J | 黑金刚石 |
+| 简易能源连接器 | 12 J/t | 40 J/t | 75 J/t | 72,000 | ~436K J | 从合成表随机 |
+| 大功率能源连接器 | 36 J/t | 100 J/t | 200 J/t | 144,000 | ~2.6M J | 从合成表随机 |
+| 能源连接器 | 24 J/t | 72 J/t | 160 J/t | 576,000 | ~2.4M J | 从合成表随机 |
+| 镶金能源连接器 | 100 J/t | 300 J/t | 500 J/t | 3,456,000 | ~67.8M J | 从合成表随机 |
+| 强化能源连接器 | 300 J/t | 750 J/t | 1,200 J/t | 6,912,000 | ~405M J | 从合成表随机 |
+| 黑钻能源连接器 | 512 J/t | 2,000 J/t | 8,000 J/t | 27,648,000 | ~2.76B J | 从合成表随机 |
+| 长途连接器 | 512 J/t | 2,000 J/t | 8,000 J/t | 27,648,000 | ~2.76B J | 从合成表随机 |
+
+> 预期总传输 = sweetPower × 有效寿命（含老化加速数值积分），在 sweet 功率下持续运行时的理论值。
 
 #### 8.5.3 老化概率公式
 
@@ -419,22 +423,41 @@ else:
 totalProb = baseProb × loadFactor × ageFactor
 ```
 
-- **baseProb** = (100 / 0.01) / expectedLifetime（由期望寿命自动校准）
-- **loadFactor**：高次幂分段函数（指数 exp=4）：
-  - load ≤ sweetPower：线性 `0.2 × load/sweetPower`
-  - sweet < load ≤ max：`0.2 + 0.8 × r^4`
-  - max < load ≤ peak：`1 + 9 × r^4`
-  - load > peak：强制过载惩罚
-- **ageFactor** = `1 + (1 - durability) × 4.0`（低耐久加速老化）
+- **baseProb** = 10000 / expectedLifetime（每 tick 在 maxPower+全新 下的命中概率）
+- **loadFactor**：三段有理函数，完全连续：
+  - **0 ≤ P ≤ sweetPower**: `x = P/sweet`, `lf = x / (0.9 + 0.1x)`
+    - P=0 → lf=0（不老化）；P=sweet → lf=1.0
+  - **sweetPower < P ≤ maxPower**: `x = (P-sweet)/(max-sweet)×3 + 1`, `lf = x / (1.2 - 0.2x)`
+    - P=sweet(x=1) → lf=1.0；P=max(x=4) → lf=10.0
+  - **maxPower < P ≤ peakPower**: `x = (P-max)/(peak-max)×4 + 4`, `lf = x / (0.79 - 0.0975x)`
+    - P=max(x=4) → lf=10.0；P=peak(x=8) → lf=800.0
+  - **P > peakPower**: 不走概率，走直接过载扣减
+- **ageFactor**：分段线性插值，10段：
+  - 1.0~0.95 → 1.0；0.95~0.9 → 1.1→1.0；...
+  - ...0.2~0.0 → 5.0→4.4
 
-#### 8.5.4 过载惩罚
+#### 8.5.4 关键点 loadFactor 值
+
+| P | loadFactor | 预期寿命(刻)与sweet处比值 | 预期传输量与sweet处比值 |
+|---|-----------|------------------------|---------------------|
+| 0 | 0 | ∞(不老化) | 0 |
+| sweetPower | **1.0** | 1x (基准) | **1x (峰值)** |
+| midway(sweet~max) | ~3.4 | 0.29x | 0.43x |
+| maxPower | **10.0** | 0.1x | 0.33x |
+| midway(max~peak) | ~145 | 0.0069x | 0.012x |
+| peakPower | **800.0** | 0.00125x | 0.00083x |
+
+**T(P) = P/loadFactor 严格单调递减**（从 sweet 到 peak 持续下降）。
+
+#### 8.5.5 过载惩罚
 
 当 load > peakPower 时：
-- 不经过概率判定，强制扣除 `0.5% × (load/peakPower)` 耐久
+- 不经过概率判定，直接扣除 `0.5% × (load/peakPower)` 耐久/tick
 - 产生烟雾 + 橙色电火花粒子
-- 连续过载 10 秒直接损坏
+- 连续过载超过 `当前耐久 × 60秒` 强制归零（动态阈值，例如满耐久允许 60s，半耐久只允许 30s）
+- 过载计数器在负载恢复正常时自动归零；修复完成时也归零
 
-#### 8.5.5 耐久状态等级
+#### 8.5.6 耐久状态等级
 
 | 耐久范围 | 状态 | 显示颜色 | 表现 |
 |---------|------|---------|------|
@@ -445,28 +468,48 @@ totalProb = baseProb × loadFactor × ageFactor
 | 0%~15% | 预计故障 | ⚫ &4 | 濒临损坏 |
 | 0% | 已损坏 | ❌ &c | 断开连接 |
 
-#### 8.5.6 右键修复机制
+#### 8.5.7 右键修复机制
 
-右键连接器时显示耐久的修复信息：
-- 耐久 >66%：消耗 1 个修复物品修复到 100%
-- 耐久 >33%：消耗 2 个修复物品
-- 耐久 >0%：消耗 3 个修复物品
-- 已损坏(0%)：消耗 4 个修复物品
+右键连接器时显示耐久的修复信息。修复材料**从合成配方中随机抽取不同种类物品**，逐一提交：
 
-修复物品为各连接器配方的核心材料（红石/地狱砖/碳/金锭/强化合金锭/黑金刚石）。
+- 已损坏(0%)：需要提交 **4 个不同材料**
+- 耐久 ≤33%：需要提交 **3 个不同材料**
+- 耐久 ≤66%：需要提交 **2 个不同材料**
+- 耐久 <100%：需要提交 **1 个材料**
 
-#### 8.5.7 显示集成
+手持匹配的物品右键点击即可逐个提交，进度实时显示。
 
-- **连接器 Lore**：甜点/最大/峰值功率 + 总传输容量
+#### 8.5.8 过载连续时间（耐久动态阈值）
+
+```java
+int maxTicks = (int) (newDura * 60.0f * 20 / TICK_DELAY);
+```
+
+当前耐久对应的允许过载时长：
+
+| 当前耐久 | 允许过载时长 |
+|---------|-------------|
+| 100% | 60 秒 |
+| 80% | 48 秒 |
+| 50% | 30 秒 |
+| 25% | 15 秒 |
+| 10% | 6 秒 |
+
+#### 8.5.9 显示集成
+
+- **连接器右键**：连接状态 + 范围 + 耐久百分比 + 状态文本 + 剩余吞吐(J) + 修复材料列表 + 当前进度
 - **万用表**：点击连接器显示 `耐久: XX.X% (状态)` + `剩余吞吐: X.X J`
-- **路径悬浮字**：负载后增加状态文字，如 `负载: 50 J 健康`
-- **拆除**：耐久 >95% 正常掉落，≤95% 参考损坏机器拆除机制
+- **损坏全息**：红色 "§c连接器损坏"
 
-#### 8.5.8 实现类
+#### 8.5.10 实现类
 
 - `ConnectorAgingManager` — 核心管理类（`core/networks/energy/`），含配置注册、概率计算、数据存储、修复逻辑
 - `EnergyNet.performEnergyTransfer()` 末尾调用 `ConnectorAgingManager.processAging(this)`
-- `EnergyConnector.BlockUseHandler` 显示耐久信息并处理右键修复
+- `EnergyConnector.BlockUseHandler` / `LongRangeConnector.BlockUseHandler` 显示耐久信息并处理右键修复
+
+#### 8.5.11 预计算预期寿命
+
+在 `ConnectorConfig` 构造函数中一次性数值积分（`computeExpectedLifetimeJoules`）计算含老化加速的总预期传输量，用于 `getRemainingJoules()` 和后续 lore 显示。
 
 ---
 
@@ -611,7 +654,75 @@ BFS: 源=worlds (x,y,z) 类型=GENERATOR 找到路径数=N 路径: ... (L=跳数
 
 ---
 
-## 11. 已知限制与未来改进
+## 11. 货运网络电力集成
+
+### 11.1 概述
+
+货运管理器（CargoManager）现已接入能源电网，作为电网的 CONSUMER（用电器）运行。货运网络每次执行物品传输前需消耗电力，电力不足时传输任务被跳过。
+
+### 11.2 可变容量
+
+货运管理器具有**位置感知的可变容量**，通过 `EnergyNetComponent.getChargeCapacityLong(Location)` 接口支持：
+
+- **基础容量**：128 J（出厂默认）
+- **每输入节点加成**：+4 J/个
+- **上限**：10,000 J
+- **公式**：`capacity = min(10000, 128 + 4 × inputNodeCount)`
+
+输入节点计数通过 `CargoNet.onClassificationChange()` 自动追踪，在方块数据中以 `cargo-input-count` 持久化。
+
+> **容量变化无需触发电网重新初始化**，EnergyNet 在每次计算需求时调用 `getChargeCapacityLong(loc)` 获取最新值。
+
+### 11.3 电力消耗计算
+
+每次 Slimefun Tick，货运网络在执行物品传输前计算所需电力：
+
+```
+powerNeeded = 16(信道) × 6J + inputNodeCount × 2J
+```
+
+- **16 × 6J = 96J**：固定部分，16个信道每个信道的传输尝试开销
+- **inputNodeCount × 2J**：每个输入节点尝试传输时的开销
+- 例如 4 个输入节点：`96 + 4×2 = 104J`
+
+### 11.4 执行流程
+
+```
+CargoNet.tick()
+├── super.tick() → discoverStep()
+├── 检查是否已连接
+├── mapInputNodes() / mapOutputNodes()
+├── calculatePowerNeeded(inputCount)
+├── readCharge() → 从 regulator (货运管理器) 读取 energy-charge
+│
+├── if (charge < powerNeeded):
+│   └── 更新悬浮字 "&c电力不足: 需要 N J, 当前 M J"
+│   └── return (跳过本次传输)
+│
+├── deductCharge(powerNeeded) → 扣除电力
+│
+└── 继续原有传输逻辑 (CargoNetworkTask)
+```
+
+### 11.5 电力不足时的行为
+
+- 货运管理器悬浮字显示当前电力不足信息
+- 物品传输被跳过（不执行 CargoNetworkTask）
+- 电力恢复（有足够存电）后自动恢复正常传输
+- **不接入机器损坏机制**
+
+### 11.6 实现相关文件
+
+| 文件 | 改动 |
+|------|------|
+| `EnergyNetComponent.java` | 新增 `getChargeCapacityLong(Location)` 默认方法 |
+| `EnergyNet.java` | 4处 `getCapacityLong()` → `getChargeCapacityLong(loc)` |
+| `CargoManager.java` | 实现 `EnergyNetComponent`，`CONSUMER` 类型，可变容量，覆写 `setCharge()` |
+| `CargoNet.java` | 新增 `calculatePowerNeeded()`、`readCharge()`、`deductCharge()`、`updateCargoManagerInputCount()` |
+
+---
+
+## 12. 已知限制与未来改进
 
 | 类别 | 限制 | 说明 |
 |------|------|------|

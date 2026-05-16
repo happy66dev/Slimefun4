@@ -42,6 +42,10 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
 
     private static final int RANGE = 5;
 
+    private static final long CHANNEL_COST = 6;
+    private static final long INPUT_NODE_COST = 2;
+    private static final int TOTAL_CHANNELS = 16;
+
     private final Set<Location> inputNodes = new HashSet<>();
     private final Set<Location> outputNodes = new HashSet<>();
 
@@ -119,6 +123,8 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
                 default -> {}
             }
         }
+
+        updateCargoManagerInputCount();
     }
 
     public void tick(@Nonnull Block b, SlimefunBlockData blockData) {
@@ -146,6 +152,17 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
 
             Map<Location, Integer> inputs = mapInputNodes();
             Map<Integer, List<Location>> outputs = mapOutputNodes();
+
+            long powerNeeded = calculatePowerNeeded(inputs.size());
+            long charge = readCharge();
+
+            if (charge < powerNeeded) {
+                String msg = "&c电力不足: 需要 " + powerNeeded + " J, 当前 " + charge + " J";
+                updateHologram(b, msg, blockData::isPendingRemove);
+                return;
+            }
+
+            deductCharge(powerNeeded);
 
             if (StorageCacheUtils.getData(b.getLocation(), "visualizer") == null) {
                 display();
@@ -260,5 +277,51 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
         } else {
             return Integer.parseInt(frequency);
         }
+    }
+
+    private long calculatePowerNeeded(int inputCount) {
+        return (long) TOTAL_CHANNELS * CHANNEL_COST + (long) inputCount * INPUT_NODE_COST;
+    }
+
+    private long readCharge() {
+        var data = StorageCacheUtils.getDataContainer(regulator);
+        if (data == null || data.isPendingRemove() || !data.isDataLoaded()) {
+            return 0;
+        }
+        String charge = data.getData("energy-charge");
+        if (charge != null) {
+            try {
+                return Long.parseLong(charge);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    private void deductCharge(long amount) {
+        var data = StorageCacheUtils.getDataContainer(regulator);
+        if (data == null || data.isPendingRemove() || !data.isDataLoaded()) {
+            return;
+        }
+        String chargeStr = data.getData("energy-charge");
+        long charge = 0;
+        if (chargeStr != null) {
+            try {
+                charge = Long.parseLong(chargeStr);
+            } catch (NumberFormatException e) {
+                charge = 0;
+            }
+        }
+        long newCharge = Math.max(0, charge - amount);
+        data.setData("energy-charge", String.valueOf(newCharge));
+    }
+
+    private void updateCargoManagerInputCount() {
+        var data = StorageCacheUtils.getBlock(regulator);
+        if (data == null) {
+            return;
+        }
+        data.setData("cargo-input-count", String.valueOf(inputNodes.size()));
     }
 }

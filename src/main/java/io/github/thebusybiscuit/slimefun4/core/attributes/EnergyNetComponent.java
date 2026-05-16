@@ -72,6 +72,20 @@ public interface EnergyNetComponent extends ItemAttribute {
     }
 
     /**
+     * This returns the charge capacity at a given {@link Location}.
+     * By default it delegates to {@link #getCapacityLong()}, but implementors can override
+     * this to provide location-dependent (variable) capacity values.
+     *
+     * @param l
+     *            The target {@link Location}
+     *
+     * @return The charge capacity at that {@link Location}
+     */
+    default long getChargeCapacityLong(@Nonnull Location l) {
+        return getCapacityLong();
+    }
+
+    /**
      * This returns the currently stored charge at a given {@link Location}.
      *
      * @param l
