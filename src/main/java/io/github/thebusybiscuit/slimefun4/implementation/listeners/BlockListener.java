@@ -243,14 +243,12 @@ public class BlockListener implements Listener {
                         // 尝试获取所有可能的 slots 并掉落内容物
                         if (sfItem
                                 instanceof
-                                me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer
-                                container) {
+                                me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
                             inv.dropItems(location, container.getInputSlots());
                             inv.dropItems(location, container.getOutputSlots());
                         } else if (sfItem
                                 instanceof
-                                me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator
-                                generator) {
+                                me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
                             inv.dropItems(location, generator.getInputSlots());
                             inv.dropItems(location, generator.getOutputSlots());
                         } else {
@@ -267,13 +265,11 @@ public class BlockListener implements Listener {
                     // 清理处理器操作数据
                     if (sfItem
                             instanceof
-                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer
-                            container) {
+                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
                         container.getMachineProcessor().endOperation(block);
                     } else if (sfItem
                             instanceof
-                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator
-                            generator) {
+                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
                         generator.getMachineProcessor().endOperation(block);
                     }
                     // 移除机器数据
@@ -300,14 +296,12 @@ public class BlockListener implements Listener {
                     // 尝试获取所有可能的 slots 并掉落内容物
                     if (sfItem
                             instanceof
-                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer
-                            container) {
+                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
                         inv.dropItems(location, container.getInputSlots());
                         inv.dropItems(location, container.getOutputSlots());
                     } else if (sfItem
                             instanceof
-                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator
-                            generator) {
+                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
                         inv.dropItems(location, generator.getInputSlots());
                         inv.dropItems(location, generator.getOutputSlots());
                     } else {

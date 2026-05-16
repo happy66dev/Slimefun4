@@ -1300,8 +1300,8 @@ public class EnergyNet extends Network implements HologramOwner {
                     double collectFraction = (double) initWorkDone / initTotalWork;
                     double pathFraction = (double) pathSourcesDone / totalSources
                             + (double) head / (Math.max(1, nodes.size()) * totalSources);
-                    int pct = Math.max(
-                            0, Math.min(99, (int) ((collectFraction + (1.0 - collectFraction) * pathFraction) * 100)));
+                    int pct = Math.max(0, Math.min(99, (int)
+                            ((collectFraction + (1.0 - collectFraction) * pathFraction) * 100)));
                     Slimefun.runSync(() -> {
                         if (!destroyed) {
                             updateHologram(regulator.getBlock(), "&e初始化电网中 " + pct + "%", () -> false);
