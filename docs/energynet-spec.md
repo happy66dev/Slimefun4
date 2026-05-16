@@ -179,7 +179,7 @@ for each axis:
 | CONSUMER | **无出边**（不能作为发送方） |
 | CAPACITOR | 相邻电容(曼哈顿=1) + 调节器(26邻居) + 连接器(26邻居+`validateConnection`) |
 | CONNECTOR(普通) | 其他连接器 + 发电机 + 调节器 + 用电器 + 电容（**全部使用轴向范围检查** `isWithinRangeAxial`） |
-| CONNECTOR(长途) | **仅其他连接器**（不连接发电机、调节器、用电器、电容） |
+| CONNECTOR(长途) | **仅6个轴向上最近的连接器**（扫描每个轴向，遇到第一个连接器即停，遇任意非空方块也停） |
 
 ---
 
@@ -257,8 +257,9 @@ else:
 > **长途连接器（LongRangeConnector）特殊规则**：
 > - `LongRangeConnector` 的 range=128，但 `getMaxConnectorRange()` 排除它，不参与调节器/发电机搜索范围计算
 > - 当普通连接器作为发送方且目标为长途连接器时，正向验证使用长途连接器的 range(128)
-> - 长途连接器在 `processConnector()` 中仅将 CONNECTOR 类型加入 BFS 队列
-> - 长途连接器在 `getNeighbors(CONNECTOR)` 中仅生成到其他连接器的边
+> - 长途连接器在 `processConnector()` 中扫描每个轴向，找到第一个 CONNECTOR 后 `break`（只连最近）
+> - 长途连接器在 `getNeighbors(CONNECTOR)` 中扫描6轴向，找到每个方向上最近的连接器
+> - 长途连接器有老化机制，使用碳金能源连接器的配置（512/2000/8000, 碳金修复）
 
 ### 7.2 `validateConnection()` [L876](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L876)
 

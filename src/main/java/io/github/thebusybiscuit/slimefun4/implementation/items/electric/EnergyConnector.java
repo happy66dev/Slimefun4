@@ -51,31 +51,19 @@ public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> impleme
             ConnectorConfig config = ConnectorAgingManager.getConfig(loc);
 
             if (damaged) {
-                int required = ConnectorAgingManager.getRequiredRepairCount(0f);
                 p.sendMessage(ChatColors.color("&c连接器已损坏！"));
-                if (config != null) {
-                    p.sendMessage(
-                            ChatColors.color("&7需要 &e" + required + " &7个 " + itemName(config.repairItem) + " &7来修复"));
-                }
-                tryRepair(p, loc, config);
+                p.sendMessage(ChatColors.color("&7需要: " + ConnectorAgingManager.getRepairItemsDisplay(loc)));
+                ConnectorAgingManager.tryRepair(p, loc);
                 return;
             }
 
             if (durability < 1f) {
-                tryRepair(p, loc, config);
+                ConnectorAgingManager.tryRepair(p, loc);
                 return;
             }
 
             sendStatus(p, loc, durability, config);
         };
-    }
-
-    private void tryRepair(@Nonnull Player p, @Nonnull Location loc, ConnectorConfig config) {
-        if (config == null) return;
-        if (p.getInventory().getItemInMainHand().isSimilar(config.repairItem)
-                || p.getInventory().getItemInOffHand().isSimilar(config.repairItem)) {
-            ConnectorAgingManager.tryRepair(p, loc);
-        }
     }
 
     private void sendStatus(@Nonnull Player p, @Nonnull Location loc, float durability, ConnectorConfig config) {
@@ -95,15 +83,8 @@ public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> impleme
         if (config != null) {
             long remaining = ConnectorAgingManager.getRemainingJoules(loc);
             p.sendMessage(ChatColors.color("&7剩余吞吐: &f" + ConnectorAgingManager.formatJoules(remaining) + " &7J"));
-            int needed = ConnectorAgingManager.getRequiredRepairCount(durability);
-            p.sendMessage(ChatColors.color("&7修复: &e" + needed + " &7x " + itemName(config.repairItem)));
+            p.sendMessage(ChatColors.color("&7修复: " + ConnectorAgingManager.getRepairItemsDisplay(loc)));
         }
-    }
-
-    private static String itemName(ItemStack item) {
-        return item.getItemMeta() != null && item.getItemMeta().hasDisplayName()
-                ? item.getItemMeta().getDisplayName()
-                : item.getType().name();
     }
 
     @Override

@@ -4574,6 +4574,8 @@ public final class SlimefunItemSetup {
                         },
                         new SlimefunItemStack(SlimefunItems.LONG_RANGE_ENERGY_CONNECTOR, 1))
                 .register(plugin);
+        ConnectorAgingManager.registerConfig(
+                "LONG_RANGE_ENERGY_CONNECTOR", 512, 2000, 8000, 27648000, SlimefunItems.CARBONADO.clone());
 
         new SlimefunItem(
                         itemGroups.misc,

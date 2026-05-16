@@ -1519,31 +1519,48 @@ public class EnergyNet extends Network implements HologramOwner {
                 }
                 boolean isLongRangeConnector = connComponent instanceof LongRangeConnector;
                 int connRange = connComponent.getRange();
-                // 连接器到连接器：沿轴向双向范围覆盖（与processConnector一致）
-                if (DEBUG_PATHS) {
-                    debugPathLog(
-                            "getNeighbors(CONNECTOR): 当前=" + formatLocation(location) + " 连接器总数=" + connectors.size());
-                }
-                for (Location otherConnector : connectors.keySet()) {
-                    if (!otherConnector.equals(location)) {
-                        EnergyNetComponent otherComponent = getComponent(otherConnector);
-                        boolean valid = otherComponent != null
-                                && validateConnection(
-                                        location,
-                                        otherConnector,
-                                        EnergyNetComponentType.CONNECTOR,
-                                        EnergyNetComponentType.CONNECTOR);
-                        if (DEBUG_PATHS) {
-                            debugPathLog("getNeighbors(CONNECTOR): 检查连接器 " + formatLocation(otherConnector)
-                                    + " 轴向距离=" + getAxialDistance(location, otherConnector)
-                                    + " 结果=" + valid);
-                        }
-                        if (valid) {
-                            neighbors.add(otherConnector);
+
+                if (isLongRangeConnector) {
+                    // 长途连接器：扫描6个轴向，只连接每个方向上最近的连接器
+                    int[][] axes = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+                    for (int[] axis : axes) {
+                        for (int i = 1; i <= connRange; i++) {
+                            Location targetLoc = location.clone().add(axis[0] * i, axis[1] * i, axis[2] * i);
+                            EnergyNetComponent targetComp = getComponent(targetLoc);
+                            if (targetComp != null) {
+                                if (targetComp.getEnergyComponentType() == EnergyNetComponentType.CONNECTOR
+                                        && connectors.containsKey(targetLoc)) {
+                                    neighbors.add(targetLoc);
+                                }
+                                break;
+                            }
                         }
                     }
-                }
-                if (!isLongRangeConnector) {
+                } else {
+                    // 连接器到连接器：沿轴向双向范围覆盖（与processConnector一致）
+                    if (DEBUG_PATHS) {
+                        debugPathLog("getNeighbors(CONNECTOR): 当前=" + formatLocation(location) + " 连接器总数="
+                                + connectors.size());
+                    }
+                    for (Location otherConnector : connectors.keySet()) {
+                        if (!otherConnector.equals(location)) {
+                            EnergyNetComponent otherComponent = getComponent(otherConnector);
+                            boolean valid = otherComponent != null
+                                    && validateConnection(
+                                            location,
+                                            otherConnector,
+                                            EnergyNetComponentType.CONNECTOR,
+                                            EnergyNetComponentType.CONNECTOR);
+                            if (DEBUG_PATHS) {
+                                debugPathLog("getNeighbors(CONNECTOR): 检查连接器 " + formatLocation(otherConnector)
+                                        + " 轴向距离=" + getAxialDistance(location, otherConnector)
+                                        + " 结果=" + valid);
+                            }
+                            if (valid) {
+                                neighbors.add(otherConnector);
+                            }
+                        }
+                    }
                     // 连接器到发电机：连接器沿轴向覆盖发电机即可
                     for (Location terminus : generators.keySet()) {
                         if (isWithinRangeAxial(location, terminus, connRange)) {
@@ -1881,8 +1898,12 @@ public class EnergyNet extends Network implements HologramOwner {
                     visited.add(targetLoc);
                     debugLog("processConnector: 发现 " + targetType + " @ " + formatLocation(targetLoc));
 
-                    if (targetType == EnergyNetComponentType.CONNECTOR
-                            || (!isLongRange && targetType == EnergyNetComponentType.CAPACITOR)) {
+                    if (targetType == EnergyNetComponentType.CONNECTOR) {
+                        queue.add(targetLoc);
+                        if (isLongRange) {
+                            break;
+                        }
+                    } else if (!isLongRange && targetType == EnergyNetComponentType.CAPACITOR) {
                         queue.add(targetLoc);
                     }
                     continue;
@@ -1914,8 +1935,12 @@ public class EnergyNet extends Network implements HologramOwner {
                     visited.add(targetLoc);
                     debugLog("processConnector: 发现(DB) " + targetType + " @ " + formatLocation(targetLoc));
 
-                    if (targetType == EnergyNetComponentType.CONNECTOR
-                            || (!isLongRange && targetType == EnergyNetComponentType.CAPACITOR)) {
+                    if (targetType == EnergyNetComponentType.CONNECTOR) {
+                        queue.add(targetLoc);
+                        if (isLongRange) {
+                            break;
+                        }
+                    } else if (!isLongRange && targetType == EnergyNetComponentType.CAPACITOR) {
                         queue.add(targetLoc);
                     }
                     continue;

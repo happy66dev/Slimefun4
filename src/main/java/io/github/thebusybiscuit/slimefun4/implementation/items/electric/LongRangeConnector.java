@@ -7,6 +7,8 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.attributes.rotations.NotRotatable;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockUseHandler;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager.ConnectorConfig;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.implementation.items.SimpleSlimefunItem;
@@ -43,16 +45,46 @@ public class LongRangeConnector extends SimpleSlimefunItem<BlockUseHandler>
             Block b = e.getClickedBlock().get();
             Location loc = b.getLocation();
 
-            String netStatus;
-            if (EnergyNet.getNetworkFromLocation(loc) != null) {
-                netStatus = "&2\u2714";
-            } else {
-                netStatus = "&4\u2718";
+            boolean damaged = ConnectorAgingManager.isConnectorDamaged(loc);
+            float durability = ConnectorAgingManager.getDurability(loc);
+            ConnectorConfig config = ConnectorAgingManager.getConfig(loc);
+
+            if (damaged) {
+                p.sendMessage(ChatColors.color("&c连接器已损坏！"));
+                p.sendMessage(ChatColors.color("&7需要: " + ConnectorAgingManager.getRepairItemsDisplay(loc)));
+                ConnectorAgingManager.tryRepair(p, loc);
+                return;
             }
 
-            p.sendMessage(ChatColors.color("&7连接状态: " + netStatus));
-            p.sendMessage(ChatColors.color("&7范围: &c" + RANGE + " 格"));
+            if (durability < 1f) {
+                ConnectorAgingManager.tryRepair(p, loc);
+                return;
+            }
+
+            sendStatus(p, loc, durability, config);
         };
+    }
+
+    private void sendStatus(@Nonnull Player p, @Nonnull Location loc, float durability, ConnectorConfig config) {
+        String netStatus;
+        if (EnergyNet.getNetworkFromLocation(loc) != null) {
+            netStatus = "&2\u2714";
+        } else {
+            netStatus = "&4\u2718";
+        }
+
+        p.sendMessage(ChatColors.color("&7连接状态: " + netStatus));
+        p.sendMessage(ChatColors.color("&7范围: &c" + RANGE + " 格"));
+
+        if (config != null) {
+            String statusColor = ConnectorAgingManager.getStatusColor(durability);
+            String statusText = ConnectorAgingManager.getStatusText(durability);
+            p.sendMessage(ChatColors.color(
+                    "&7耐久: " + statusColor + String.format("%.1f", durability * 100) + "% &7(" + statusText + ")"));
+            long remaining = ConnectorAgingManager.getRemainingJoules(loc);
+            p.sendMessage(ChatColors.color("&7剩余吞吐: &f" + ConnectorAgingManager.formatJoules(remaining) + " &7J"));
+            p.sendMessage(ChatColors.color("&7修复: " + ConnectorAgingManager.getRepairItemsDisplay(loc)));
+        }
     }
 
     @Override
