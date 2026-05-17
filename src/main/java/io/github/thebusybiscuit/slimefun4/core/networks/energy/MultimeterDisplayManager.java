@@ -1,6 +1,7 @@
 package io.github.thebusybiscuit.slimefun4.core.networks.energy;
 
 import io.github.bakedlibs.dough.common.ChatColors;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet.EnergyPath;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -440,6 +441,12 @@ public class MultimeterDisplayManager implements Listener {
     }
 
     private static String connectorHologramText(Location conn, long load, boolean showTimer) {
+        SlimefunItem sfItem = com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils.getSlimefunItem(conn);
+        boolean isCapacitor = sfItem instanceof EnergyNetComponent ec
+                && ec.getEnergyComponentType() == EnergyNetComponentType.CAPACITOR;
+        if (isCapacitor) {
+            return ChatColors.color("&e负载: &f" + load + " &7J  &b[电容桥接]");
+        }
         float durability = ConnectorAgingManager.getDurability(conn);
         String statusColor = ConnectorAgingManager.getStatusColor(durability);
         String statusText = ConnectorAgingManager.getStatusText(durability);

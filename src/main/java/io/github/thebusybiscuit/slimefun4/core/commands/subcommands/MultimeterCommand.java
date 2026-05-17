@@ -169,12 +169,19 @@ class MultimeterCommand extends SubCommand {
             sb.append("&7输电路径: &e无\n");
         }
 
-        Map<Location, EnergyPath> capPaths = net.getGeneratorToCapacitorPaths().get(loc);
+        Map<Location, Set<EnergyPath>> capPaths =
+                net.getGeneratorToCapacitorPaths().get(loc);
         if (capPaths != null && !capPaths.isEmpty()) {
-            sb.append("&b▼ 电容充电路径 (").append(capPaths.size()).append(" 条)\n");
-            for (EnergyPath p : capPaths.values()) {
-                sb.append("  &7[电容] &f").append(EnergyNet.formatLocation(p.getConsumer()));
-                sb.append(" &7(跳数: ").append(p.getLength()).append(")\n");
+            int totalCapPaths = 0;
+            for (Set<EnergyPath> pathSet : capPaths.values()) {
+                totalCapPaths += pathSet.size();
+            }
+            sb.append("&b▼ 电容充电路径 (").append(totalCapPaths).append(" 条)\n");
+            for (Set<EnergyPath> pathSet : capPaths.values()) {
+                for (EnergyPath p : pathSet) {
+                    sb.append("  &7[电容] &f").append(EnergyNet.formatLocation(p.getConsumer()));
+                    sb.append(" &7(跳数: ").append(p.getLength()).append(")\n");
+                }
             }
         }
     }
@@ -303,9 +310,13 @@ class MultimeterCommand extends SubCommand {
             case GENERATOR -> {
                 Set<EnergyPath> paths = net.getGeneratorPaths().get(loc);
                 if (paths != null) result.addAll(paths);
-                Map<Location, EnergyPath> capPaths =
+                Map<Location, Set<EnergyPath>> capPaths =
                         net.getGeneratorToCapacitorPaths().get(loc);
-                if (capPaths != null) result.addAll(capPaths.values());
+                if (capPaths != null) {
+                    for (Set<EnergyPath> pathSet : capPaths.values()) {
+                        result.addAll(pathSet);
+                    }
+                }
             }
             case CAPACITOR -> {
                 Set<EnergyPath> paths = net.getCapacitorPaths().get(loc);

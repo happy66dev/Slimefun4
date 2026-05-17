@@ -18,6 +18,7 @@ import io.github.thebusybiscuit.slimefun4.core.attributes.rotations.NotRotatable
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockPlaceHandler;
 import io.github.thebusybiscuit.slimefun4.core.handlers.ToolUseHandler;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.utils.compatibility.VersionedEnchantment;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
@@ -325,6 +326,41 @@ public class BlockListener implements Listener {
                 // 移除悬浮字
                 Location hologramLocation = location.clone().add(0.5, 1.5, 0.5);
                 Slimefun.getHologramsService().removeHologram(hologramLocation);
+                return;
+            }
+        }
+
+        // 处理连接器损坏的老化挖掘逻辑（耐久≤99%时视为已损坏）
+        if (blockData != null
+                && ConnectorAgingManager.getConfig(location) != null
+                && ConnectorAgingManager.getDurability(location) <= 0.99f) {
+            if (e.getPlayer() != null) {
+                damagedMachineBreakAttempts.putIfAbsent(player, new HashMap<>());
+                Map<Location, Long> playerAttempts = damagedMachineBreakAttempts.get(player);
+                Long lastAttemptTime = playerAttempts.get(location);
+                long currentTime = System.currentTimeMillis();
+
+                if (lastAttemptTime == null) {
+                    e.setCancelled(true);
+                    player.sendMessage("§c连接器已老化！挖掘将不会掉落任何东西！");
+                    player.sendMessage("§c10秒内再次挖掘就会直接破坏连接器");
+                    playerAttempts.put(location, currentTime);
+                } else if (currentTime - lastAttemptTime < 10000) {
+                    e.setDropItems(false);
+                    ConnectorAgingManager.removeDamageHologram(location);
+                    Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
+                    playerAttempts.remove(location);
+                } else {
+                    e.setCancelled(true);
+                    player.sendMessage("§c连接器已老化！挖掘将不会掉落任何东西！");
+                    player.sendMessage("§c10秒内再次挖掘就会直接破坏连接器");
+                    playerAttempts.put(location, currentTime);
+                }
+                return;
+            } else {
+                e.setDropItems(false);
+                ConnectorAgingManager.removeDamageHologram(location);
+                Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
                 return;
             }
         }

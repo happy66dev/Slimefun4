@@ -2342,7 +2342,7 @@ public final class SlimefunItems {
             "&c能源连接器",
             LoreBuilder.range(5),
             "&8甜点: &e24 J/t  &8最大: &e72 J/t  &8峰值: &e160 J/t",
-            "&8总传输容量: &e41.47M J",
+            "&8总传输容量: &e6.98M J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2352,7 +2352,7 @@ public final class SlimefunItems {
             "&f简易能源连接器",
             LoreBuilder.range(3),
             "&8甜点: &e12 J/t  &8最大: &e40 J/t  &8峰值: &e75 J/t",
-            "&8总传输容量: &e2.88M J",
+            "&8总传输容量: &e436K J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2362,7 +2362,7 @@ public final class SlimefunItems {
             "&c大功率能源连接器",
             LoreBuilder.range(4),
             "&8甜点: &e36 J/t  &8最大: &e100 J/t  &8峰值: &e200 J/t",
-            "&8总传输容量: &e14.40M J",
+            "&8总传输容量: &e2.62M J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2372,7 +2372,7 @@ public final class SlimefunItems {
             "&6镶金能源连接器",
             LoreBuilder.range(6),
             "&8甜点: &e100 J/t  &8最大: &e300 J/t  &8峰值: &e500 J/t",
-            "&8总传输容量: &e1.04B J",
+            "&8总传输容量: &e174.6M J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2382,7 +2382,7 @@ public final class SlimefunItems {
             "&b强化能源连接器",
             LoreBuilder.range(10),
             "&8甜点: &e300 J/t  &8最大: &e750 J/t  &8峰值: &e1200 J/t",
-            "&8总传输容量: &e5.18B J",
+            "&8总传输容量: &e1.05B J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");
@@ -2392,7 +2392,7 @@ public final class SlimefunItems {
             "&8黑钻能源连接器",
             LoreBuilder.range(18),
             "&8甜点: &e512 J/t  &8最大: &e2000 J/t  &8峰值: &e8000 J/t",
-            "&8总传输容量: &e55.30B J",
+            "&8总传输容量: &e7.15B J",
             "",
             "&f用于连接机器和发电机",
             "&f可以连接到附近的能源网络");

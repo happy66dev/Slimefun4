@@ -65,6 +65,11 @@ public class CargoManager extends SlimefunItem implements HologramOwner, NotRota
     }
 
     @Override
+    public long getCapacityLong() {
+        return MAX_CAPACITY;
+    }
+
+    @Override
     public long getChargeCapacityLong(@Nonnull Location l) {
         var data = StorageCacheUtils.getBlock(l);
         int inputCount = 0;

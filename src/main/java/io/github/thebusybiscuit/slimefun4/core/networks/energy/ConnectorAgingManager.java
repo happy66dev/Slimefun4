@@ -7,12 +7,9 @@ import io.github.bakedlibs.dough.common.ChatColors;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -119,6 +116,12 @@ public final class ConnectorAgingManager {
 
             float durability = getDurability(loc);
 
+            if (durability < (float) (LOSS_PERCENT / 100.0)) {
+                setDurability(loc, 0f);
+                net.markDirty(loc);
+                continue;
+            }
+
             if (load > config.peakPower) {
                 handleOverload(loc, config, load, durability, net);
             } else {
@@ -129,7 +132,7 @@ public final class ConnectorAgingManager {
 
     public static float getDurability(@Nonnull Location loc) {
         var data = StorageCacheUtils.getDataContainer(loc);
-        if (data == null) return 1.0f;
+        if (data == null || data.isPendingRemove() || !data.isDataLoaded()) return 1.0f;
         try {
             String val = data.getData(DURABILITY_KEY);
             return val != null ? Float.parseFloat(val) : 1.0f;
@@ -140,13 +143,16 @@ public final class ConnectorAgingManager {
 
     public static void setDurability(@Nonnull Location loc, float durability) {
         var data = StorageCacheUtils.getDataContainer(loc);
-        if (data == null) return;
+        if (data == null || data.isPendingRemove()) return;
+        if (!data.isDataLoaded()) {
+            StorageCacheUtils.requestLoad(data);
+            return;
+        }
         durability = Math.max(0f, Math.min(1f, durability));
         float oldDura = getDurability(loc);
         data.setData(DURABILITY_KEY, String.valueOf(durability));
         if (durability <= 0f) {
             data.setData(DAMAGED_KEY, "true");
-            showDamageHologram(loc);
             if (oldDura > 0f) {
                 generateRepairItems(loc);
             }
@@ -157,7 +163,7 @@ public final class ConnectorAgingManager {
 
     public static boolean isConnectorDamaged(@Nonnull Location loc) {
         var data = StorageCacheUtils.getDataContainer(loc);
-        if (data == null) return false;
+        if (data == null || data.isPendingRemove() || !data.isDataLoaded()) return false;
         try {
             return "true".equals(data.getData(DAMAGED_KEY));
         } catch (Exception e) {
@@ -274,36 +280,43 @@ public final class ConnectorAgingManager {
 
     private static void setOverloadTicks(Location loc, int ticks) {
         var data = StorageCacheUtils.getDataContainer(loc);
-        if (data == null) return;
+        if (data == null || data.isPendingRemove()) return;
+        if (!data.isDataLoaded()) {
+            StorageCacheUtils.requestLoad(data);
+            return;
+        }
         data.setData(OVERLOAD_TICKS_KEY, String.valueOf(ticks));
     }
 
     private static void spawnOverloadParticles(Location loc) {
-        loc.getWorld()
-                .spawnParticle(
-                        Particle.SMOKE, loc.getX() + 0.5, loc.getY() + 0.5, loc.getZ() + 0.5, 3, 0.3, 0.3, 0.3, 0.02);
-        loc.getWorld()
-                .spawnParticle(
-                        Particle.ELECTRIC_SPARK,
-                        loc.getX() + 0.5,
-                        loc.getY() + 0.5,
-                        loc.getZ() + 0.5,
-                        5,
-                        0.4,
-                        0.4,
-                        0.4,
-                        0.05);
-        loc.getWorld().playSound(loc, Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.0f);
+        Slimefun.runSync(() -> {
+            loc.getWorld()
+                    .spawnParticle(
+                            Particle.SMOKE,
+                            loc.getX() + 0.5,
+                            loc.getY() + 0.5,
+                            loc.getZ() + 0.5,
+                            3,
+                            0.3,
+                            0.3,
+                            0.3,
+                            0.02);
+            loc.getWorld()
+                    .spawnParticle(
+                            Particle.ELECTRIC_SPARK,
+                            loc.getX() + 0.5,
+                            loc.getY() + 0.5,
+                            loc.getZ() + 0.5,
+                            5,
+                            0.4,
+                            0.4,
+                            0.4,
+                            0.05);
+            loc.getWorld().playSound(loc, Sound.BLOCK_FIRE_EXTINGUISH, 0.5f, 1.0f);
+        });
     }
 
-    // ─── 损坏全息 ───────────────────────────────────────────────
-
-    private static void showDamageHologram(Location loc) {
-        try {
-            Slimefun.getHologramsService().setHologramLabel(loc.clone().add(0.5, 1.5, 0.5), "§c连接器损坏");
-        } catch (Exception ignored) {
-        }
-    }
+    // ─── 全息清理 ───────────────────────────────────────────────
 
     public static void removeDamageHologram(Location loc) {
         try {
@@ -348,6 +361,17 @@ public final class ConnectorAgingManager {
 
         if (repairItems == null || repairItems.isEmpty()) return false;
 
+        int required = getRequiredRepairCount(getDurability(loc));
+        if (repairItems.size() < required) {
+            for (int i = repairItems.size(); i < required; i++) {
+                Map<String, String> item = pickRandomRepairItem(loc);
+                if (item != null) {
+                    repairItems.add(item);
+                }
+            }
+            data.setData(REPAIR_ITEMS_KEY, GSON.toJson(repairItems));
+        }
+
         int submitted = 0;
         try {
             submitted = Integer.parseInt(data.getData(REPAIR_SUBMITTED_KEY));
@@ -360,6 +384,7 @@ public final class ConnectorAgingManager {
             data.removeData(REPAIR_SUBMITTED_KEY);
             data.removeData(OVERLOAD_TICKS_KEY);
             removeDamageHologram(loc);
+            triggerGridRecheck(loc);
             p.sendMessage(ChatColors.color("&a连接器已修复至 100%"));
             p.playSound(loc, Sound.BLOCK_ANVIL_USE, 0.6f, 1.2f);
             return true;
@@ -394,6 +419,7 @@ public final class ConnectorAgingManager {
             data.removeData(REPAIR_SUBMITTED_KEY);
             data.removeData(OVERLOAD_TICKS_KEY);
             removeDamageHologram(loc);
+            triggerGridRecheck(loc);
             p.sendMessage(ChatColors.color("&a连接器已修复至 100%"));
             p.playSound(loc, Sound.BLOCK_ANVIL_USE, 0.6f, 1.2f);
         } else {
@@ -472,62 +498,47 @@ public final class ConnectorAgingManager {
         var data = StorageCacheUtils.getDataContainer(loc);
         if (data == null) return;
 
-        List<ItemStack> distinctItems = getDistinctRecipeItems(loc);
-        if (distinctItems.isEmpty()) return;
-
         int count = getRequiredRepairCount(getDurability(loc));
-        if (count > distinctItems.size()) {
-            count = distinctItems.size();
-        }
-
-        Collections.shuffle(distinctItems, ThreadLocalRandom.current());
-        List<ItemStack> picked = distinctItems.subList(0, count);
 
         List<Map<String, String>> itemsList = new ArrayList<>();
-        for (ItemStack item : picked) {
-            Map<String, String> map = new HashMap<>();
-            SlimefunItem sf = SlimefunItem.getByItem(item);
-            if (sf != null) {
-                map.put("type", "slimefun");
-                map.put("id", sf.getId());
-            } else {
-                map.put("type", "vanilla");
-                map.put("id", item.getType().name());
+        for (int i = 0; i < count; i++) {
+            Map<String, String> item = pickRandomRepairItem(loc);
+            if (item != null) {
+                itemsList.add(item);
             }
-            itemsList.add(map);
         }
+        if (itemsList.isEmpty()) return;
 
         data.setData(REPAIR_ITEMS_KEY, GSON.toJson(itemsList));
         data.setData(REPAIR_SUBMITTED_KEY, "0");
     }
 
-    private static List<ItemStack> getDistinctRecipeItems(@Nonnull Location loc) {
+    @Nullable private static Map<String, String> pickRandomRepairItem(@Nonnull Location loc) {
         SlimefunItem sfItem = StorageCacheUtils.getSlimefunItem(loc);
-        if (sfItem == null) return new ArrayList<>();
+        if (sfItem == null) return null;
 
         ItemStack[] recipe = sfItem.getRecipe();
-        if (recipe == null) return new ArrayList<>();
+        if (recipe == null) return null;
 
-        Set<String> seen = new HashSet<>();
-        List<ItemStack> result = new ArrayList<>();
-
+        List<ItemStack> weightedItems = new ArrayList<>();
         for (ItemStack item : recipe) {
-            if (item == null || item.getType() == Material.AIR) continue;
-
-            String key;
-            SlimefunItem sf = SlimefunItem.getByItem(item);
-            if (sf != null) {
-                key = "sf:" + sf.getId();
-            } else {
-                key = "v:" + item.getType().name();
-            }
-
-            if (seen.add(key)) {
-                result.add(item.clone());
+            if (item != null && item.getType() != Material.AIR) {
+                weightedItems.add(item);
             }
         }
+        if (weightedItems.isEmpty()) return null;
 
-        return result;
+        ItemStack picked = weightedItems.get(ThreadLocalRandom.current().nextInt(weightedItems.size()));
+        Map<String, String> map = new HashMap<>();
+        SlimefunItem sf = SlimefunItem.getByItem(picked);
+        if (sf != null) {
+            map.put("type", "slimefun");
+            map.put("id", sf.getId());
+        } else {
+            map.put("type", "vanilla");
+            map.put("id", picked.getType().name());
+        }
+        return map;
     }
 
     // ─── 工具方法 ───────────────────────────────────────────────
@@ -567,5 +578,14 @@ public final class ConnectorAgingManager {
         if (data == null) return;
         data.removeData(REPAIR_ITEMS_KEY);
         data.removeData(REPAIR_SUBMITTED_KEY);
+    }
+
+    private static void triggerGridRecheck(@Nonnull Location loc) {
+        EnergyNet net = EnergyNet.getNetworkFromLocation(loc);
+        if (net != null) {
+            net.markDirty(loc);
+        } else {
+            EnergyNet.onMachinePlaced(loc);
+        }
     }
 }

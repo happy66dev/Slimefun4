@@ -18,9 +18,12 @@ import java.util.Set;
 import java.util.logging.Level;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import me.mrCookieSlime.Slimefun.api.inventory.DirtyChestMenu;
+import me.mrCookieSlime.Slimefun.api.item_transport.ItemTransportFlow;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -44,7 +47,6 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
 
     private static final long CHANNEL_COST = 6;
     private static final long INPUT_NODE_COST = 2;
-    private static final int TOTAL_CHANNELS = 16;
 
     private final Set<Location> inputNodes = new HashSet<>();
     private final Set<Location> outputNodes = new HashSet<>();
@@ -138,8 +140,6 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
         if (connectorNodes.isEmpty() && terminusNodes.isEmpty()) {
             updateHologram(b, "&c找不到附近的货运网络节点", blockData::isPendingRemove);
         } else {
-            updateHologram(b, "&7状态: &a&l已连接", blockData::isPendingRemove);
-
             // Skip ticking if the threshold is not reached. The delay is not same as minecraft tick,
             // but it's based on 'custom-ticker-delay' config.
             if (tickDelayThreshold < Slimefun.getCfg().getInt("networks.cargo-ticker-delay")) {
@@ -153,17 +153,6 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
             Map<Location, Integer> inputs = mapInputNodes();
             Map<Integer, List<Location>> outputs = mapOutputNodes();
 
-            long powerNeeded = calculatePowerNeeded(inputs.size());
-            long charge = readCharge();
-
-            if (charge < powerNeeded) {
-                String msg = "&c电力不足: 需要 " + powerNeeded + " J, 当前 " + charge + " J";
-                updateHologram(b, msg, blockData::isPendingRemove);
-                return;
-            }
-
-            deductCharge(powerNeeded);
-
             if (StorageCacheUtils.getData(b.getLocation(), "visualizer") == null) {
                 display();
             }
@@ -172,17 +161,72 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
                 if (blockData.isPendingRemove()) {
                     return;
                 }
-                var event = new CargoTickEvent(inputs, outputs);
+
+                Map<Location, Integer> activeInputs = filterActiveInputNodes(inputs);
+                long powerNeeded = calculatePowerNeeded(activeInputs);
+
+                if (powerNeeded > 0) {
+                    long charge = readCharge();
+                    if (charge < powerNeeded) {
+                        String msg = "&c电力不足: 需要 " + powerNeeded + " J, 当前 " + charge + " J";
+                        updateHologram(b, msg, blockData::isPendingRemove);
+                        return;
+                    }
+                    deductCharge(powerNeeded);
+                }
+
+                if (activeInputs.isEmpty()) {
+                    updateHologram(b, "&7状态: &a&l已连接 &7(空闲)", blockData::isPendingRemove);
+                    return;
+                }
+
+                var event = new CargoTickEvent(activeInputs, outputs);
                 Bukkit.getPluginManager().callEvent(event);
                 event.getHologramMsg().ifPresent(msg -> updateHologram(b, msg));
                 if (event.isCancelled()) {
                     return;
                 }
 
-                Slimefun.getProfiler().scheduleEntries(inputs.size() + 1);
-                new CargoNetworkTask(this, inputs, outputs).run();
+                Slimefun.getProfiler().scheduleEntries(activeInputs.size() + 1);
+                new CargoNetworkTask(this, activeInputs, outputs).run();
             });
         }
+    }
+
+    private @Nonnull Map<Location, Integer> filterActiveInputNodes(@Nonnull Map<Location, Integer> inputs) {
+        Map<Location, Integer> active = new HashMap<>();
+        for (Map.Entry<Location, Integer> entry : inputs.entrySet()) {
+            Location inputLoc = entry.getKey();
+            Optional<Block> attached = getAttachedBlock(inputLoc);
+            if (attached.isPresent()) {
+                Block target = attached.get();
+                if (hasItemsToTransfer(target)) {
+                    active.put(inputLoc, entry.getValue());
+                }
+            }
+        }
+        return active;
+    }
+
+    private boolean hasItemsToTransfer(@Nonnull Block target) {
+        if (target.getState() instanceof InventoryHolder holder) {
+            for (ItemStack item : holder.getInventory().getContents()) {
+                if (item != null && !item.getType().isAir()) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        DirtyChestMenu menu = CargoUtils.getChestMenu(target);
+        if (menu != null) {
+            for (int slot : menu.getPreset().getSlotsAccessedByItemTransport(menu, ItemTransportFlow.WITHDRAW, null)) {
+                if (menu.getItemInSlot(slot) != null) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return false;
     }
 
     private @Nonnull Map<Location, Integer> mapInputNodes() {
@@ -234,6 +278,11 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
         return output;
     }
 
+    private static long calculatePowerNeeded(@Nonnull Map<Location, Integer> activeInputs) {
+        Set<Integer> channels = new HashSet<>(activeInputs.values());
+        return (long) channels.size() * CHANNEL_COST + (long) activeInputs.size() * INPUT_NODE_COST;
+    }
+
     /**
      * This method returns the frequency a given node is set to.
      * Should there be invalid data this method it will fall back to zero in
@@ -277,10 +326,6 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
         } else {
             return Integer.parseInt(frequency);
         }
-    }
-
-    private long calculatePowerNeeded(int inputCount) {
-        return (long) TOTAL_CHANNELS * CHANNEL_COST + (long) inputCount * INPUT_NODE_COST;
     }
 
     private long readCharge() {
