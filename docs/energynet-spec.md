@@ -206,19 +206,26 @@ for each axis:
 
 ```
 tickAllGenerators() → 发电机产电，追踪 netNewEnergy + perGeneratorNewCharge
+totalProducedThisTick = netNewEnergy + calcNonChargeableRemaining()   ← 记录本tick总产出
+
 tickAllCapacitors() → 排除损坏电容
 
 calculateTotalDemand() → 所有用电器缺口总和
 
 if generatorSupply >= totalDemand:
     transferFromGenerators(totalDemand)     → 发电机供电给用电器
+    totalConsumedThisTick = totalDemand     ← 记录本tick总消耗
     excess = totalNew - usedFromNew         → 剩余电力
     stored = storeRemainingEnergy(excess)   → 存入电容（返回实际存储量）
     按比例扣减发电机（只扣 stored 的量）      → 避免能量克隆
 else:
     supplyLeft = transferFromGenerators(generatorSupply)  → 发电机供应
     remainingDemand = totalDemand - (genSupply - supplyLeft) → 正确计算剩余需求
-    transferFromCapacitors(remainingDemand) → 电容补足
+    consumedFromGenerators = genSupply - supplyLeft
+    if remainingDemand > 0:
+        capLeft = transferFromCapacitors(remainingDemand)
+        consumedFromCapacitors = remainingDemand - capLeft
+    totalConsumedThisTick = consumedFromGenerators + consumedFromCapacitors  ← 记录本tick总消耗
 ```
 
 ### 6.2 `storeRemainingEnergy()` [L419](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L419)
@@ -257,9 +264,9 @@ else:
 >
 > **长途连接器（LongRangeConnector）特殊规则**：
 > - `LongRangeConnector` 的 range=128，但 `getMaxConnectorRange()` 排除它，不参与调节器/发电机搜索范围计算
-> - 当普通连接器作为发送方且目标为长途连接器时，正向验证使用长途连接器的 range(128)
+> - 当普通连接器作为发送方且目标为长途连接器时，正向验证使用长途连接器的 range(128)（这意味着普通连接器在范围内时能接入长途网络，但反向传输被下一规则阻止）
 > - 长途连接器在 `processConnector()` 中扫描每个轴向，找到第一个 CONNECTOR 后 `break`（只连最近）
-> - 长途连接器在 `getNeighbors(CONNECTOR)` 中扫描6轴向，找到每个方向上最近的连接器
+> - 长途连接器在 `getNeighbors(CONNECTOR)` 中扫描6轴向，找到每个方向上最近的连接器，**双向校验**：目标连接器必须能用**自身的范围**沿轴向覆盖长途连接器，否则不建立邻居；普通连接器侧对长途连接器也附加 `isWithinRangeAxial(长途, 自身, 自身范围)` 校验。两侧等价（`distance ≤ target.range`），实现**完全隔离**。
 > - 长途连接器有老化机制，使用碳金能源连接器的配置（512/2000/8000, 碳金修复）
 
 ### 7.2 `validateConnection()` [L876](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L876)
@@ -277,9 +284,15 @@ else:
 
 ## 8. 显示与指令
 
-### 8.1 调节器悬浮字
-- 初始化中：`"&e初始化电网中 N%"`
-- 已就绪：`"+N J ⚡"` 或 `"-N J ⚡"`（供需差）
+### 8.1 调节器悬浮字（多行 ArmorStand 方案）
+- 使用 `HologramsService.setMultiLineHologram()` 实现，每行一个独立的 ArmorStand
+- 三行 ArmorStand 沿 Y 轴以 0.3 间距垂直堆叠
+- 初始化中：`"&e初始化电网中 N%"`（单行）
+- 初始化完成但未首次tick：`"&e初始化完成，等待首个tick数据..."`（单行，首个tick成功后才切多行）
+- 已就绪（首行）：`"+N J ⚡"` 或 `"-N J ⚡"`（电力净差额）
+- 已就绪（次行）：`"&a产出 +N J &7| &c消耗 -N J"`（本tick产出/消耗）
+- 已就绪（第三行）：`"&e储能 N &7/ &eN &7J"`（当前总存电量 / 最大可存容量）
+- 冲突时自动切换回单行：`removeMultiLineHologram() + updateHologram()`
 - 冲突：`"&c电网冲突：*"`
 - 空闲：`"&7电网已就绪，等待接入设备"`
 
@@ -750,14 +763,14 @@ tick()
 │   │   │   ├── addRegulatorNeighbors()
 │   │   │   └── extractConnectorsFromPath()
 │   │   └── findShortestPathsToCapacitors()   (发电机 → 电容，仅显示)
-│   └── calculateTotalSupply/Demand()
+│   └── 初始化完成 → 更新全息(净差额 + 等待首个tick + 储能/容量)
 └── performEnergyTransfer()
-    ├── tickAllGenerators()
+    ├── tickAllGenerators()       → 记录 totalProducedThisTick
     ├── tickAllCapacitors()
     ├── calculateTotalDemand()
-    ├── transferFromGenerators()
-    ├── storeRemainingEnergy()
-    └── transferFromCapacitors()
+    ├── transferFromGenerators()  → + transferFromCapacitors() → 记录 totalConsumedThisTick
+    └── ConnectorAgingManager.processAging()
+    └── [tick()中后续] updateHologram() (多行: 净差额 + 产出/消耗 + 储能/容量)
 
 MultimeterDisplayManager (独立于tick)
 ├── PathDisplay.start()

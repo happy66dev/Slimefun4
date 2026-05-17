@@ -1,11 +1,14 @@
 package io.github.thebusybiscuit.slimefun4.core.services.holograms;
 
 import io.github.bakedlibs.dough.blocks.BlockPosition;
+import io.github.bakedlibs.dough.common.ChatColors;
 import io.github.thebusybiscuit.slimefun4.core.attributes.HologramOwner;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
 import java.util.logging.Level;
@@ -60,10 +63,16 @@ public class HologramsService {
      */
     private final NamespacedKey persistentDataKey;
 
+    private final NamespacedKey multiLineKey;
+
     /**
      * Our cache to save {@link Entity} lookups
      */
     private final Map<BlockPosition, Hologram> cache = new HashMap<>();
+
+    private final Map<BlockPosition, List<Hologram>> multiLineCache = new HashMap<>();
+
+    private static final double LINE_SPACING = 0.3;
 
     /**
      * This constructs a new {@link HologramsService}.
@@ -76,6 +85,7 @@ public class HologramsService {
 
         // Null-Validation is performed in the NamespacedKey constructor
         persistentDataKey = new NamespacedKey(plugin, "hologram_id");
+        multiLineKey = new NamespacedKey(plugin, "multiline_id");
     }
 
     /**
@@ -107,6 +117,16 @@ public class HologramsService {
 
             if (hologram.hasExpired()) {
                 iterator.remove();
+            }
+        }
+
+        Iterator<Map.Entry<BlockPosition, List<Hologram>>> multiIt =
+                multiLineCache.entrySet().iterator();
+        while (multiIt.hasNext()) {
+            List<Hologram> lines = multiIt.next().getValue();
+            lines.removeIf(Hologram::hasExpired);
+            if (lines.isEmpty()) {
+                multiIt.remove();
             }
         }
     }
@@ -315,5 +335,81 @@ public class HologramsService {
         Validate.notNull(loc, "Location must not be null");
 
         updateHologram(loc, hologram -> hologram.setLabel(label));
+    }
+
+    /**
+     * Creates or updates a multi-line hologram at the given base {@link Location}.
+     * Each line is rendered as a separate {@link ArmorStand} stacked vertically.
+     *
+     * @param baseLoc
+     *            The base {@link Location} (block position)
+     * @param lines
+     *            The text lines to display (each line is one ArmorStand)
+     */
+    public void setMultiLineHologram(@Nonnull Location baseLoc, @Nonnull String... lines) {
+        Validate.notNull(baseLoc, "Location must not be null");
+
+        if (!Bukkit.isPrimaryThread()) {
+            Slimefun.runSync(() -> setMultiLineHologram(baseLoc, lines));
+            return;
+        }
+
+        BlockPosition position = new BlockPosition(baseLoc);
+
+        // 同时清除该位置已有的单行全息（避免闪烁/重叠）
+        removeHologram(baseLoc);
+
+        removeMultiLineHologram(baseLoc);
+
+        List<Hologram> holograms = new ArrayList<>();
+
+        // baseLoc 已由调用方叠加了偏移量，只需沿 Y 轴向下堆叠
+        for (int i = 0; i < lines.length; i++) {
+            Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
+
+            ArmorStand armorstand = (ArmorStand) lineLoc.getWorld().spawnEntity(lineLoc, EntityType.ARMOR_STAND);
+            armorstand.setVisible(false);
+            armorstand.setInvulnerable(true);
+            armorstand.setSilent(true);
+            armorstand.setMarker(true);
+            armorstand.setAI(false);
+            armorstand.setGravity(false);
+            armorstand.setRemoveWhenFarAway(false);
+
+            if (lines[i] != null) {
+                armorstand.setCustomNameVisible(true);
+                armorstand.setCustomName(ChatColors.color(lines[i]));
+            }
+
+            PersistentDataContainer container = armorstand.getPersistentDataContainer();
+            container.set(multiLineKey, PersistentDataType.INTEGER, i);
+
+            Hologram hologram = new Hologram(armorstand.getUniqueId());
+            holograms.add(hologram);
+        }
+
+        multiLineCache.put(position, holograms);
+    }
+
+    /**
+     * Removes the multi-line hologram at the given base {@link Location}.
+     *
+     * @param baseLoc
+     *            The base {@link Location} (block position)
+     */
+    public void removeMultiLineHologram(@Nonnull Location baseLoc) {
+        if (!Bukkit.isPrimaryThread()) {
+            Slimefun.runSync(() -> removeMultiLineHologram(baseLoc));
+            return;
+        }
+
+        BlockPosition position = new BlockPosition(baseLoc);
+        List<Hologram> holograms = multiLineCache.remove(position);
+
+        if (holograms != null) {
+            for (Hologram hologram : holograms) {
+                hologram.remove();
+            }
+        }
     }
 }

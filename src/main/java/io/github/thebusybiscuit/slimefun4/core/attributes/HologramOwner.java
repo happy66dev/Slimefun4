@@ -65,6 +65,54 @@ public interface HologramOwner extends ItemAttribute {
     }
 
     /**
+     * Updates a multi-line hologram for the given {@link Block}.
+     * Each line is displayed as a separate {@link org.bukkit.entity.ArmorStand}.
+     *
+     * @param b
+     *            The {@link Block} to which the hologram belongs
+     * @param lines
+     *            The text lines to display
+     */
+    default void updateMultiLineHologram(@Nonnull Block b, @Nonnull String... lines) {
+        Location loc = b.getLocation().add(getHologramOffset(b));
+        Slimefun.getHologramsService().setMultiLineHologram(loc, lines);
+    }
+
+    /**
+     * Updates a multi-line hologram for the given {@link Block} with async safety.
+     *
+     * @param b
+     *            The {@link Block} to which the hologram belongs
+     * @param abort
+     *            A {@link Supplier} that returns whether to abort the update
+     * @param lines
+     *            The text lines to display
+     */
+    default void updateMultiLineHologram(@Nonnull Block b, @Nonnull Supplier<Boolean> abort, @Nonnull String... lines) {
+        if (Bukkit.isPrimaryThread()) {
+            if (abort.get()) return;
+            updateMultiLineHologram(b, lines);
+            return;
+        }
+
+        Slimefun.runSync(() -> {
+            if (abort.get()) return;
+            updateMultiLineHologram(b, lines);
+        });
+    }
+
+    /**
+     * Removes a multi-line hologram for the given {@link Block}.
+     *
+     * @param b
+     *            The {@link Block} to which the hologram belongs
+     */
+    default void removeMultiLineHologram(@Nonnull Block b) {
+        Location loc = b.getLocation().add(getHologramOffset(b));
+        Slimefun.getHologramsService().removeMultiLineHologram(loc);
+    }
+
+    /**
      * This returns the offset of the hologram as a {@link Vector}.
      * This offset is applied to {@link Block#getLocation()} when spawning
      * the hologram.

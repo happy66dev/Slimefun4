@@ -106,6 +106,7 @@ public class EnergyNet extends Network implements HologramOwner {
     public static void removeHologramAt(Location loc) {
         Location hologramLoc = loc.clone().add(0.5, 0.75, 0.5);
         Slimefun.getHologramsService().removeHologram(hologramLoc);
+        Slimefun.getHologramsService().removeMultiLineHologram(loc);
     }
 
     private final Map<Location, EnergyNetProvider> generators = new HashMap<>();
@@ -131,6 +132,13 @@ public class EnergyNet extends Network implements HologramOwner {
     private volatile int pathSourcesDone = 0;
     private volatile long netNewEnergy = 0;
     private final Map<Location, Long> perGeneratorNewCharge = new HashMap<>();
+
+    private long totalProducedThisTick = 0;
+    private long totalConsumedThisTick = 0;
+    private long totalStoredThisTick = 0;
+    private long totalNetStoredThisTick = 0;
+    private long lastConsumerCharge = 0;
+    private long lastTotalCharge = 0;
 
     private static final AtomicInteger bfsDbQueryCount = new AtomicInteger(0);
     private static final int BFS_DB_QUERY_THROTTLE = 10;
@@ -435,6 +443,7 @@ public class EnergyNet extends Network implements HologramOwner {
         try {
             if (!regulator.equals(b.getLocation())) {
                 debugLog("tick: 调节器不匹配，预期=" + formatLocation(regulator) + " 实际=" + formatLocation(b.getLocation()));
+                removeMultiLineHologram(b);
                 updateHologram(b, "&c电网冲突：多个能源调节器相连", blockData::isPendingRemove);
                 if (initializing) {
                     initializing = false;
@@ -444,11 +453,13 @@ public class EnergyNet extends Network implements HologramOwner {
             }
 
             if (conflictMode) {
+                removeMultiLineHologram(b);
                 updateHologram(b, "&c电网冲突：电网交叉", () -> false);
                 return;
             }
 
             if (!initialized) {
+                removeMultiLineHologram(b);
                 if (!initializing && !pendingInit) {
                     pendingInit = true;
                     debugLog("tick: 未初始化，提交异步初始化任务");
@@ -468,8 +479,10 @@ public class EnergyNet extends Network implements HologramOwner {
                 debugLog("tick: connectorNodes和terminusNodes均为空，但regulatorNodes=" + regulatorNodes.size()
                         + " initialized=" + initialized);
                 if (!regulatorNodes.isEmpty()) {
+                    removeMultiLineHologram(b);
                     updateHologram(b, "&7电网已就绪，等待接入设备", blockData::isPendingRemove);
                 } else {
+                    removeMultiLineHologram(b);
                     updateHologram(b, "&4找不到能源网络", blockData::isPendingRemove);
                 }
             } else {
@@ -477,6 +490,9 @@ public class EnergyNet extends Network implements HologramOwner {
                 if (destroyed) {
                     return;
                 }
+                long currentTotalCharge = calculateTotalCharge();
+                totalNetStoredThisTick = currentTotalCharge - lastTotalCharge;
+                lastTotalCharge = currentTotalCharge;
                 long supply = calculateTotalSupply();
                 long demand = calculateTotalDemand();
                 debugLog("tick: 电力传输完成 | 发电=" + supply + " 用电=" + demand
@@ -773,15 +789,32 @@ public class EnergyNet extends Network implements HologramOwner {
     }
 
     private void updateHologram(@Nonnull SlimefunBlockData data, double supply, double demand) {
+        String netLine;
         if (demand > supply) {
             String netLoss = NumberUtils.getCompactDouble(demand - supply);
-            updateHologram(
-                    data.getLocation().getBlock(), "&4&l- &c" + netLoss + " &7J &e\u26A1", data::isPendingRemove);
+            netLine = "&e可调度电量 &7| &4&l- &c" + netLoss + " &7J &e\u26A1";
         } else {
             String netGain = NumberUtils.getCompactDouble(supply - demand);
-            updateHologram(
-                    data.getLocation().getBlock(), "&2&l+ &a" + netGain + " &7J &e\u26A1", data::isPendingRemove);
+            netLine = "&e可调度电量 &7| &2&l+ &a" + netGain + " &7J &e\u26A1";
         }
+
+        String prodStr = NumberUtils.getCompactDouble(totalProducedThisTick);
+        String consStr = NumberUtils.getCompactDouble(totalConsumedThisTick);
+        long absNet = Math.abs(totalNetStoredThisTick);
+        String netPrefix = totalNetStoredThisTick > 0 ? "+" : (totalNetStoredThisTick < 0 ? "-" : "±");
+        String netColor = totalNetStoredThisTick > 0 ? "&a" : (totalNetStoredThisTick < 0 ? "&c" : "&7");
+        String netStr = NumberUtils.getCompactDouble(absNet);
+        String prodConsLine = "&2产出 +" + prodStr + " J &7| &e净值 " + netColor + netPrefix + netStr + " &7J &7| &c消耗 -"
+                + consStr + " J";
+
+        long totalCharge = calculateTotalCharge();
+        long totalCapacity = calculateTotalCapacity();
+        String chargeStr = NumberUtils.getCompactDouble(totalCharge);
+        String capacityStr = NumberUtils.getCompactDouble(totalCapacity);
+        String storageLine = "&e储能 " + chargeStr + " &7/ &e" + capacityStr + " &7J";
+
+        updateMultiLineHologram(
+                data.getLocation().getBlock(), data::isPendingRemove, netLine, prodConsLine, storageLine);
     }
 
     @Nullable private static EnergyNetComponent getComponent(@Nonnull Location l) {
@@ -914,15 +947,7 @@ public class EnergyNet extends Network implements HologramOwner {
                         + " 路径=" + (countTotalPaths(generatorPaths) + countTotalPaths(capacitorPaths)));
                 if (!destroyed) {
                     Slimefun.runSync(() -> {
-                        long supply = calculateTotalSupply();
-                        long demand = calculateTotalDemand();
-                        if (demand > supply) {
-                            String netLoss = NumberUtils.getCompactDouble(demand - supply);
-                            updateHologram(regulator.getBlock(), "&4&l- &c" + netLoss + " &7J &e\u26A1", () -> false);
-                        } else {
-                            String netGain = NumberUtils.getCompactDouble(supply - demand);
-                            updateHologram(regulator.getBlock(), "&2&l+ &a" + netGain + " &7J &e\u26A1", () -> false);
-                        }
+                        updateHologram(regulator.getBlock(), "&e初始化完成，等待首个tick数据...", () -> false);
                     });
                 }
             } finally {
@@ -1571,6 +1596,7 @@ public class EnergyNet extends Network implements HologramOwner {
 
                 if (isLongRangeConnector) {
                     // 长途连接器：扫描6个轴向，只连接每个方向上最近的连接器
+                    // 双向校验：目标连接器也必须能用自身范围反向覆盖长途连接器
                     int[][] axes = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
                     for (int[] axis : axes) {
                         for (int i = 1; i <= connRange; i++) {
@@ -1579,7 +1605,10 @@ public class EnergyNet extends Network implements HologramOwner {
                             if (targetComp != null) {
                                 if (targetComp.getEnergyComponentType() == EnergyNetComponentType.CONNECTOR
                                         && connectors.containsKey(targetLoc)) {
-                                    neighbors.add(targetLoc);
+                                    // 双向校验：目标连接器必须能用自身范围反向覆盖长途连接器
+                                    if (isWithinRangeAxial(targetLoc, location, targetComp.getRange())) {
+                                        neighbors.add(targetLoc);
+                                    }
                                 }
                                 break;
                             }
@@ -1600,6 +1629,10 @@ public class EnergyNet extends Network implements HologramOwner {
                                             otherConnector,
                                             EnergyNetComponentType.CONNECTOR,
                                             EnergyNetComponentType.CONNECTOR);
+                            // 对长途连接器附加反向校验：本连接器自身范围需能覆盖对方
+                            if (valid && otherComponent instanceof LongRangeConnector) {
+                                valid = isWithinRangeAxial(otherConnector, location, connRange);
+                            }
                             if (DEBUG_PATHS) {
                                 debugPathLog("getNeighbors(CONNECTOR): 检查连接器 " + formatLocation(otherConnector)
                                         + " 轴向距离=" + getAxialDistance(location, otherConnector)
@@ -2087,6 +2120,18 @@ public class EnergyNet extends Network implements HologramOwner {
         // 排除已损坏的电容
         tickAllCapacitors();
 
+        // 记录本tick总产出
+        totalProducedThisTick = netNewEnergy + calcNonChargeableRemaining();
+
+        // 计算用电器实际耗电：上次tick传输后电荷 - 本次传输前电荷
+        long currentConsumerCharge = 0;
+        for (Map.Entry<Location, EnergyNetComponent> entry : consumers.entrySet()) {
+            currentConsumerCharge += entry.getValue().getChargeLong(entry.getKey());
+        }
+        totalConsumedThisTick = Math.max(0, lastConsumerCharge - currentConsumerCharge);
+        lastConsumerCharge = currentConsumerCharge;
+        totalStoredThisTick = 0;
+
         // 计算总需求
         long totalDemand = calculateTotalDemand();
 
@@ -2098,6 +2143,7 @@ public class EnergyNet extends Network implements HologramOwner {
             long usedFromNew = Math.min(totalNew, totalDemand);
             long excess = totalNew - usedFromNew;
             long stored = storeRemainingEnergy(excess);
+            totalStoredThisTick = stored;
             // 存完电容后扣减发电机，避免能量克隆（只扣实际存入电容的量）
             if (stored > 0 && netNewEnergy > 0) {
                 for (Map.Entry<Location, Long> entry : perGeneratorNewCharge.entrySet()) {
@@ -2117,11 +2163,12 @@ public class EnergyNet extends Network implements HologramOwner {
         } else {
             // 先用发电机供电，然后用电容供电
             long supplyLeft = transferFromGenerators(generatorSupply);
-            long usedFromGenerators = generatorSupply - supplyLeft;
-            long remainingDemand = totalDemand - usedFromGenerators;
+            long remainingDemand = totalDemand - (generatorSupply - supplyLeft);
             if (remainingDemand > 0) {
                 transferFromCapacitors(remainingDemand);
             }
+            // 电容放出能量，存入量为 0
+            totalStoredThisTick = 0;
         }
 
         // 连接器老化处理（在所有负载记录完成后）
@@ -2337,6 +2384,40 @@ public class EnergyNet extends Network implements HologramOwner {
     }
 
     /**
+     * 计算电网内所有机器的当前总存电量（发电机 + 电容 + 用电器）
+     */
+    private long calculateTotalCharge() {
+        long charge = 0;
+        for (Map.Entry<Location, EnergyNetProvider> entry : generators.entrySet()) {
+            charge = NumberUtils.flowSafeAddition(charge, entry.getValue().getChargeLong(entry.getKey()));
+        }
+        for (Map.Entry<Location, EnergyNetComponent> entry : capacitors.entrySet()) {
+            charge = NumberUtils.flowSafeAddition(charge, entry.getValue().getChargeLong(entry.getKey()));
+        }
+        for (Map.Entry<Location, EnergyNetComponent> entry : consumers.entrySet()) {
+            charge = NumberUtils.flowSafeAddition(charge, entry.getValue().getChargeLong(entry.getKey()));
+        }
+        return charge;
+    }
+
+    /**
+     * 计算电网内所有机器的最大可存电量总和（发电机 + 电容 + 用电器）
+     */
+    private long calculateTotalCapacity() {
+        long capacity = 0;
+        for (Map.Entry<Location, EnergyNetProvider> entry : generators.entrySet()) {
+            capacity = NumberUtils.flowSafeAddition(capacity, entry.getValue().getChargeCapacityLong(entry.getKey()));
+        }
+        for (Map.Entry<Location, EnergyNetComponent> entry : capacitors.entrySet()) {
+            capacity = NumberUtils.flowSafeAddition(capacity, entry.getValue().getChargeCapacityLong(entry.getKey()));
+        }
+        for (Map.Entry<Location, EnergyNetComponent> entry : consumers.entrySet()) {
+            capacity = NumberUtils.flowSafeAddition(capacity, entry.getValue().getChargeCapacityLong(entry.getKey()));
+        }
+        return capacity;
+    }
+
+    /**
      * 获取按路径长度排序的能量路径列表
      */
     private List<EnergyPath> getSortedPaths(Map<Location, Set<EnergyPath>> pathMap) {
@@ -2402,6 +2483,7 @@ public class EnergyNet extends Network implements HologramOwner {
      * 清除电网内所有机器的悬浮字（用于电网销毁时清理冲突提示等）
      */
     private void removeAllHolograms() {
+        removeMultiLineHologram(regulator.getBlock());
         removeHologram(regulator.getBlock());
         for (Location loc : connectedLocations) {
             if (!loc.equals(regulator)) {
