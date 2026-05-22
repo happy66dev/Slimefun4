@@ -2404,6 +2404,16 @@ public final class SlimefunItems {
             "",
             "&f用于远距离连接能源网络",
             "&f只能连接到其他连接器");
+    public static final SlimefunItemStack ENERGY_METER = new SlimefunItemStack(
+            "ENERGY_METER", Material.DAYLIGHT_DETECTOR, "&e电量计数器", "", "&f放在连接器上方可统计", "&f经过连接器的累计电量");
+    public static final SlimefunItemStack CURRENT_LIMITER = new SlimefunItemStack(
+            "CURRENT_LIMITER",
+            Material.COMPARATOR,
+            "&b限电器",
+            "",
+            "&f放在连接器上方可限制",
+            "&f经过连接器的最大负载电量",
+            "&f右键设置限制值 | Shift+右键设为无限制");
     public static final SlimefunItemStack DEBUG_FISH = new SlimefunItemStack(
             "DEBUG_FISH",
             Material.SALMON,

@@ -196,18 +196,7 @@ public class Multimeter extends SimpleSlimefunItem<ItemUseHandler> {
         float durability = ConnectorAgingManager.getDurability(loc);
         String statusColor = ConnectorAgingManager.getStatusColor(durability);
         String statusText = ConnectorAgingManager.getStatusText(durability);
-        sb.append("&7耐久: ")
-                .append(statusColor)
-                .append(String.format("%.1f", durability * 100))
-                .append("% &7(")
-                .append(statusText)
-                .append(")\n");
-        long remaining = ConnectorAgingManager.getRemainingJoules(loc);
-        if (remaining > 0) {
-            sb.append("&7剩余吞吐: &f")
-                    .append(ConnectorAgingManager.formatJoules(remaining))
-                    .append(" &7J\n");
-        }
+        sb.append("&7状态: ").append(statusColor).append(statusText).append("\n");
 
         int connectedCount = 0;
         for (Set<EnergyPath> paths : net.getGeneratorPaths().values()) {

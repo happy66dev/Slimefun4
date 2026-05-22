@@ -118,7 +118,10 @@ for each axis:
         检查 regulator + axis * i 位置
         如果是 CONNECTOR/CAPACITOR → 加入 BFS 队列
         如果是 GENERATOR/CONSUMER → 仅标记 visited
+        如果是 ENERGY_REGULATOR（不实现 EnergyNetComponent，需显式 id 检查）→ 冲突检测
 ```
+
+> **注意**：`EnergyRegulator` 不实现 `EnergyNetComponent` 接口，因此 `getComponent()` 返回 null，**必须通过 `querySlimefunItemFromDb()` 查到后显式检查 id.equals("ENERGY_REGULATOR")**。如果忽略此检查，两个调节器直接堆叠（无连接器）时将无法检测冲突。
 
 **阶段2：BFS 队列扩展**
 
@@ -135,7 +138,7 @@ for each axis:
 - 6轴向 × range 格线性扫描
 - 每步检查：缓存 `getComponent()` → DB查询 `querySlimefunItemFromDb()`
 - 发现 CONNECTOR/CAPACITOR 加入队列继续扩展
-- 发现调节器（冲突检测）→ `conflictMode`
+- 发现调节器（冲突检测，也通过 `dbItem.getId().equals("ENERGY_REGULATOR")` 显式判断）→ `conflictMode`
 
 ### 4.3 `processCapacitor()` [L1616](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L1616)
 - 仅6方向相邻（曼哈顿距离=1）
@@ -748,6 +751,39 @@ CargoNet.tick()
 
 ---
 
+### 电量计数器（EnergyMeter）
+- 物品ID: `ENERGY_METER`
+- 材质: `Material.DAYLIGHT_DETECTOR`
+- 功能：统计经过连接器的累计电量（负载）
+- 位置：连接器正上方一格
+- 数据存储：使用 `SlimefunBlockData` 持久化（`energy-counter` key），重启不丢失
+- 全息显示：自动单位转换（K/M/B/T/Q），带闪烁抑制（displayCache 仅变化时更新）
+- 右键：显示精确的电量数值
+- Shift+右键（仅放置者）：清零计数器
+- 放置者记录：`energy-meter-owner` key 记录 UUID
+- 无挖掘保护（任何玩家都可挖掘）
+- 实现原理：
+  1. `EnergyNet.tick()` 中 `performEnergyTransfer()` 后调用 `propagateToEnergyMeters()`
+  2. 遍历所有连接器负载，检查正上方是否为 ENERGY_METER
+  3. 使用 `NumberUtils.flowSafeAddition(long, long)` 安全加法避免溢出
+  4. 结果通过 `data.setData()` 写回持久化存储
+- 独立 tick（BlockTicker）：每秒更新全息显示
+
+### markDirty 主线程短路
+
+[EnergyNet:L2469](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L2469)
+`markDirty()` 中的 `runSync` 已优化为**主线程短路**：
+```java
+if (Bukkit.isPrimaryThread()) {
+    hologramCleanup.run();  // 已在主线程，直接执行
+} else {
+    Slimefun.runSync(hologramCleanup);
+}
+```
+当从 `onMachinePlaced`（BlockPlaceEvent → 主线程）调用时，省去一次 runSync 调度。
+
+---
+
 ## 附录A：关键方法调用图
 
 ```
@@ -758,19 +794,20 @@ tick()
 │   │   ├── processConnector()
 │   │   └── processCapacitor()
 │   ├── precomputePaths()
-│   │   ├── findShortestPathsFromSource()     (发电机/电容 → 用电器)
-│   │   │   ├── getNeighbors()
-│   │   │   ├── addRegulatorNeighbors()
-│   │   │   └── extractConnectorsFromPath()
-│   │   └── findShortestPathsToCapacitors()   (发电机 → 电容，仅显示)
-│   └── 初始化完成 → 更新全息(净差额 + 等待首个tick + 储能/容量)
-└── performEnergyTransfer()
-    ├── tickAllGenerators()       → 记录 totalProducedThisTick
-    ├── tickAllCapacitors()
-    ├── calculateTotalDemand()
-    ├── transferFromGenerators()  → + transferFromCapacitors() → 记录 totalConsumedThisTick
-    └── ConnectorAgingManager.processAging()
-    └── [tick()中后续] updateHologram() (多行: 净差额 + 产出/消耗 + 储能/容量)
+│   └── 初始化完成 → scheduleSelfTick() → 更新全息(等待首个tick)
+└── [显示层] 全息刷新（无电力逻辑）← 电力逻辑由 tickSelf() 接管
+
+tickSelf() (BukkitScheduler 异步自调度，不依赖 chunk.isLoaded())
+├── performEnergyTransfer()
+│   ├── tickAllGenerators()       → 记录 totalProducedThisTick
+│   ├── tickAllCapacitors()
+│   ├── calculateTotalDemand()
+│   ├── transferFromGenerators()  → + transferFromCapacitors() → 记录 totalConsumedThisTick
+│   ├── storeRemainingEnergy()
+│   └── ConnectorAgingManager.processAging()
+├── propagateToEnergyMeters()
+├── 统计计算 (lastSupply, lastDemand, totalNetStoredThisTick)
+└── 全息刷新 (regulator区块加载 → runSync 刷新 / 未加载 → 跳过)
 
 MultimeterDisplayManager (独立于tick)
 ├── PathDisplay.start()
@@ -811,3 +848,86 @@ public static class EnergyPath {
 ```
 
 万用表和 `/sf multimeter` 指令通过 `EnergyNet.getGeneratorPaths()`、`getCapacitorPaths()`、`getGeneratorToCapacitorPaths()` 公开 getter 获取路径数据。
+
+---
+
+## 12. 自调度架构 (Self-Tick)
+
+### 12.1 动机
+
+电网的 `tick()` 原本由 BlockTicker 驱动，而 BlockTicker 依赖 `chunk.isLoaded()`。当调节器区块卸载时，整个电网停摆。这对 LongRangeConnector（范围128格）超远跨区电网是致命问题。
+
+### 12.2 设计
+
+```
+旧架构：BlockTicker → chunk.isLoaded()? → tick() → 电力逻辑+显示
+新架构：
+  显示层：BlockTicker → tick()            (仅全息刷新，无电力逻辑)
+  逻辑层：BukkitScheduler → tickSelf()    (电力传输+计数+老化，永不依赖区块)
+```
+
+- `tickSelf()` 在 `scheduleSelfTick()` 中注册为 Bukkit 异步周期任务（tick-based，TPS低时自动降速）
+- `tickSelf()` 开头有 `AtomicBoolean` 防重入守卫
+- 启动时机：`initializeNetworkAsync()` 成功后调用 `scheduleSelfTick()`
+- 停止时机：`markDirty(regulator)` → `cancelSelfTick()`；`initializeNetworkAsync` 开头也调用 `cancelSelfTick()` 清除旧任务
+- 自愈机制：`initializeNetworkAsync.finally` 中，若初始化被中断且 `!initialized && !destroyed && !pendingInit`，自动重试
+
+### 12.3 markDirty 直接提交
+
+`markDirty` 不再只"标记脏了等 tick"，而是在设置 `initialized=false` 后直接调用 `GRID_EXECUTOR.submit(this::initializeNetworkAsync)`。这样即使调节器区块未加载，网络也能立即开始重新初始化。
+
+### 12.4 全息刷新
+
+`tickSelf()` 通过 `regulator.getChunk().isLoaded()` 判断：
+- 加载 → `Slimefun.runSync(() -> updateHologram(...))` 
+- 未加载 → 跳过（不报错，不影响电力逻辑）
+
+BlockTicker 的 `tick()` 作为显示层的补充，在区块加载时额外刷新全息。
+
+---
+
+## 13. 限电器 (CurrentLimiter)
+
+### 13.1 动机
+
+在复杂电网中，管理员可对特定连接器设置流量上限，防止某条线路承载过多电力。限电器放在连接器正上方（与电量计数器互斥），限制该连接器每 tick 的最大通过电量。
+
+### 13.2 设计
+
+```
+连接器 y+1 位置:
+  电量计数器 (ENERGY_METER) ↔ 限电器 (CURRENT_LIMITER)  二选一
+```
+
+- 存储键 `current-limit` (String long)，持久化到数据库
+- `connectorLimits` (ConcurrentHashMap) 电网级数据，由 BFS 初始化填充，运行中可实时修改
+- `computeLimiterCap(pathGroup)` 在传输前检查路径上所有连接器的剩余额度
+- 注入点：`transferFromGenerators` / `transferFromCapacitors`
+
+### 13.3 交互
+
+| 交互 | 行为 |
+|------|------|
+| 右键（放置者） | 提示在聊天栏输入整数值 (J/t) |
+| 输入 0 | 连接器禁用 |
+| 输入正整数 | 限制通过量 |
+| 输入非法值 | 拒绝 |
+| Shift+右键 | 快捷设为无限制 |
+| 非放置者右键 | 仅查看当前限制值 |
+
+### 13.4 限流逻辑
+
+`transferAmount = min(transferAmount, computeLimiterCap(pathGroup))`
+
+- 仅对当前 tick 有效，`connectorLoad` 每 tick 清零
+- 超出限额的电留在源端不传输
+- 无备用路径时用电器收不到足额电力
+
+### 13.5 生命周期
+
+| 事件 | BFS 重扫？ |
+|------|:---:|
+| 初次初始化 | ✅ |
+| 限电器值变更 | ❌ 实时 |
+| 拆限电器 | ❌ 实时 (BlockBreakHandler) |
+| 服务器重启 | ✅ 从 DB 恢复 |

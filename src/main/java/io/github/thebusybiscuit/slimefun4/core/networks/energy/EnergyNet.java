@@ -27,14 +27,17 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongConsumer;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
@@ -116,6 +119,7 @@ public class EnergyNet extends Network implements HologramOwner {
     // 新规格说明添加的字段
     private final Map<Location, EnergyNetComponent> connectors = new HashMap<>();
     private final Map<Location, Long> connectorLoad = new HashMap<>();
+    private final Map<Location, Long> connectorLimits = new ConcurrentHashMap<>();
     private final Map<Location, Set<EnergyPath>> generatorPaths = new HashMap<>();
     private final Map<Location, Set<EnergyPath>> capacitorPaths = new HashMap<>();
     private final Map<Location, Map<Location, Set<EnergyPath>>> generatorToCapacitorPaths = new HashMap<>();
@@ -139,6 +143,11 @@ public class EnergyNet extends Network implements HologramOwner {
     private long totalNetStoredThisTick = 0;
     private long lastConsumerCharge = 0;
     private long lastTotalCharge = 0;
+
+    private int selfTickTaskId = -1;
+    private long lastSupply;
+    private long lastDemand;
+    private final AtomicBoolean selfTicking = new AtomicBoolean(false);
 
     private static final AtomicInteger bfsDbQueryCount = new AtomicInteger(0);
     private static final int BFS_DB_QUERY_THROTTLE = 10;
@@ -486,20 +495,7 @@ public class EnergyNet extends Network implements HologramOwner {
                     updateHologram(b, "&4找不到能源网络", blockData::isPendingRemove);
                 }
             } else {
-                performEnergyTransfer();
-                if (destroyed) {
-                    return;
-                }
-                long currentTotalCharge = calculateTotalCharge();
-                totalNetStoredThisTick = currentTotalCharge - lastTotalCharge;
-                lastTotalCharge = currentTotalCharge;
-                long supply = calculateTotalSupply();
-                long demand = calculateTotalDemand();
-                debugLog("tick: 电力传输完成 | 发电=" + supply + " 用电=" + demand
-                        + " | 发电机=" + generators.size() + " 连接器=" + connectors.size()
-                        + " 电容=" + capacitors.size() + " 用电器=" + consumers.size()
-                        + " 路径=" + (countTotalPaths(generatorPaths) + countTotalPaths(capacitorPaths)));
-                updateHologram(blockData, supply, demand);
+                updateHologram(blockData, lastSupply, lastDemand);
             }
         } finally {
             Slimefun.getProfiler()
@@ -872,6 +868,7 @@ public class EnergyNet extends Network implements HologramOwner {
      */
     private void initializeNetworkAsync() {
         pendingInit = false;
+        cancelSelfTick();
         debugLog("initializeNetworkAsync: 开始异步初始化");
         bfsDbQueryCount.set(0);
         bfsDbQueried.clear();
@@ -941,6 +938,7 @@ public class EnergyNet extends Network implements HologramOwner {
                 }
 
                 initialized = true;
+                scheduleSelfTick();
                 debugLog("初始化完成 ✓ 调节器=" + formatLocation(regulator)
                         + " 发电机=" + generators.size() + " 连接器=" + connectors.size()
                         + " 电容=" + capacitors.size() + " 用电器=" + consumers.size()
@@ -953,6 +951,11 @@ public class EnergyNet extends Network implements HologramOwner {
             } finally {
                 initializing = false;
                 abortRequested = false;
+                if (!initialized && !destroyed && !pendingInit) {
+                    debugLog("initializeNetworkAsync: 初始化被打断，自动重试");
+                    pendingInit = true;
+                    GRID_EXECUTOR.submit(this::initializeNetworkAsync);
+                }
             }
         }
     }
@@ -973,6 +976,7 @@ public class EnergyNet extends Network implements HologramOwner {
         consumers.clear();
         connectors.clear();
         connectorLoad.clear();
+        connectorLimits.clear();
         generatorPaths.clear();
         capacitorPaths.clear();
         generatorToCapacitorPaths.clear();
@@ -1787,6 +1791,16 @@ public class EnergyNet extends Network implements HologramOwner {
                     SlimefunItem dbItem = querySlimefunItemFromDb(targetLoc);
                     if (dbItem instanceof EnergyNetComponent dbComp) {
                         targetComponent = dbComp;
+                    } else if (dbItem != null && dbItem.getId().equals("ENERGY_REGULATOR")) {
+                        // 调节器不实现 EnergyNetComponent，需显式冲突检测
+                        if (!targetLoc.equals(regulator)) {
+                            debugLog("collectNetworkMembers: 调节器扩展发现冲突调节器 @ " + formatLocation(targetLoc));
+                            updateHologram(targetLoc.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false);
+                            Slimefun.runSync(
+                                    () -> updateHologram(regulator.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false));
+                            return false;
+                        }
+                        continue;
                     } else {
                         continue;
                     }
@@ -1937,6 +1951,21 @@ public class EnergyNet extends Network implements HologramOwner {
                     break;
             }
             connectedLocations.add(loc);
+        }
+
+        for (Location loc : connectors.keySet()) {
+            Location above = loc.clone().add(0, 1, 0);
+            var limiterData = StorageCacheUtils.getDataContainer(above);
+            if (limiterData == null || limiterData.isPendingRemove()) continue;
+            if (!"CURRENT_LIMITER".equals(limiterData.getSfId())) continue;
+            String limitStr = limiterData.getData("current-limit");
+            if (limitStr != null) {
+                try {
+                    long limit = Long.parseLong(limitStr);
+                    connectorLimits.put(loc, limit);
+                } catch (NumberFormatException ignored) {
+                }
+            }
         }
 
         return true;
@@ -2176,6 +2205,90 @@ public class EnergyNet extends Network implements HologramOwner {
     }
 
     /**
+     * 将连接器负载传播到上方的电量计数器
+     */
+    private void propagateToEnergyMeters() {
+        for (Map.Entry<Location, Long> entry : connectorLoad.entrySet()) {
+            long load = entry.getValue();
+            if (load <= 0) continue;
+            Location above = entry.getKey().clone().add(0, 1, 0);
+            var data = StorageCacheUtils.getDataContainer(above);
+            if (data == null || data.isPendingRemove()) continue;
+            if (!"ENERGY_METER".equals(data.getSfId())) continue;
+            long acc = 0;
+            String counterStr = data.getData("energy-counter");
+            if (counterStr != null) {
+                acc = Long.parseLong(counterStr);
+            }
+            acc = NumberUtils.flowSafeAddition(acc, load);
+            data.setData("energy-counter", String.valueOf(acc));
+        }
+    }
+
+    private void scheduleSelfTick() {
+        cancelSelfTick();
+        int delay = Slimefun.getCfg().getInt("URID.custom-ticker-delay");
+        selfTickTaskId = Bukkit.getScheduler()
+                .runTaskTimerAsynchronously(Slimefun.instance(), this::tickSelf, delay, delay)
+                .getTaskId();
+        debugLog("scheduleSelfTick: 自调度已启动 delay=" + delay);
+    }
+
+    private void cancelSelfTick() {
+        if (selfTickTaskId >= 0) {
+            Bukkit.getScheduler().cancelTask(selfTickTaskId);
+            selfTickTaskId = -1;
+            debugLog("cancelSelfTick: 自调度已取消");
+        }
+    }
+
+    private void tickSelf() {
+        if (!selfTicking.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            if (destroyed || !initialized || initializing || conflictMode) {
+                return;
+            }
+
+            boolean hasMembers = !connectorNodes.isEmpty() || !terminusNodes.isEmpty();
+            if (!hasMembers) {
+                return;
+            }
+
+            performEnergyTransfer();
+            if (destroyed) {
+                return;
+            }
+            propagateToEnergyMeters();
+
+            long currentTotalCharge = calculateTotalCharge();
+            totalNetStoredThisTick = currentTotalCharge - lastTotalCharge;
+            lastTotalCharge = currentTotalCharge;
+            lastSupply = calculateTotalSupply();
+            lastDemand = calculateTotalDemand();
+
+            debugLog("tickSelf: 电力传输完成 | 发电=" + lastSupply + " 用电=" + lastDemand
+                    + " | 发电机=" + generators.size() + " 连接器=" + connectors.size()
+                    + " 电容=" + capacitors.size() + " 用电器=" + consumers.size()
+                    + " 路径=" + (countTotalPaths(generatorPaths) + countTotalPaths(capacitorPaths)));
+
+            if (regulator.getChunk().isLoaded()) {
+                Slimefun.runSync(() -> {
+                    if (!destroyed && regulator.getChunk().isLoaded()) {
+                        var data = StorageCacheUtils.getBlock(regulator);
+                        if (data != null && !data.isPendingRemove()) {
+                            updateHologram(data, lastSupply, lastDemand);
+                        }
+                    }
+                });
+            }
+        } finally {
+            selfTicking.set(false);
+        }
+    }
+
+    /**
      * 从发电机传输能量到消费者
      * @param maxEnergy 最大传输能量
      * @return 剩余的未满足需求
@@ -2232,6 +2345,11 @@ public class EnergyNet extends Network implements HologramOwner {
             long neededByConsumer = consumerCapacity - consumerCharge;
             long transferAmount = Math.min(Math.min(availableFromGenerator, neededByConsumer), remainingEnergy);
 
+            if (transferAmount <= 0) {
+                continue;
+            }
+
+            transferAmount = Math.min(transferAmount, computeLimiterCap(pathGroup));
             if (transferAmount <= 0) {
                 continue;
             }
@@ -2321,6 +2439,11 @@ public class EnergyNet extends Network implements HologramOwner {
             long neededByConsumer = consumerCapacity - consumerCharge;
             long transferAmount = Math.min(Math.min(availableFromCapacitor, neededByConsumer), remainingEnergy);
 
+            if (transferAmount <= 0) {
+                continue;
+            }
+
+            transferAmount = Math.min(transferAmount, computeLimiterCap(pathGroup));
             if (transferAmount <= 0) {
                 continue;
             }
@@ -2443,6 +2566,36 @@ public class EnergyNet extends Network implements HologramOwner {
         }
     }
 
+    private long computeLimiterCap(List<EnergyPath> pathGroup) {
+        long cap = Long.MAX_VALUE;
+        for (EnergyPath path : pathGroup) {
+            for (Location connLoc : path.connectors) {
+                if (connLoc.equals(regulator)) continue;
+                Long limit = connectorLimits.get(connLoc);
+                if (limit == null) continue;
+                if (limit == 0) return 0;
+                long currentLoad = connectorLoad.getOrDefault(connLoc, 0L);
+                long remaining = limit - currentLoad;
+                if (remaining <= 0) return 0;
+                if (remaining < cap) cap = remaining;
+            }
+        }
+        return cap;
+    }
+
+    public void setConnectorLimit(Location connLoc, long limit) {
+        connectorLimits.put(connLoc, limit);
+    }
+
+    public void removeConnectorLimit(Location connLoc) {
+        connectorLimits.remove(connLoc);
+    }
+
+    public long getConnectorLimit(Location connLoc) {
+        Long limit = connectorLimits.get(connLoc);
+        return limit != null ? limit : -1;
+    }
+
     private long calcNonChargeableRemaining() {
         long total = 0;
         for (long v : nonChargeableSupply.values()) {
@@ -2457,14 +2610,20 @@ public class EnergyNet extends Network implements HologramOwner {
      */
     @Override
     public void markDirty(@Nonnull Location l) {
-        Slimefun.runSync(() -> {
+        Runnable hologramCleanup = () -> {
             removeHologramAt(l);
             if (regulator.equals(l)) {
                 removeAllHolograms();
             }
-        });
+        };
+        if (Bukkit.isPrimaryThread()) {
+            hologramCleanup.run();
+        } else {
+            Slimefun.runSync(hologramCleanup);
+        }
 
         if (regulator.equals(l)) {
+            cancelSelfTick();
             destroyed = true;
             abortRequested = true;
             manager.unregisterNetwork(this);
@@ -2476,6 +2635,10 @@ public class EnergyNet extends Network implements HologramOwner {
             regulatorNodes.remove(l);
             connectorNodes.remove(l);
             terminusNodes.remove(l);
+            if (!initializing && !pendingInit) {
+                pendingInit = true;
+                GRID_EXECUTOR.submit(this::initializeNetworkAsync);
+            }
         }
     }
 

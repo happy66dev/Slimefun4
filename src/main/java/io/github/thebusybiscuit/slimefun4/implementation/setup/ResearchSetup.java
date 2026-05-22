@@ -951,6 +951,8 @@ public final class ResearchSetup {
                 SlimefunItems.RAINBOW_CHESTPLATE,
                 SlimefunItems.RAINBOW_LEGGINGS,
                 SlimefunItems.RAINBOW_BOOTS);
+        register("energy_meter", 282, "Energy Counter", 12, SlimefunItems.ENERGY_METER);
+        register("current_limiter", 283, "Current Limiter", 12, SlimefunItems.CURRENT_LIMITER);
     }
 
     @ParametersAreNonnullByDefault

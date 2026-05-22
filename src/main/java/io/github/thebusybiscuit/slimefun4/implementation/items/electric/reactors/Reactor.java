@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -83,6 +84,7 @@ public abstract class Reactor extends AbstractEnergyProvider
     private static final int[] border_4 = {25, 34, 43};
 
     private final Set<Location> explosionsQueue = new HashSet<>();
+    private static final Map<Location, Boolean> lastWaterCheck = new ConcurrentHashMap<>();
     private final MachineProcessor<FuelOperation> processor = new MachineProcessor<>(this);
 
     @ParametersAreNonnullByDefault
@@ -409,6 +411,7 @@ public abstract class Reactor extends AbstractEnergyProvider
             });
 
             explosionsQueue.remove(l);
+            lastWaterCheck.remove(l);
             processor.endOperation(l);
         }
 
@@ -417,15 +420,19 @@ public abstract class Reactor extends AbstractEnergyProvider
 
     private void checkForWaterBlocks(Location l) {
         Slimefun.runSync(() -> {
-            /*
-             * We will pick a surrounding block at random and see if this is water.
-             * If it isn't, then we will make it explode.
-             */
             int index = ThreadLocalRandom.current().nextInt(WATER_BLOCKS.length);
             BlockFace randomNeighbour = WATER_BLOCKS[index];
 
-            if (l.getBlock().getRelative(randomNeighbour).getType() != Material.WATER) {
-                explosionsQueue.add(l);
+            if (l.getChunk().isLoaded()) {
+                boolean isWater = l.getBlock().getRelative(randomNeighbour).getType() == Material.WATER;
+                lastWaterCheck.put(l, isWater);
+                if (!isWater) {
+                    explosionsQueue.add(l);
+                }
+            } else {
+                if (Boolean.FALSE.equals(lastWaterCheck.get(l))) {
+                    explosionsQueue.add(l);
+                }
             }
         });
     }

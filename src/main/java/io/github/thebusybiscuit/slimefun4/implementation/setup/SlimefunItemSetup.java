@@ -65,7 +65,9 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.cargo.CargoOutput
 import io.github.thebusybiscuit.slimefun4.implementation.items.cargo.ReactorAccessPort;
 import io.github.thebusybiscuit.slimefun4.implementation.items.cargo.TrashCan;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.Capacitor;
+import io.github.thebusybiscuit.slimefun4.implementation.items.electric.CurrentLimiter;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.EnergyConnector;
+import io.github.thebusybiscuit.slimefun4.implementation.items.electric.EnergyMeter;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.EnergyRegulator;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.LongRangeConnector;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.gadgets.JetBoots;
@@ -4576,6 +4578,30 @@ public final class SlimefunItemSetup {
                 .register(plugin);
         ConnectorAgingManager.registerConfig(
                 "LONG_RANGE_ENERGY_CONNECTOR", 512, 2000, 8000, 27648000, SlimefunItems.CARBONADO.clone());
+
+        new EnergyMeter(
+                        itemGroups.electricity,
+                        SlimefunItems.ENERGY_METER,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {
+                            null, null, null,
+                            null, null, null,
+                            null, null, null
+                        },
+                        new SlimefunItemStack(SlimefunItems.ENERGY_METER, 1))
+                .register(plugin);
+
+        new CurrentLimiter(
+                        itemGroups.electricity,
+                        SlimefunItems.CURRENT_LIMITER,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {
+                            null, null, null,
+                            null, null, null,
+                            null, null, null
+                        },
+                        new SlimefunItemStack(SlimefunItems.CURRENT_LIMITER, 1))
+                .register(plugin);
 
         new SlimefunItem(
                         itemGroups.misc,
