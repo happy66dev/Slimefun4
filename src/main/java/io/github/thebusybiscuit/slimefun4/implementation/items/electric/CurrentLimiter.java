@@ -81,12 +81,14 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
                 var connData = StorageCacheUtils.getDataContainer(connLoc);
                 if (connData == null || connData.isPendingRemove()) {
                     e.setCancelled(true);
+                    Slimefun.getDatabaseManager().getBlockDataController().removeBlock(placed);
                     e.getPlayer().sendMessage(ChatColors.color("&c只能在连接器正上方放置"));
                     return;
                 }
                 String connId = connData.getSfId();
                 if (connId == null || (!connId.contains("CONNECTOR") && !connId.contains("connector"))) {
                     e.setCancelled(true);
+                    Slimefun.getDatabaseManager().getBlockDataController().removeBlock(placed);
                     e.getPlayer().sendMessage(ChatColors.color("&c只能在连接器正上方放置"));
                     return;
                 }
@@ -95,6 +97,7 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
                     String existingId = existingData.getSfId();
                     if ("ENERGY_METER".equals(existingId)) {
                         e.setCancelled(true);
+                        Slimefun.getDatabaseManager().getBlockDataController().removeBlock(placed);
                         e.getPlayer().sendMessage(ChatColors.color("&c该位置已有电量计数器，电量计数器与限电器只能二选一"));
                         return;
                     }

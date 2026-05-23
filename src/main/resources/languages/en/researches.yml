@@ -171,6 +171,7 @@ slimefun:
   energized_gps_transmitter: Top Tier Transmitter
   energy_regulator: Energy Networks 101
   energy_connectors: Wired Connections
+  short_circuit_connectors: Short-Circuit Connections
   butcher_androids: Butcher Androids
   organic_food: Organic Food
   auto_breeder: Automated Feeding
@@ -259,3 +260,5 @@ slimefun:
   portable_teleporter: Teleportation from Anywhere
   farmer_talisman: Talisman of the Farmer
   rainbow_armor: I wanna see the rainbow high in the sky
+  energy_meter: Energy Counter
+  current_limiter: Current Limiter

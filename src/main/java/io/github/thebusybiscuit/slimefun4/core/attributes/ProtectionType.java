@@ -23,6 +23,11 @@ public enum ProtectionType {
     BEES,
 
     /**
+     * This damage type represents damage inflicted by overloaded Energy Connectors.
+     */
+    ENERGY_OVERLOAD,
+
+    /**
      * This damage type represents damage caused by flying into a wall with an elytra
      */
     FLYING_INTO_WALL;

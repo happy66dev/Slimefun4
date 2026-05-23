@@ -47,7 +47,7 @@ EnergyNet (extends Network)
     ├── RANGE = 6          (调节器覆盖半径)
     ├── MAX_BFS_NODES = 100_000  (BFS节点上限防OOM)
     ├── DEBUG = false      (完整调试日志开关)
-    ├── DEBUG_PATHS = true (BFS路由日志开关)
+    ├── DEBUG_PATHS = false (BFS路由日志开关)
     └── MAX_BFS_DEBUG_LOG = 200  (每条BFS细节日志最多打印次数)
 ```
 
@@ -280,7 +280,7 @@ else:
 | CONNECTOR→普通CONNECTOR | `isWithinRangeAxial(发送方, 接收方, 发送方.range)` | 不需要 |
 | CONNECTOR→长途CONNECTOR | `isWithinRangeAxial(发送方, 接收方, 长途.range=128)` | 不需要 |
 | GENERATOR→CONNECTOR | `true`（发电机不验证） | `isWithinRangeAxial(conn, gen, conn.range)` |
-| CAPACITOR→CONNECTOR | `isWithinRange(cap, conn, 1)` (26邻居) | `isWithinRangeAxial(conn, cap, conn.range)` |
+| CAPACITOR→CONNECTOR | `isAdjacent(cap, conn)`（6方向相邻） | `isWithinRangeAxial(conn, cap, conn.range)` |
 | CONNECTOR↔CONNECTOR | 默认已在轴向范围内 | 不需要 |
 
 ---
@@ -368,7 +368,7 @@ else:
 | `/sf multimeter` | 看向机器，显示电网设备信息 |
 | `/sf multimeter -p` | 看向机器，显示信息 + 切换路径显示/连接器负载 |
 
-需要权限 `slimefun.command.multimeter`（默认仅 OP）
+需要权限 `slimefun.command.multimeter`（`plugin.yml` 当前默认 `true`）
 
 #### 8.4.3 粒子颜色方案
 
@@ -486,11 +486,11 @@ totalProb = baseProb × loadFactor × ageFactor
 
 #### 8.5.7 右键修复机制
 
-右键连接器时显示耐久的修复信息。修复材料**从合成配方中随机抽取不同种类物品**，逐一提交：
+右键连接器时显示耐久的修复信息。修复材料从合成配方中随机抽取，当前实现允许重复抽到同一种材料，逐一提交：
 
-- 已损坏(0%)：需要提交 **4 个不同材料**
-- 耐久 ≤33%：需要提交 **3 个不同材料**
-- 耐久 ≤66%：需要提交 **2 个不同材料**
+- 已损坏(0%)：需要提交 **4 个材料**
+- 耐久 ≤33%：需要提交 **3 个材料**
+- 耐久 ≤66%：需要提交 **2 个材料**
 - 耐久 <100%：需要提交 **1 个材料**
 
 手持匹配的物品右键点击即可逐个提交，进度实时显示。
@@ -513,7 +513,7 @@ int maxTicks = (int) (newDura * 60.0f * 20 / TICK_DELAY);
 
 #### 8.5.9 显示集成
 
-- **连接器右键**：连接状态 + 范围 + 耐久百分比 + 状态文本 + 剩余吞吐(J) + 修复材料列表 + 当前进度
+- **连接器右键**：仅在需要修复时显示修复材料列表和当前进度；连接状态、范围、耐久百分比和剩余吞吐由万用表显示
 - **万用表**：点击连接器显示 `耐久: XX.X% (状态)` + `剩余吞吐: X.X J`
 - **损坏全息**：红色 "§c连接器损坏"
 
@@ -536,10 +536,10 @@ int maxTicks = (int) (newDura * 60.0f * 20 / TICK_DELAY);
 | 常量 | 默认值 | 作用 | 建议场景 |
 |------|:------:|------|---------|
 | `DEBUG` | `false` | 完整调试日志（含初始化进度、能量传输细节） | 调试能量分配/扣减异常 |
-| `DEBUG_PATHS` | `true` | BFS路由日志（路径数、跳数、成员数量） | 默认开启，排查路径问题 |
+| `DEBUG_PATHS` | `false` | BFS路由日志（路径数、跳数、成员数量） | 默认关闭，需要排查路径时临时开启 |
 | `MAX_BFS_DEBUG_LOG` | `200` | 每条BFS细节日志最多打印次数 | 防刷屏，需要时调大 |
 
-所有 `DEBUG_PATHS = true` 的日志输出到控制台格式为 `[EnergyNet-DEBUG]`，同时向 OP / 有 `slimefun.debug` 权限的在线玩家发送彩色消息。
+所有 `DEBUG_PATHS = true` 的日志输出到控制台格式为 `[EnergyNet-DEBUG]`，同时向 OP / 有 `slimefun.debug` 权限的在线玩家发送彩色消息；默认值当前为 `false`。
 
 ### 9.2 三个日志函数
 
@@ -600,7 +600,7 @@ BFS: 源=worlds (x,y,z) 类型=GENERATOR 找到路径数=N 路径: ... (L=跳数
 
 要排查BFS路径问题，推荐步骤：
 
-1. **确保 `DEBUG_PATHS=true`**（默认已开启）
+1. **临时开启 `DEBUG_PATHS=true`**（默认关闭）
 2. **重现问题**（放置/拆除机器触发电网重新初始化）
 3. **查看控制台日志**，搜索关键词：
    - 先看 `precomputePaths:` 行 — 确认sources/consumers数量

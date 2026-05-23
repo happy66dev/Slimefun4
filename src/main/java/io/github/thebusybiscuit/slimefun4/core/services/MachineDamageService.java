@@ -1,5 +1,6 @@
 package io.github.thebusybiscuit.slimefun4.core.services;
 
+import city.norain.slimefun4.utils.LocalizationUtils;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -619,7 +620,7 @@ public class MachineDamageService {
                                                 .getDisplayName()
                                                 .isEmpty()
                                 ? repairItem.getItemMeta().getDisplayName()
-                                : city.norain.slimefun4.utils.LocalizationUtils.getItemName(repairItem.getType());
+                                : LocalizationUtils.getItemName(repairItem.getType());
 
                         if (submitted != null && submitted > 0) {
                             info.append("§a✓ ")

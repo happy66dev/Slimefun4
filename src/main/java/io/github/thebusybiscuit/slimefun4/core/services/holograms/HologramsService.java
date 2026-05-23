@@ -1,5 +1,6 @@
 package io.github.thebusybiscuit.slimefun4.core.services.holograms;
 
+import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.bakedlibs.dough.blocks.BlockPosition;
 import io.github.bakedlibs.dough.common.ChatColors;
 import io.github.thebusybiscuit.slimefun4.core.attributes.HologramOwner;
@@ -20,6 +21,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
+import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
@@ -94,6 +96,26 @@ public class HologramsService {
      */
     public void start() {
         plugin.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, this::purge, PURGE_RATE, PURGE_RATE);
+        cleanupOrphanHologramsOnStartup();
+    }
+
+    private void cleanupOrphanHologramsOnStartup() {
+        int removed = 0;
+        for (World world : Bukkit.getWorlds()) {
+            for (Entity entity : world.getEntitiesByClass(ArmorStand.class)) {
+                PersistentDataContainer container = entity.getPersistentDataContainer();
+                if (container.has(persistentDataKey, PersistentDataType.LONG)
+                        || container.has(multiLineKey, PersistentDataType.INTEGER)) {
+                    if (isHologram(entity)) {
+                        entity.remove();
+                        removed++;
+                    }
+                }
+            }
+        }
+        if (removed > 0) {
+            Slimefun.logger().info("启动时清除了 " + removed + " 个孤儿全息实体");
+        }
     }
 
     /**
@@ -107,28 +129,79 @@ public class HologramsService {
     }
 
     /**
-     * This purges any expired {@link Hologram}.
+     * This purges any expired {@link Hologram} and orphan holograms
+     * whose underlying block no longer has Slimefun data.
      */
     private void purge() {
-        Iterator<Hologram> iterator = cache.values().iterator();
+        Iterator<Map.Entry<BlockPosition, Hologram>> singleIt = cache.entrySet().iterator();
 
-        while (iterator.hasNext()) {
-            Hologram hologram = iterator.next();
+        while (singleIt.hasNext()) {
+            Map.Entry<BlockPosition, Hologram> entry = singleIt.next();
+            Hologram hologram = entry.getValue();
 
-            if (hologram.hasExpired()) {
-                iterator.remove();
+            if (hologram.hasExpired() || !hasBlockDataNearby(entry.getKey())) {
+                hologram.remove();
+                singleIt.remove();
             }
         }
 
         Iterator<Map.Entry<BlockPosition, List<Hologram>>> multiIt =
                 multiLineCache.entrySet().iterator();
         while (multiIt.hasNext()) {
-            List<Hologram> lines = multiIt.next().getValue();
-            lines.removeIf(Hologram::hasExpired);
+            Map.Entry<BlockPosition, List<Hologram>> entry = multiIt.next();
+            List<Hologram> lines = entry.getValue();
+            boolean shouldRemove = lines.stream().anyMatch(Hologram::hasExpired) || !hasBlockDataNearby(entry.getKey());
+
+            if (shouldRemove) {
+                for (Hologram hologram : lines) {
+                    hologram.remove();
+                }
+                lines.clear();
+            }
             if (lines.isEmpty()) {
                 multiIt.remove();
             }
         }
+    }
+
+    private boolean hasBlockDataNearby(@Nonnull BlockPosition bp) {
+        Location loc = bp.toLocation();
+        if (loc.getWorld() == null) {
+            return true;
+        }
+
+        if (StorageCacheUtils.hasSlimefunBlock(loc)) {
+            return true;
+        }
+
+        loc.subtract(0, 1, 0);
+        return StorageCacheUtils.hasSlimefunBlock(loc);
+    }
+
+    /**
+     * 玩家手动干预时清理方块位置附近的孤儿全息。
+     * 当玩家在可能曾存在机器的位置放置或破坏方块时调用此方法，
+     * 立即检查和清除可能残留的全息（单行 + 多行）。
+     * 此方法必须在主线程上调用。
+     *
+     * @param blockLoc
+     *            方块的 {@link Location}（机器可能曾在此位置）
+     */
+    public void cleanOrphanHolograms(@Nonnull Location blockLoc) {
+        Validate.notNull(blockLoc, "Location cannot be null");
+
+        if (!Bukkit.isPrimaryThread()) {
+            Slimefun.runSync(() -> cleanOrphanHolograms(blockLoc));
+            return;
+        }
+
+        BlockPosition bpSame = new BlockPosition(blockLoc);
+        BlockPosition bpAbove = new BlockPosition(blockLoc.clone().add(0, 1, 0));
+
+        removeHologram(bpSame.toLocation());
+        removeHologram(bpAbove.toLocation());
+        removeMultiLineHologram(bpSame.toLocation());
+        removeMultiLineHologram(bpAbove.toLocation());
     }
 
     /**
@@ -359,36 +432,65 @@ public class HologramsService {
         // 同时清除该位置已有的单行全息（避免闪烁/重叠）
         removeHologram(baseLoc);
 
-        removeMultiLineHologram(baseLoc);
+        List<Hologram> existing = multiLineCache.get(position);
 
-        List<Hologram> holograms = new ArrayList<>();
-
-        // baseLoc 已由调用方叠加了偏移量，只需沿 Y 轴向下堆叠
-        for (int i = 0; i < lines.length; i++) {
-            Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
-
-            ArmorStand armorstand = (ArmorStand) lineLoc.getWorld().spawnEntity(lineLoc, EntityType.ARMOR_STAND);
-            armorstand.setVisible(false);
-            armorstand.setInvulnerable(true);
-            armorstand.setSilent(true);
-            armorstand.setMarker(true);
-            armorstand.setAI(false);
-            armorstand.setGravity(false);
-            armorstand.setRemoveWhenFarAway(false);
-
-            if (lines[i] != null) {
-                armorstand.setCustomNameVisible(true);
-                armorstand.setCustomName(ChatColors.color(lines[i]));
+        if (existing != null) {
+            for (int i = 0; i < lines.length; i++) {
+                if (i < existing.size()) {
+                    Hologram hologram = existing.get(i);
+                    ArmorStand as = hologram.getArmorStand();
+                    if (as != null && as.isValid()) {
+                        hologram.setLabel(lines[i] != null ? ChatColors.color(lines[i]) : null);
+                        continue;
+                    }
+                }
+                Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
+                Hologram hologram = createLineArmorStand(lineLoc, i, lines[i]);
+                if (i < existing.size()) {
+                    existing.set(i, hologram);
+                } else {
+                    existing.add(hologram);
+                }
             }
+            while (existing.size() > lines.length) {
+                existing.remove(existing.size() - 1).remove();
+            }
+        } else {
+            List<Hologram> holograms = new ArrayList<>();
+            for (int i = 0; i < lines.length; i++) {
+                Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
+                holograms.add(createLineArmorStand(lineLoc, i, lines[i]));
+            }
+            multiLineCache.put(position, holograms);
+        }
+    }
 
-            PersistentDataContainer container = armorstand.getPersistentDataContainer();
-            container.set(multiLineKey, PersistentDataType.INTEGER, i);
-
-            Hologram hologram = new Hologram(armorstand.getUniqueId());
-            holograms.add(hologram);
+    @Nonnull
+    private Hologram createLineArmorStand(@Nonnull Location lineLoc, int index, @Nullable String text) {
+        for (Entity entity : lineLoc.getWorld().getNearbyEntities(lineLoc, 0.1, 0.1, 0.1, this::isHologram)) {
+            if (entity instanceof ArmorStand) {
+                entity.remove();
+            }
         }
 
-        multiLineCache.put(position, holograms);
+        ArmorStand armorstand = (ArmorStand) lineLoc.getWorld().spawnEntity(lineLoc, EntityType.ARMOR_STAND);
+        armorstand.setVisible(false);
+        armorstand.setInvulnerable(true);
+        armorstand.setSilent(true);
+        armorstand.setMarker(true);
+        armorstand.setAI(false);
+        armorstand.setGravity(false);
+        armorstand.setRemoveWhenFarAway(false);
+
+        if (text != null) {
+            armorstand.setCustomNameVisible(true);
+            armorstand.setCustomName(ChatColors.color(text));
+        }
+
+        PersistentDataContainer container = armorstand.getPersistentDataContainer();
+        container.set(multiLineKey, PersistentDataType.INTEGER, index);
+
+        return new Hologram(armorstand.getUniqueId());
     }
 
     /**
@@ -409,6 +511,16 @@ public class HologramsService {
         if (holograms != null) {
             for (Hologram hologram : holograms) {
                 hologram.remove();
+            }
+        } else {
+            for (int i = 0; i < 6; i++) {
+                Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
+                for (Entity entity : lineLoc.getWorld().getNearbyEntities(lineLoc, 0.2, 0.2, 0.2, this::isHologram)) {
+                    if (entity instanceof ArmorStand as
+                            && as.getPersistentDataContainer().has(multiLineKey, PersistentDataType.INTEGER)) {
+                        as.remove();
+                    }
+                }
             }
         }
     }

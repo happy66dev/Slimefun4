@@ -1,22 +1,30 @@
 package io.github.thebusybiscuit.slimefun4.core.networks.energy;
 
+import city.norain.slimefun4.utils.LocalizationUtils;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.bakedlibs.dough.common.ChatColors;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.api.player.PlayerProfile;
+import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
+import io.github.thebusybiscuit.slimefun4.core.attributes.ProtectionType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Particle;
 import org.bukkit.Sound;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -47,6 +55,8 @@ public final class ConnectorAgingManager {
     private static final String REPAIR_SUBMITTED_KEY = "connector_repair_submitted";
 
     private static final Gson GSON = new Gson();
+    private static final Map<Location, Integer> OVERLOAD_DAMAGE_COOLDOWN = new ConcurrentHashMap<>();
+    private static final int OVERLOAD_DAMAGE_INTERVAL = Math.max(1, (int) Math.ceil(20.0 / TICK_DELAY));
 
     // ─── 连接器配置 ──────────────────────────────────────────────
     public static final class ConnectorConfig {
@@ -256,6 +266,7 @@ public final class ConnectorAgingManager {
         }
 
         spawnOverloadParticles(loc);
+        tickOverloadDamage(loc, cfg, load, net);
 
         int consecutiveTicks = getOverloadTicks(loc) + 1;
         setOverloadTicks(loc, consecutiveTicks);
@@ -265,6 +276,54 @@ public final class ConnectorAgingManager {
             setDurability(loc, 0f);
             net.markDirty(loc);
         }
+    }
+
+    private static void tickOverloadDamage(Location loc, ConnectorConfig cfg, long load, EnergyNet net) {
+        int ticks = OVERLOAD_DAMAGE_COOLDOWN.merge(loc, 1, Integer::sum);
+        if (ticks < OVERLOAD_DAMAGE_INTERVAL) return;
+        OVERLOAD_DAMAGE_COOLDOWN.put(loc, 0);
+        Slimefun.runSync(() -> applyOverloadDamage(loc, cfg, load, net));
+    }
+
+    private static void applyOverloadDamage(Location loc, ConnectorConfig cfg, long load, EnergyNet net) {
+        EnergyNetComponent component = net.getConnectors().get(loc);
+        if (component == null || loc.getWorld() == null) return;
+
+        int range = component.getRange();
+        if (range <= 0) return;
+
+        double baseDamage = roundToHalf((double) load / cfg.peakPower);
+        if (baseDamage <= 0.0) return;
+
+        Collection<Entity> nearbyEntities =
+                loc.getWorld().getNearbyEntities(loc, range, range, range, entity -> entity instanceof Player);
+        for (Entity entity : nearbyEntities) {
+            Player player = (Player) entity;
+            if (!player.isValid() || player.isDead()) continue;
+            if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) continue;
+
+            double distance = player.getLocation().distance(loc);
+            if (distance >= range) continue;
+
+            double damage = baseDamage * (range - distance) / range * 3.0 / 4.0;
+            if (damage <= 0.0) continue;
+
+            PlayerProfile.find(player).ifPresent(profile -> {
+                if (profile.hasFullProtectionAgainst(ProtectionType.ENERGY_OVERLOAD)) return;
+                player.setHealth(Math.max(0.0, player.getHealth() - damage));
+                player.getWorld()
+                        .spawnParticle(
+                                Particle.ELECTRIC_SPARK, player.getLocation().add(0, 1, 0), 5, 0.4, 0.4, 0.4, 0.05);
+            });
+        }
+    }
+
+    private static double roundToHalf(double value) {
+        double floor = Math.floor(value);
+        double frac = value - floor;
+        if (frac <= 0.2) return floor;
+        if (frac <= 0.7) return floor + 0.5;
+        return floor + 1.0;
     }
 
     private static int getOverloadTicks(Location loc) {
@@ -432,7 +491,11 @@ public final class ConnectorAgingManager {
 
     public static String getRepairItemsDisplay(@Nonnull Location loc) {
         var data = StorageCacheUtils.getDataContainer(loc);
-        if (data == null) return "";
+        if (data == null || data.isPendingRemove()) return "";
+        if (!data.isDataLoaded()) {
+            StorageCacheUtils.requestLoad(data);
+            return "";
+        }
 
         String itemsJson = data.getData(REPAIR_ITEMS_KEY);
         if (itemsJson == null || itemsJson.isEmpty()) {
@@ -454,12 +517,13 @@ public final class ConnectorAgingManager {
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < items.size(); i++) {
                 if (i > 0) sb.append(", ");
+                String display = getRepairItemDisplay(items.get(i));
                 if (i < submitted) {
-                    sb.append("§7~~").append(items.get(i).get("id")).append("~~");
+                    sb.append("§7~~").append(display).append("~~");
                 } else if (i == submitted) {
-                    sb.append("§e> ").append(items.get(i).get("id")).append(" §f<");
+                    sb.append("§e> ").append(display).append(" §f<");
                 } else {
-                    sb.append("§7").append(items.get(i).get("id"));
+                    sb.append("§7").append(display);
                 }
             }
             return sb.toString();
@@ -472,7 +536,22 @@ public final class ConnectorAgingManager {
 
     private static String getRepairItemDisplay(Map<String, String> item) {
         if (item == null) return "未知";
-        return item.get("id");
+        String type = item.get("type");
+        String id = item.get("id");
+        if (type == null || id == null) return "未知";
+        if ("slimefun".equals(type)) {
+            SlimefunItem sfItem = SlimefunItem.getById(id);
+            return sfItem != null ? sfItem.getItemName() : id;
+        }
+        if ("vanilla".equals(type)) {
+            try {
+                Material mat = Material.valueOf(id);
+                return LocalizationUtils.getItemName(mat);
+            } catch (IllegalArgumentException e) {
+                return id;
+            }
+        }
+        return id;
     }
 
     private static boolean matchesRepairItem(ItemStack held, Map<String, String> target) {

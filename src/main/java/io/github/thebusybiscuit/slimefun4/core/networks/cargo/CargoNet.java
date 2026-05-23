@@ -140,21 +140,18 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
         if (connectorNodes.isEmpty() && terminusNodes.isEmpty()) {
             updateHologram(b, "&c找不到附近的货运网络节点", blockData::isPendingRemove);
         } else {
-            // Skip ticking if the threshold is not reached. The delay is not same as minecraft tick,
-            // but it's based on 'custom-ticker-delay' config.
-            if (tickDelayThreshold < Slimefun.getCfg().getInt("networks.cargo-ticker-delay")) {
-                tickDelayThreshold++;
-                return;
-            }
-
-            // Reset the internal threshold, so we can start skipping again
-            tickDelayThreshold = 0;
-
             Map<Location, Integer> inputs = mapInputNodes();
             Map<Integer, List<Location>> outputs = mapOutputNodes();
 
             if (StorageCacheUtils.getData(b.getLocation(), "visualizer") == null) {
                 display();
+            }
+
+            boolean canRun = tickDelayThreshold >= Slimefun.getCfg().getInt("networks.cargo-ticker-delay");
+            if (!canRun) {
+                tickDelayThreshold++;
+            } else {
+                tickDelayThreshold = 0;
             }
 
             Slimefun.runSync(() -> {
@@ -172,11 +169,17 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
                         updateHologram(b, msg, blockData::isPendingRemove);
                         return;
                     }
-                    deductCharge(powerNeeded);
+                    if (canRun) {
+                        deductCharge(powerNeeded);
+                    }
                 }
 
                 if (activeInputs.isEmpty()) {
                     updateHologram(b, "&7状态: &a&l已连接 &7(空闲)", blockData::isPendingRemove);
+                    return;
+                }
+
+                if (!canRun) {
                     return;
                 }
 
@@ -209,18 +212,18 @@ public class CargoNet extends AbstractItemNetwork implements HologramOwner {
     }
 
     private boolean hasItemsToTransfer(@Nonnull Block target) {
-        if (target.getState() instanceof InventoryHolder holder) {
-            for (ItemStack item : holder.getInventory().getContents()) {
-                if (item != null && !item.getType().isAir()) {
+        DirtyChestMenu menu = CargoUtils.getChestMenu(target);
+        if (menu != null) {
+            for (int slot : menu.getPreset().getSlotsAccessedByItemTransport(menu, ItemTransportFlow.WITHDRAW, null)) {
+                if (menu.getItemInSlot(slot) != null) {
                     return true;
                 }
             }
             return false;
         }
-        DirtyChestMenu menu = CargoUtils.getChestMenu(target);
-        if (menu != null) {
-            for (int slot : menu.getPreset().getSlotsAccessedByItemTransport(menu, ItemTransportFlow.WITHDRAW, null)) {
-                if (menu.getItemInSlot(slot) != null) {
+        if (target.getState() instanceof InventoryHolder holder) {
+            for (ItemStack item : holder.getInventory().getContents()) {
+                if (item != null && !item.getType().isAir()) {
                     return true;
                 }
             }

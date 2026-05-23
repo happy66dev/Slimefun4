@@ -35,7 +35,7 @@ public class HazmatArmorPiece extends SlimefunArmorPiece implements ProtectiveAr
             PotionEffect[] effects) {
         super(itemGroup, item, recipeType, recipe, effects);
 
-        types = new ProtectionType[] {ProtectionType.BEES, ProtectionType.RADIATION};
+        types = new ProtectionType[] {ProtectionType.BEES, ProtectionType.RADIATION, ProtectionType.ENERGY_OVERLOAD};
         namespacedKey = new NamespacedKey(Slimefun.instance(), "hazmat_suit");
     }
 

@@ -895,6 +895,12 @@ public final class ResearchSetup {
         register("elytra_cap", 268, "Crash Gear", 20, SlimefunItems.ELYTRA_CAP);
         register("energy_connectors", 269, "Wired Connections", 12, SlimefunItems.ENERGY_CONNECTOR);
         register(
+                "short_circuit_connectors",
+                284,
+                "Short-Circuit Connections",
+                12,
+                SlimefunItems.SHORT_CIRCUIT_ENERGY_CONNECTOR);
+        register(
                 "bee_armor",
                 270,
                 "Bee Armor",

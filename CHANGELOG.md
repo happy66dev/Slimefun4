@@ -40,6 +40,10 @@
 
 ## Release Candidate 38 (TBD)
 
+#### Fixes
+* Fix UI items dropping when breaking Slimefun blocks with non-standard inventories
+* Fix cargo node filter items not dropping when damaged machines are force-broken
+
 ## Release Candidate 37 (25 Feb 2024)
 
 #### Additions

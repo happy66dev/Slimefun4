@@ -50,7 +50,10 @@ public class ConnectorAgingSimulation {
             double x = ((double) (load - cfg.sweetPower) / (cfg.maxPower - cfg.sweetPower)) * 3.0 + 1.0;
             return x / (1.2 - 0.2 * x);
         }
-        // load > maxPower → overload path, not used in normal aging
+        if (load <= cfg.peakPower) {
+            double x = ((double) (load - cfg.maxPower) / (cfg.peakPower - cfg.maxPower)) * 4.0 + 4.0;
+            return x / (0.79 - 0.0975 * x);
+        }
         return 1.0;
     }
 
@@ -177,21 +180,20 @@ public class ConnectorAgingSimulation {
     }
 
     static void printConnectorSimulation(Config cfg, long seed, int totalTicks) {
-        printHeader(cfg.name + "  sweet=" + cfg.sweetPower + " max=" + cfg.maxPower
-                + " peak=" + cfg.peakPower + " lifetime=" + formatTicks(cfg.expectedLifetime));
+        printHeader(cfg.name + "  sweet=" + cfg.sweetPower + " max=" + cfg.maxPower + " peak=" + cfg.peakPower
+                + " lifetime=" + formatTicks(cfg.expectedLifetime));
 
         String[][] loads = {
             {"0.5× 甜点", String.valueOf(cfg.sweetPower / 2)},
-            {"1× 甜点",  String.valueOf(cfg.sweetPower)},
-            {"2× 甜点",  String.valueOf(cfg.sweetPower * 2)},
+            {"1× 甜点", String.valueOf(cfg.sweetPower)},
+            {"2× 甜点", String.valueOf(cfg.sweetPower * 2)},
             {"甜点→最大中点", String.valueOf((cfg.sweetPower + cfg.maxPower) / 2)},
-            {"1× 最大",  String.valueOf(cfg.maxPower)},
-            {"0.8× 峰值", String.valueOf((long)(cfg.peakPower * 0.8))},
-            {"1.2× 峰值(过载)", String.valueOf((long)(cfg.peakPower * 1.2))},
+            {"1× 最大", String.valueOf(cfg.maxPower)},
+            {"0.8× 峰值", String.valueOf((long) (cfg.peakPower * 0.8))},
+            {"1.2× 峰值(过载)", String.valueOf((long) (cfg.peakPower * 1.2))},
         };
 
-        System.out.printf("  %-18s %10s %10s %10s %10s %10s%n",
-                "负载档位", "最终耐久%", "老化命中", "过载次数", "死亡Tick", "耐久度柱状图");
+        System.out.printf("  %-18s %10s %10s %10s %10s %10s%n", "负载档位", "最终耐久%", "老化命中", "过载次数", "死亡Tick", "耐久度柱状图");
         System.out.println("  " + "-".repeat(78));
 
         for (String[] entry : loads) {
@@ -201,13 +203,9 @@ public class ConnectorAgingSimulation {
             Result r = simulate(rng, cfg, load, totalTicks);
 
             String death = r.deathTick == -1 ? "存活" : String.valueOf(r.deathTick);
-            System.out.printf("  %-18s %9.1f%% %10d %10d %10s %s%n",
-                    label,
-                    r.finalDurability * 100.0,
-                    r.hitCount,
-                    r.overloadCount,
-                    death,
-                    bar(r.finalDurability));
+            System.out.printf(
+                    "  %-18s %9.1f%% %10d %10d %10s %s%n",
+                    label, r.finalDurability * 100.0, r.hitCount, r.overloadCount, death, bar(r.finalDurability));
         }
     }
 
@@ -279,21 +277,21 @@ public class ConnectorAgingSimulation {
         long SEED = 42;
 
         Config[] configs = {
-            new Config("BASIC(简易)",          12,   40,    75,    72000),
-            new Config("ENERGY(能源)",         24,   72,    160,   576000),
-            new Config("POWERFUL(大功率)",     36,   100,   200,   144000),
-            new Config("GILDED(镶金)",         100,  300,   500,   3456000),
-            new Config("REINFORCED(强化)",     300,  750,   1200,  6912000),
-            new Config("CARBONADO(碳金)",      512,  2000,  8000,  27648000),
-            new Config("LONG_RANGE(长途)",     512,  2000,  8000,  27648000),
+            new Config("BASIC(简易)", 12, 40, 75, 72000),
+            new Config("ENERGY(能源)", 24, 72, 160, 576000),
+            new Config("POWERFUL(大功率)", 36, 100, 200, 144000),
+            new Config("GILDED(镶金)", 100, 300, 500, 3456000),
+            new Config("REINFORCED(强化)", 300, 750, 1200, 6912000),
+            new Config("CARBONADO(碳金)", 512, 2000, 8000, 27648000),
+            new Config("LONG_RANGE(长途)", 512, 2000, 8000, 27648000),
         };
 
         System.out.println("╔══════════════════════════════════════════════════════════════════╗");
         System.out.println("║       Slimefun 连接器老化仿真 — 100K ticks 耐久度分布            ║");
         System.out.println("║   算法复现自 ConnectorAgingManager.handleNormalAging/Overload    ║");
         System.out.println("╚══════════════════════════════════════════════════════════════════╝");
-        System.out.printf("基础参数: DURA_PER_HIT=%.4f  TICK_DELAY=%d  baseProb=10000/lifetime%n%n",
-                DURA_PER_HIT, TICK_DELAY);
+        System.out.printf(
+                "基础参数: DURA_PER_HIT=%.4f  TICK_DELAY=%d  baseProb=10000/lifetime%n%n", DURA_PER_HIT, TICK_DELAY);
 
         printAgeFactorCurve();
 
@@ -310,8 +308,10 @@ public class ConnectorAgingSimulation {
         for (Config cfg : configs) {
             Random rng = new Random(SEED);
             Result r = simulate(rng, cfg, cfg.sweetPower, TICKS);
-            double expectedTicksToDie = (1.0 / DURA_PER_HIT) / (cfg.baseProb * calcLoadFactor(cfg.sweetPower, cfg) * 1.0);
-            System.out.printf("  %-20s %12.6f %12.0f %11.1f%%%n",
+            double expectedTicksToDie =
+                    (1.0 / DURA_PER_HIT) / (cfg.baseProb * calcLoadFactor(cfg.sweetPower, cfg) * 1.0);
+            System.out.printf(
+                    "  %-20s %12.6f %12.0f %11.1f%%%n",
                     cfg.name, cfg.baseProb, expectedTicksToDie, r.finalDurability * 100.0);
         }
 

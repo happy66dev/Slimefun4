@@ -30,7 +30,7 @@ public class LocalizationUtils {
                 int count = 0;
                 for (Map.Entry<String, JsonElement> entry : jsonObject.entrySet()) {
                     String key = entry.getKey();
-                    if (key.startsWith("item.minecraft.")) {
+                    if (key.startsWith("item.minecraft.") || key.startsWith("block.minecraft.")) {
                         ITEM_LOCALIZATIONS.put(key, entry.getValue().getAsString());
                         count++;
                     }
@@ -60,13 +60,18 @@ public class LocalizationUtils {
             initialize();
         }
 
-        String key = "item.minecraft." + material.name().toLowerCase();
+        String materialKey = material.name().toLowerCase();
+        String key = "item.minecraft." + materialKey;
         String name = ITEM_LOCALIZATIONS.get(key);
+        if (name == null) {
+            key = "block.minecraft." + materialKey;
+            name = ITEM_LOCALIZATIONS.get(key);
+        }
         if (name != null) {
-            Slimefun.logger().info("Found localization for " + key + ": " + name);
             return name;
         } else {
-            Slimefun.logger().info("No localization found for " + key + ", using material name: " + material.name());
+            Slimefun.logger()
+                    .info("No localization found for " + materialKey + ", using material name: " + material.name());
             return material.name();
         }
     }

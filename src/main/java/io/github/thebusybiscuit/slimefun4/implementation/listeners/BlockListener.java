@@ -31,6 +31,7 @@ import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
+import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.interfaces.InventoryBlock;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenu;
 import org.bukkit.Bukkit;
 import org.bukkit.GameMode;
@@ -133,6 +134,8 @@ public class BlockListener implements Listener {
                 }
             }
         }
+
+        Slimefun.getHologramsService().cleanOrphanHolograms(block.getLocation());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
@@ -198,6 +201,8 @@ public class BlockListener implements Listener {
                 }
             }
         }
+
+        Slimefun.getHologramsService().cleanOrphanHolograms(e.getBlock().getLocation());
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -238,31 +243,10 @@ public class BlockListener implements Listener {
                 } else if (currentTime - lastAttemptTime < 10000) {
                     // 10秒内二次挖掘，直接破坏机器且不掉落物品
                     e.setDropItems(false);
-                    // 掉落机器内容物
+                    callCargoNodeBreakHandler(e, heldItem, sfItem);
                     BlockMenu inv = StorageCacheUtils.getMenu(location);
-                    if (inv != null) {
-                        // 尝试获取所有可能的 slots 并掉落内容物
-                        if (sfItem
-                                instanceof
-                                me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
-                            inv.dropItems(location, container.getInputSlots());
-                            inv.dropItems(location, container.getOutputSlots());
-                        } else if (sfItem
-                                instanceof
-                                me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
-                            inv.dropItems(location, generator.getInputSlots());
-                            inv.dropItems(location, generator.getOutputSlots());
-                        } else {
-                            // 对于其他类型的机器，尝试掉落所有可能的 slots
-                            for (int i = 0; i < inv.getSize(); i++) {
-                                ItemStack item = inv.getItemInSlot(i);
-                                if (item != null) {
-                                    location.getWorld().dropItemNaturally(location, item);
-                                    inv.replaceExistingItem(i, null);
-                                }
-                            }
-                        }
-                    }
+                    dropBlockMenuContents(location, sfItem, inv);
+
                     // 清理处理器操作数据
                     if (sfItem
                             instanceof
@@ -291,31 +275,10 @@ public class BlockListener implements Listener {
             } else {
                 // 非可抗因素破坏（如爆炸），直接破坏机器且不掉落物品
                 e.setDropItems(false);
-                // 掉落机器内容物
+                callCargoNodeBreakHandler(e, heldItem, sfItem);
                 BlockMenu inv = StorageCacheUtils.getMenu(location);
-                if (inv != null) {
-                    // 尝试获取所有可能的 slots 并掉落内容物
-                    if (sfItem
-                            instanceof
-                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
-                        inv.dropItems(location, container.getInputSlots());
-                        inv.dropItems(location, container.getOutputSlots());
-                    } else if (sfItem
-                            instanceof
-                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
-                        inv.dropItems(location, generator.getInputSlots());
-                        inv.dropItems(location, generator.getOutputSlots());
-                    } else {
-                        // 对于其他类型的机器，尝试掉落所有可能的 slots
-                        for (int i = 0; i < inv.getSize(); i++) {
-                            ItemStack item = inv.getItemInSlot(i);
-                            if (item != null) {
-                                location.getWorld().dropItemNaturally(location, item);
-                                inv.replaceExistingItem(i, null);
-                            }
-                        }
-                    }
-                }
+                dropBlockMenuContents(location, sfItem, inv);
+
                 // 清理处理器操作数据
                 if (sfItem
                         instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
@@ -392,6 +355,7 @@ public class BlockListener implements Listener {
 
             if (blockData == null || blockData.isPendingRemove()) {
                 dropItems(e, heldItem, block, sfItem, drops);
+                Slimefun.getHologramsService().cleanOrphanHolograms(location);
                 return;
             }
 
@@ -428,6 +392,8 @@ public class BlockListener implements Listener {
             // Checks for vanilla sensitive blocks everywhere
             // checkForSensitiveBlocks(e.getBlock(), 0, e.isDropItems());
         }
+
+        Slimefun.getHologramsService().cleanOrphanHolograms(location);
     }
 
     @ParametersAreNonnullByDefault
@@ -455,29 +421,8 @@ public class BlockListener implements Listener {
                 return;
             }
 
-            // 掉落机器内容物
             BlockMenu inv = StorageCacheUtils.getMenu(loc);
-            if (inv != null) {
-                // 尝试获取所有可能的 slots 并掉落内容物
-                if (sfItem
-                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
-                    inv.dropItems(loc, container.getInputSlots());
-                    inv.dropItems(loc, container.getOutputSlots());
-                } else if (sfItem
-                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
-                    inv.dropItems(loc, generator.getInputSlots());
-                    inv.dropItems(loc, generator.getOutputSlots());
-                } else {
-                    // 对于其他类型的机器，尝试掉落所有可能的 slots
-                    for (int i = 0; i < inv.getSize(); i++) {
-                        ItemStack slotItem = inv.getItemInSlot(i);
-                        if (slotItem != null) {
-                            loc.getWorld().dropItemNaturally(loc, slotItem);
-                            inv.replaceExistingItem(i, null);
-                        }
-                    }
-                }
-            }
+            dropBlockMenuContents(loc, sfItem, inv);
 
             // 清理处理器操作数据
             if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
@@ -493,6 +438,34 @@ public class BlockListener implements Listener {
             // 移除机器上方的悬浮字
             Location hologramLocation = loc.clone().add(0, 1.5, 0);
             Slimefun.getHologramsService().removeHologram(hologramLocation);
+        }
+    }
+
+    @ParametersAreNonnullByDefault
+    private void callCargoNodeBreakHandler(BlockBreakEvent e, ItemStack item, @Nullable SlimefunItem sfItem) {
+        if (!(sfItem instanceof CargoNode)) {
+            return;
+        }
+
+        sfItem.callItemHandler(BlockBreakHandler.class, handler -> handler.onPlayerBreak(e, item, new ArrayList<>()));
+    }
+
+    @ParametersAreNonnullByDefault
+    private void dropBlockMenuContents(Location location, @Nullable SlimefunItem sfItem, @Nullable BlockMenu inv) {
+        if (sfItem == null || inv == null) {
+            return;
+        }
+
+        if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
+            inv.dropItems(location, container.getInputSlots());
+            inv.dropItems(location, container.getOutputSlots());
+        } else if (sfItem
+                instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
+            inv.dropItems(location, generator.getInputSlots());
+            inv.dropItems(location, generator.getOutputSlots());
+        } else if (sfItem instanceof InventoryBlock inventoryBlock) {
+            inv.dropItems(location, inventoryBlock.getInputSlots());
+            inv.dropItems(location, inventoryBlock.getOutputSlots());
         }
     }
 

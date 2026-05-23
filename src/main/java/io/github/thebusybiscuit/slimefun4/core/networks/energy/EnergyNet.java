@@ -41,6 +41,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.block.Block;
+import org.bukkit.util.Vector;
 
 /**
  * The {@link EnergyNet} is an implementation of {@link Network} that deals with
@@ -103,12 +104,35 @@ public class EnergyNet extends Network implements HologramOwner {
         return false;
     }
 
+    private static final Vector HOLOGRAM_OFFSET = new Vector(0.5, 0.75, 0.5);
+    private static final Vector MULTILINE_HOLOGRAM_OFFSET = new Vector(0.5, 1.35, 0.5);
+
     /**
      * 静态辅助方法：清除指定位置的悬浮字（不需要电网实例）
      */
     public static void removeHologramAt(Location loc) {
-        Location hologramLoc = loc.clone().add(0.5, 0.75, 0.5);
+        Location hologramLoc = loc.clone().add(HOLOGRAM_OFFSET);
         Slimefun.getHologramsService().removeHologram(hologramLoc);
+        Slimefun.getHologramsService().removeMultiLineHologram(loc.clone().add(MULTILINE_HOLOGRAM_OFFSET));
+    }
+
+    @Nonnull
+    @Override
+    public Vector getHologramOffset(@Nonnull Block block) {
+        return HOLOGRAM_OFFSET;
+    }
+
+    @Override
+    public void updateMultiLineHologram(@Nonnull Block b, @Nonnull String... lines) {
+        Location multilineLoc = b.getLocation().add(MULTILINE_HOLOGRAM_OFFSET);
+        Location singleLoc = b.getLocation().add(HOLOGRAM_OFFSET);
+        Slimefun.getHologramsService().removeHologram(singleLoc);
+        Slimefun.getHologramsService().setMultiLineHologram(multilineLoc, lines);
+    }
+
+    @Override
+    public void removeMultiLineHologram(@Nonnull Block b) {
+        Location loc = b.getLocation().add(MULTILINE_HOLOGRAM_OFFSET);
         Slimefun.getHologramsService().removeMultiLineHologram(loc);
     }
 
@@ -130,6 +154,8 @@ public class EnergyNet extends Network implements HologramOwner {
     private volatile boolean abortRequested = false;
     private volatile boolean destroyed = false;
     private volatile boolean conflictMode = false;
+    private volatile EnergyNet conflictPartner;
+    private final Set<Location> conflictHologramTargets = ConcurrentHashMap.newKeySet();
 
     private volatile int initTotalWork = 0;
     private volatile int initWorkDone = 0;
@@ -147,6 +173,7 @@ public class EnergyNet extends Network implements HologramOwner {
     private int selfTickTaskId = -1;
     private long lastSupply;
     private long lastDemand;
+    private volatile boolean firstTickDone = false;
     private final AtomicBoolean selfTicking = new AtomicBoolean(false);
 
     private static final AtomicInteger bfsDbQueryCount = new AtomicInteger(0);
@@ -494,6 +521,9 @@ public class EnergyNet extends Network implements HologramOwner {
                     removeMultiLineHologram(b);
                     updateHologram(b, "&4找不到能源网络", blockData::isPendingRemove);
                 }
+            } else if (!firstTickDone) {
+                removeMultiLineHologram(b);
+                updateHologram(b, "&e初始化完成，等待首个tick数据...", blockData::isPendingRemove);
             } else {
                 updateHologram(blockData, lastSupply, lastDemand);
             }
@@ -945,13 +975,14 @@ public class EnergyNet extends Network implements HologramOwner {
                         + " 路径=" + (countTotalPaths(generatorPaths) + countTotalPaths(capacitorPaths)));
                 if (!destroyed) {
                     Slimefun.runSync(() -> {
+                        removeMultiLineHologram(regulator.getBlock());
                         updateHologram(regulator.getBlock(), "&e初始化完成，等待首个tick数据...", () -> false);
                     });
                 }
             } finally {
                 initializing = false;
                 abortRequested = false;
-                if (!initialized && !destroyed && !pendingInit) {
+                if (!initialized && !destroyed && !pendingInit && !conflictMode) {
                     debugLog("initializeNetworkAsync: 初始化被打断，自动重试");
                     pendingInit = true;
                     GRID_EXECUTOR.submit(this::initializeNetworkAsync);
@@ -976,7 +1007,7 @@ public class EnergyNet extends Network implements HologramOwner {
         consumers.clear();
         connectors.clear();
         connectorLoad.clear();
-        connectorLimits.clear();
+        conflictHologramTargets.clear();
         generatorPaths.clear();
         capacitorPaths.clear();
         generatorToCapacitorPaths.clear();
@@ -992,6 +1023,7 @@ public class EnergyNet extends Network implements HologramOwner {
         regulatorNodes.add(regulator);
         connectedLocations.add(regulator);
         connectorLoad.put(regulator, 0L);
+        firstTickDone = false;
     }
 
     /**
@@ -1795,9 +1827,17 @@ public class EnergyNet extends Network implements HologramOwner {
                         // 调节器不实现 EnergyNetComponent，需显式冲突检测
                         if (!targetLoc.equals(regulator)) {
                             debugLog("collectNetworkMembers: 调节器扩展发现冲突调节器 @ " + formatLocation(targetLoc));
+                            this.conflictMode = true;
+                            EnergyNet otherNet = getNetworkFromLocation(targetLoc);
+                            if (otherNet != null && otherNet != this) {
+                                otherNet.conflictMode = true;
+                                this.conflictPartner = otherNet;
+                                otherNet.conflictPartner = this;
+                            }
                             updateHologram(targetLoc.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false);
                             Slimefun.runSync(
                                     () -> updateHologram(regulator.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false));
+                            addConflictHologramsToConnectors();
                             return false;
                         }
                         continue;
@@ -1806,15 +1846,22 @@ public class EnergyNet extends Network implements HologramOwner {
                     }
                 }
                 EnergyNetComponentType targetType = targetComponent.getEnergyComponentType();
+                if (targetType == EnergyNetComponentType.CONNECTOR && isConnectorBlocked(targetLoc)) {
+                    continue;
+                }
                 if (isLocationInOtherGrid(targetLoc)) {
                     debugLog("collectNetworkMembers: 调节器扩展发现机器属于其他电网 @ " + formatLocation(targetLoc));
-                    updateHologram(targetLoc.getBlock(), "&c电网冲突：该机器已属于其他电网", () -> false);
+                    EnergyNet otherNet = getNetworkFromLocation(targetLoc);
+                    enterConflict(otherNet, targetLoc, "&c电网冲突：电网交叉", "&c电网冲突：该机器已属于其他电网");
                     return false;
                 }
                 if (targetType == EnergyNetComponentType.CONNECTOR || targetType == EnergyNetComponentType.CAPACITOR) {
                     if (targetType == EnergyNetComponentType.CONNECTOR
                             && ConnectorAgingManager.isConnectorDamaged(targetLoc)) {
                         continue;
+                    }
+                    if (targetType == EnergyNetComponentType.CONNECTOR) {
+                        conflictHologramTargets.add(targetLoc);
                     }
                     visited.add(targetLoc);
                     queue.add(targetLoc);
@@ -1864,15 +1911,19 @@ public class EnergyNet extends Network implements HologramOwner {
                 if (item.getId().equals("ENERGY_REGULATOR")) {
                     if (!current.equals(regulator)) {
                         debugLog("collectNetworkMembers: 发现冲突调节器 @ " + formatLocation(current));
+                        this.conflictMode = true;
                         // 标记对方电网为冲突状态
                         EnergyNet otherNet = getNetworkFromLocation(current);
-                        if (otherNet != null) {
+                        if (otherNet != null && otherNet != this) {
                             otherNet.conflictMode = true;
+                            this.conflictPartner = otherNet;
+                            otherNet.conflictPartner = this;
                         }
                         // 在冲突调节器上显示冲突悬浮字
                         updateHologram(current.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false);
                         // 在本电网调节器上也显示冲突悬浮字
                         Slimefun.runSync(() -> updateHologram(regulator.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false));
+                        addConflictHologramsToConnectors();
                         return false;
                     }
                     continue;
@@ -1882,16 +1933,20 @@ public class EnergyNet extends Network implements HologramOwner {
             // 检查当前机器是否已被其他电网占用（排除调节器自身）
             if (isLocationInOtherGrid(current)) {
                 debugLog("collectNetworkMembers: 机器已被其他电网占用 @ " + formatLocation(current));
+                this.conflictMode = true;
                 // 标记占用该机器的电网也为冲突状态
                 EnergyNet otherNet = getNetworkFromLocation(current);
                 if (otherNet != null && otherNet != this) {
                     otherNet.conflictMode = true;
+                    this.conflictPartner = otherNet;
+                    otherNet.conflictPartner = this;
                     Slimefun.runSync(
                             () -> otherNet.updateHologram(otherNet.regulator.getBlock(), "&c电网冲突：电网交叉", () -> false));
                 }
                 updateHologram(current.getBlock(), "&c电网冲突：该机器已属于其他电网", () -> false);
                 // 本电网调节器也显示冲突
                 Slimefun.runSync(() -> updateHologram(regulator.getBlock(), "&c电网冲突：电网交叉", () -> false));
+                addConflictHologramsToConnectors();
                 return false;
             }
 
@@ -1968,7 +2023,45 @@ public class EnergyNet extends Network implements HologramOwner {
             }
         }
 
+        connectorLimits.keySet().removeIf(limitLoc -> !connectors.containsKey(limitLoc));
+
+        connectors.entrySet().removeIf(entry -> {
+            Long limit = connectorLimits.get(entry.getKey());
+            if (limit != null && limit == 0) {
+                connectorNodes.remove(entry.getKey());
+                connectorLoad.remove(entry.getKey());
+                connectedLocations.remove(entry.getKey());
+                return true;
+            }
+            return false;
+        });
+
         return true;
+    }
+
+    private void addConflictHologramsToConnectors() {
+        Set<Location> targets = new HashSet<>(connectorNodes);
+        targets.addAll(conflictHologramTargets);
+        for (Location connector : targets) {
+            Slimefun.runSync(() -> updateHologram(connector.getBlock(), "&c电网冲突：电网交叉", () -> false));
+        }
+    }
+
+    private void enterConflict(
+            @Nullable EnergyNet otherNet,
+            @Nonnull Location conflictLoc,
+            @Nonnull String ownMessage,
+            @Nonnull String otherMessage) {
+        this.conflictMode = true;
+        conflictHologramTargets.add(conflictLoc);
+        updateHologram(conflictLoc.getBlock(), ownMessage, () -> false);
+        if (otherNet != null && otherNet != this) {
+            otherNet.conflictMode = true;
+            this.conflictPartner = otherNet;
+            otherNet.conflictPartner = this;
+            Slimefun.runSync(() -> otherNet.updateHologram(otherNet.regulator.getBlock(), otherMessage, () -> false));
+        }
+        addConflictHologramsToConnectors();
     }
 
     /**
@@ -2006,23 +2099,32 @@ public class EnergyNet extends Network implements HologramOwner {
 
                     if (isLocationInOtherGrid(targetLoc)) {
                         debugLog("processConnector: 冲突 - 机器已属于其他电网 @ " + formatLocation(targetLoc));
-                        updateHologram(targetLoc.getBlock(), "&c电网冲突：该机器已属于其他电网", () -> false);
+                        EnergyNet otherNet = getNetworkFromLocation(targetLoc);
+                        enterConflict(otherNet, targetLoc, "&c电网冲突：电网交叉", "&c电网冲突：该机器已属于其他电网");
                         return false;
                     }
 
-                    visited.add(targetLoc);
                     debugLog("processConnector: 发现 " + targetType + " @ " + formatLocation(targetLoc));
 
                     if (targetType == EnergyNetComponentType.CONNECTOR) {
                         if (ConnectorAgingManager.isConnectorDamaged(targetLoc)) {
                             continue;
                         }
+                        if (isConnectorBlocked(targetLoc)) {
+                            continue;
+                        }
+                        visited.add(targetLoc);
                         queue.add(targetLoc);
                         if (isLongRange) {
                             break;
                         }
-                    } else if (!isLongRange && targetType == EnergyNetComponentType.CAPACITOR) {
-                        queue.add(targetLoc);
+                    } else if (isLongRange) {
+                        continue;
+                    } else {
+                        visited.add(targetLoc);
+                        if (targetType == EnergyNetComponentType.CAPACITOR) {
+                            queue.add(targetLoc);
+                        }
                     }
                     continue;
                 }
@@ -2046,7 +2148,8 @@ public class EnergyNet extends Network implements HologramOwner {
 
                     if (isLocationInOtherGrid(targetLoc)) {
                         debugLog("processConnector: 冲突 - 机器已属于其他电网 @ " + formatLocation(targetLoc));
-                        updateHologram(targetLoc.getBlock(), "&c电网冲突：该机器已属于其他电网", () -> false);
+                        EnergyNet otherNet = getNetworkFromLocation(targetLoc);
+                        enterConflict(otherNet, targetLoc, "&c电网冲突：电网交叉", "&c电网冲突：该机器已属于其他电网");
                         return false;
                     }
 
@@ -2057,12 +2160,21 @@ public class EnergyNet extends Network implements HologramOwner {
                         if (ConnectorAgingManager.isConnectorDamaged(targetLoc)) {
                             continue;
                         }
+                        if (isConnectorBlocked(targetLoc)) {
+                            visited.remove(targetLoc);
+                            continue;
+                        }
                         queue.add(targetLoc);
                         if (isLongRange) {
                             break;
                         }
-                    } else if (!isLongRange && targetType == EnergyNetComponentType.CAPACITOR) {
-                        queue.add(targetLoc);
+                    } else if (isLongRange) {
+                        visited.remove(targetLoc);
+                        continue;
+                    } else {
+                        if (targetType == EnergyNetComponentType.CAPACITOR) {
+                            queue.add(targetLoc);
+                        }
                     }
                     continue;
                 }
@@ -2071,8 +2183,16 @@ public class EnergyNet extends Network implements HologramOwner {
                 if (sfItem.getId().equals("ENERGY_REGULATOR")) {
                     if (!targetLoc.equals(regulator)) {
                         debugLog("processConnector: 发现冲突调节器 @ " + formatLocation(targetLoc));
+                        this.conflictMode = true;
+                        EnergyNet otherNet = getNetworkFromLocation(targetLoc);
+                        if (otherNet != null && otherNet != this) {
+                            otherNet.conflictMode = true;
+                            this.conflictPartner = otherNet;
+                            otherNet.conflictPartner = this;
+                        }
                         updateHologram(targetLoc.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false);
                         Slimefun.runSync(() -> updateHologram(regulator.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false));
+                        addConflictHologramsToConnectors();
                         return false;
                     }
                     // 是本电网的调节器，加入visited但不加入queue（已在BFS起点）
@@ -2267,6 +2387,7 @@ public class EnergyNet extends Network implements HologramOwner {
             lastTotalCharge = currentTotalCharge;
             lastSupply = calculateTotalSupply();
             lastDemand = calculateTotalDemand();
+            firstTickDone = true;
 
             debugLog("tickSelf: 电力传输完成 | 发电=" + lastSupply + " 用电=" + lastDemand
                     + " | 发电机=" + generators.size() + " 连接器=" + connectors.size()
@@ -2583,12 +2704,51 @@ public class EnergyNet extends Network implements HologramOwner {
         return cap;
     }
 
+    private boolean isConnectorBlocked(@Nonnull Location connLoc) {
+        Long limit = connectorLimits.get(connLoc);
+        if (limit != null) {
+            return limit == 0;
+        }
+
+        Location limiterLoc = connLoc.clone().add(0, 1, 0);
+        var limiterData = StorageCacheUtils.getDataContainer(limiterLoc);
+        if (limiterData == null || limiterData.isPendingRemove() || !"CURRENT_LIMITER".equals(limiterData.getSfId())) {
+            return false;
+        }
+
+        String limitStr = limiterData.getData("current-limit");
+        if (!"0".equals(limitStr)) {
+            return false;
+        }
+
+        connectorLimits.put(connLoc.clone(), 0L);
+        return true;
+    }
+
+    private void requestReinitialization() {
+        if (!initializing && !pendingInit && !destroyed) {
+            initialized = false;
+            abortRequested = true;
+            pendingInit = true;
+            GRID_EXECUTOR.submit(this::initializeNetworkAsync);
+        }
+    }
+
     public void setConnectorLimit(Location connLoc, long limit) {
-        connectorLimits.put(connLoc, limit);
+        Long old = connectorLimits.get(connLoc);
+        boolean oldBlocked = (old != null && old == 0);
+        boolean newBlocked = (limit == 0);
+        connectorLimits.put(connLoc.clone(), limit);
+        if (oldBlocked != newBlocked && !regulator.equals(connLoc)) {
+            requestReinitialization();
+        }
     }
 
     public void removeConnectorLimit(Location connLoc) {
-        connectorLimits.remove(connLoc);
+        Long old = connectorLimits.remove(connLoc);
+        if (old != null && old == 0 && !regulator.equals(connLoc)) {
+            requestReinitialization();
+        }
     }
 
     public long getConnectorLimit(Location connLoc) {
@@ -2635,6 +2795,13 @@ public class EnergyNet extends Network implements HologramOwner {
             regulatorNodes.remove(l);
             connectorNodes.remove(l);
             terminusNodes.remove(l);
+
+            EnergyNet partner = conflictPartner;
+            if (partner != null) {
+                conflictPartner = null;
+                Slimefun.runSync(partner::wakeUp);
+            }
+
             if (!initializing && !pendingInit) {
                 pendingInit = true;
                 GRID_EXECUTOR.submit(this::initializeNetworkAsync);
@@ -3063,6 +3230,23 @@ public class EnergyNet extends Network implements HologramOwner {
         conflictMode = false;
         initialized = false;
         abortRequested = true;
+        conflictPartner = null;
+        Slimefun.runSync(this::clearConflictHolograms);
+        if (!initializing && !pendingInit) {
+            pendingInit = true;
+            GRID_EXECUTOR.submit(this::initializeNetworkAsync);
+        }
+    }
+
+    private void clearConflictHolograms() {
+        if (!Bukkit.isPrimaryThread()) {
+            Slimefun.runSync(this::clearConflictHolograms);
+            return;
+        }
+        removeHologram(regulator.getBlock());
+        for (Location loc : connectorNodes) {
+            removeHologram(loc.getBlock());
+        }
     }
 
     public static void wakeUpConflictNets() {

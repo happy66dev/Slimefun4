@@ -4579,6 +4579,27 @@ public final class SlimefunItemSetup {
         ConnectorAgingManager.registerConfig(
                 "LONG_RANGE_ENERGY_CONNECTOR", 512, 2000, 8000, 27648000, SlimefunItems.CARBONADO.clone());
 
+        new EnergyConnector(
+                        itemGroups.electricity,
+                        1,
+                        SlimefunItems.SHORT_CIRCUIT_ENERGY_CONNECTOR,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {
+                            new ItemStack(Material.LIGHT_GRAY_CONCRETE),
+                            new ItemStack(Material.LIGHT_GRAY_CONCRETE),
+                            new ItemStack(Material.LIGHT_GRAY_CONCRETE),
+                            new ItemStack(Material.LIGHT_GRAY_CONCRETE),
+                            new ItemStack(Material.LIGHT_GRAY_CONCRETE),
+                            new ItemStack(Material.LIGHT_GRAY_CONCRETE),
+                            new ItemStack(Material.LIGHT_GRAY_CONCRETE),
+                            new ItemStack(Material.LIGHT_GRAY_CONCRETE),
+                            new ItemStack(Material.LIGHT_GRAY_CONCRETE)
+                        },
+                        new SlimefunItemStack(SlimefunItems.SHORT_CIRCUIT_ENERGY_CONNECTOR, 1))
+                .register(plugin);
+        ConnectorAgingManager.registerConfig(
+                "SHORT_CIRCUIT_ENERGY_CONNECTOR", 512, 2000, 8000, 27648000, SlimefunItems.CARBONADO.clone());
+
         new EnergyMeter(
                         itemGroups.electricity,
                         SlimefunItems.ENERGY_METER,
