@@ -4,6 +4,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.rotations.NotDiagonallyRotatable;
+import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator;
 import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.MachineFuel;
@@ -15,6 +16,7 @@ public class LavaGenerator extends AGenerator implements NotDiagonallyRotatable 
     @ParametersAreNonnullByDefault
     public LavaGenerator(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
+        this.feedbackType = MachineFeedbackType.SMELTING;
     }
 
     @Override

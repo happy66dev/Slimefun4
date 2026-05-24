@@ -121,6 +121,7 @@ public final class ConnectorAgingManager {
             if (load <= 0) continue;
 
             SlimefunItem sfItem = StorageCacheUtils.getSlimefunItem(loc);
+            if (sfItem == null) continue;
             ConnectorConfig config = CONFIGS.get(sfItem.getId());
             if (config == null) continue;
 
@@ -183,6 +184,9 @@ public final class ConnectorAgingManager {
 
     @Nullable public static ConnectorConfig getConfig(@Nonnull Location loc) {
         SlimefunItem sfItem = StorageCacheUtils.getSlimefunItem(loc);
+        if (sfItem == null) {
+            return null;
+        }
         return CONFIGS.get(sfItem.getId());
     }
 

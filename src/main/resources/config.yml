@@ -118,3 +118,10 @@ research-ranks:
   - 卓越大师
   - 精通大师
   - 天选之子
+
+# 世界名友好映射
+# 用于机器损坏通知等场景, 将原始世界名映射为可读名称
+world-name-mapping:
+  world: "主世界"
+  world_nether: "地狱"
+  world_the_end: "末地"

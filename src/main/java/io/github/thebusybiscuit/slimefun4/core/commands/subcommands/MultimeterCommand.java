@@ -15,7 +15,6 @@ import io.github.thebusybiscuit.slimefun4.core.networks.energy.MultimeterDisplay
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,9 +31,14 @@ class MultimeterCommand extends SubCommand {
     }
 
     @Override
+    protected String getDescription() {
+        return "commands.multimeter.description";
+    }
+
+    @Override
     public void onExecute(@Nonnull CommandSender sender, @Nonnull String[] args) {
         if (!(sender instanceof Player p)) {
-            sender.sendMessage(ChatColors.color("&c只有玩家可以使用此指令"));
+            Slimefun.getLocalization().sendMessage(sender, "commands.multimeter.player-only", true);
             return;
         }
 
@@ -53,7 +57,7 @@ class MultimeterCommand extends SubCommand {
 
         Block target = p.getTargetBlockExact(10);
         if (target == null) {
-            sender.sendMessage(ChatColors.color("&c请看向一个方块"));
+            Slimefun.getLocalization().sendMessage(sender, "commands.multimeter.no-target", true);
             return;
         }
 
@@ -61,16 +65,16 @@ class MultimeterCommand extends SubCommand {
         SlimefunItem sfItem = StorageCacheUtils.getSlimefunItem(loc);
 
         if (sfItem == null) {
-            sender.sendMessage(ChatColors.color("&c这个位置没有 Slimefun 物品"));
+            Slimefun.getLocalization().sendMessage(sender, "commands.multimeter.no-slimefun", true);
             return;
         }
 
         if (!(sfItem instanceof EnergyNetComponent component)) {
-            sender.sendMessage(ChatColors.color("&c这个物品不是电网组件"));
+            Slimefun.getLocalization().sendMessage(sender, "commands.multimeter.not-component", true);
             return;
         }
 
-        String info = buildComponentInfo(loc, component);
+        String info = buildComponentInfo(p, loc, component);
         sender.sendMessage(ChatColors.color(info));
 
         if (showDisplay) {
@@ -85,31 +89,42 @@ class MultimeterCommand extends SubCommand {
             EnergyNet net = EnergyNet.getNetworkFromLocation(loc);
             if (net != null) {
                 MultimeterDisplayManager.showConnectorLoad(p, loc, net);
-                p.sendMessage(ChatColors.color("&a已显示连接器负载 (15s)"));
+                Slimefun.getLocalization().sendMessage(p, "commands.multimeter.connector-load-shown", true);
+            } else {
+                Slimefun.getLocalization().sendMessage(p, "commands.multimeter.no-network", true);
             }
             return;
         }
 
         EnergyNet net = EnergyNet.getNetworkFromLocation(loc);
-        if (net == null) return;
+        if (net == null) {
+            Slimefun.getLocalization().sendMessage(p, "commands.multimeter.no-network", true);
+            return;
+        }
 
         List<EnergyPath> paths = collectPaths(net, loc, type);
+        if (paths.isEmpty()) {
+            Slimefun.getLocalization().sendMessage(p, "commands.multimeter.no-paths", true);
+            return;
+        }
 
         boolean activated = MultimeterDisplayManager.togglePathDisplay(p, loc, paths, net, type);
         if (activated) {
-            p.sendMessage(ChatColors.color("&a已开启路径显示 (15s)"));
-            p.sendMessage(ChatColors.color("&f● &7白色=共享段 &9● &b淡蓝=电容 &c● &6橙&e●&d粉=用电器"));
+            Slimefun.getLocalization().sendMessage(p, "commands.multimeter.paths-shown", true);
+            Slimefun.getLocalization().sendMessage(p, "commands.multimeter.paths-legend", true);
         } else {
-            p.sendMessage(ChatColors.color("&e已关闭路径显示"));
+            Slimefun.getLocalization().sendMessage(p, "commands.multimeter.paths-hidden", true);
         }
     }
 
-    private String buildComponentInfo(Location loc, EnergyNetComponent component) {
+    private String buildComponentInfo(Player p, Location loc, EnergyNetComponent component) {
         StringBuilder sb = new StringBuilder();
         SlimefunItem sfItem = StorageCacheUtils.getSlimefunItem(loc);
         String itemName = sfItem != null ? sfItem.getItemName() : "未知";
 
-        sb.append("\n&6=== &e万用表 - 电网设备信息 &6===\n");
+        sb.append("\n")
+                .append(Slimefun.getLocalization().getMessage(p, "commands.multimeter.inspecting"))
+                .append("\n");
         sb.append("&7物品: &f").append(itemName).append("\n");
         sb.append("&7类型: &f").append(component.getEnergyComponentType()).append("\n");
         sb.append("&7位置: &f").append(EnergyNet.formatLocation(loc)).append("\n");
@@ -132,7 +147,9 @@ class MultimeterCommand extends SubCommand {
 
         EnergyNet net = EnergyNet.getNetworkFromLocation(loc);
         if (net == null) {
-            sb.append("&7电网: &c不属于任何电网\n");
+            sb.append("&7电网: &c")
+                    .append(Slimefun.getLocalization().getMessage(p, "commands.multimeter.no-network"))
+                    .append("\n");
             return sb.toString();
         }
         sb.append("&7电网调节器: &f")
@@ -305,7 +322,7 @@ class MultimeterCommand extends SubCommand {
     }
 
     private List<EnergyPath> collectPaths(EnergyNet net, Location loc, EnergyNetComponentType type) {
-        Set<EnergyPath> result = new HashSet<>();
+        Set<EnergyPath> result = new java.util.LinkedHashSet<>();
         switch (type) {
             case GENERATOR -> {
                 Set<EnergyPath> paths = net.getGeneratorPaths().get(loc);

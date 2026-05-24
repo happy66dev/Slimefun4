@@ -32,6 +32,7 @@ import io.github.thebusybiscuit.slimefun4.core.services.CustomTextureService;
 import io.github.thebusybiscuit.slimefun4.core.services.ItemStackService;
 import io.github.thebusybiscuit.slimefun4.core.services.LocalizationService;
 import io.github.thebusybiscuit.slimefun4.core.services.MachineDamageService;
+import io.github.thebusybiscuit.slimefun4.core.services.MachineFeedbackService;
 import io.github.thebusybiscuit.slimefun4.core.services.MetricsService;
 import io.github.thebusybiscuit.slimefun4.core.services.MinecraftRecipeService;
 import io.github.thebusybiscuit.slimefun4.core.services.PerWorldSettingsService;
@@ -228,6 +229,7 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     private final BackpackListener backpackListener = new BackpackListener();
     private final SlimefunBowListener bowListener = new SlimefunBowListener();
     private MachineDamageService machineDamageService;
+    private MachineFeedbackService machineFeedbackService;
 
     /**
      * Our default constructor for {@link Slimefun}.
@@ -317,6 +319,24 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
             return;
         }
 
+        if (getServer().getPluginManager().getPlugin("Vault") == null) {
+            logger.log(Level.SEVERE, "==============================================");
+            logger.log(Level.SEVERE, "Vault 未安装! Slimefun 需要 Vault 才能运行。");
+            logger.log(Level.SEVERE, "请安装 Vault 插件: https://www.spigotmc.org/resources/vault.34315/");
+            logger.log(Level.SEVERE, "==============================================");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        if (getServer().getPluginManager().getPlugin("AuraSkills") == null) {
+            logger.log(Level.SEVERE, "==============================================");
+            logger.log(Level.SEVERE, "AuraSkills 未安装! Slimefun 需要 AuraSkills 才能运行。");
+            logger.log(Level.SEVERE, "请安装 AuraSkills 插件: https://www.spigotmc.org/resources/auraskills.81069/");
+            logger.log(Level.SEVERE, "==============================================");
+            getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
         // Encourage newer Java version
         if (NumberUtils.getJavaVersion() < RECOMMENDED_JAVA_VERSION) {
             StartupWarnings.oldJavaVersion(logger, RECOMMENDED_JAVA_VERSION);
@@ -338,6 +358,7 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         machineDamageManager = new SlimefunMachineDamageManager(this);
         machineDamageService = new MachineDamageService(this);
         machineDamageService.start();
+        machineFeedbackService = new MachineFeedbackService(this);
 
         logger.log(Level.INFO, "正在加载数据库...");
         if (PlayerProfileMigrator.getInstance().hasOldData()
@@ -499,6 +520,10 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         // 停止机器损坏服务
         if (machineDamageService != null) {
             machineDamageService.stop();
+        }
+
+        if (machineFeedbackService != null) {
+            machineFeedbackService.cleanup();
         }
 
         // Cancel all tasks from this plugin immediately
@@ -1005,6 +1030,17 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     public static @Nonnull MachineDamageService getMachineDamageService() {
         validateInstance();
         return instance.machineDamageService;
+    }
+
+    /**
+     * This returns our {@link MachineFeedbackService} which is responsible
+     * for handling machine work feedback (particles, sounds, block states).
+     *
+     * @return Our {@link MachineFeedbackService} instance
+     */
+    public static @Nonnull MachineFeedbackService getMachineFeedbackService() {
+        validateInstance();
+        return instance.machineFeedbackService;
     }
 
     /**

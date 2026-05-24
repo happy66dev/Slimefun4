@@ -4,6 +4,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.rotations.NotDiagonallyRotatable;
+import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator;
@@ -16,6 +17,7 @@ public class CombustionGenerator extends AGenerator implements NotDiagonallyRota
     @ParametersAreNonnullByDefault
     public CombustionGenerator(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
+        this.feedbackType = MachineFeedbackType.SMELTING;
     }
 
     @Override

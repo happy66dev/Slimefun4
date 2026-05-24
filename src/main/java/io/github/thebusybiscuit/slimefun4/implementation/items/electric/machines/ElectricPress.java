@@ -7,6 +7,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.rotations.NotDiagonallyRotatable;
+import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -26,6 +27,7 @@ public class ElectricPress extends AContainer implements RecipeDisplayItem, NotD
     @ParametersAreNonnullByDefault
     public ElectricPress(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
+        this.feedbackType = MachineFeedbackType.MECHANICAL;
     }
 
     @Override

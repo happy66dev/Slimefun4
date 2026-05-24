@@ -17,7 +17,6 @@ import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.handlers.SimpleBlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.utils.NumberUtils;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,10 +39,10 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
 
     private static final String LIMIT_KEY = "current-limit";
     private static final String OWNER_KEY = "current-limiter-owner";
-    private static final Map<UUID, Location> pendingInputs = new ConcurrentHashMap<>();
+    private static final Map<UUID, PendingInput> pendingInputs = new ConcurrentHashMap<>();
     private static volatile boolean listenerRegistered = false;
 
-    private final Map<BlockPosition, String> displayCache = new HashMap<>();
+    private final Map<BlockPosition, String> displayCache = new ConcurrentHashMap<>();
 
     @ParametersAreNonnullByDefault
     public CurrentLimiter(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
@@ -76,32 +75,11 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
         addItemHandler(new BlockPlaceHandler(false) {
             @Override
             public void onPlayerPlace(BlockPlaceEvent e) {
+                if (!EnergyAccessoryPlacement.validate(
+                        e, "CURRENT_LIMITER", "&c只能在连接器正上方放置", "&c该位置已有另一种附件，电量计数器与限电器只能二选一")) {
+                    return;
+                }
                 Location placed = e.getBlock().getLocation();
-                Location connLoc = placed.clone().subtract(0, 1, 0);
-                var connData = StorageCacheUtils.getDataContainer(connLoc);
-                if (connData == null || connData.isPendingRemove()) {
-                    e.setCancelled(true);
-                    Slimefun.getDatabaseManager().getBlockDataController().removeBlock(placed);
-                    e.getPlayer().sendMessage(ChatColors.color("&c只能在连接器正上方放置"));
-                    return;
-                }
-                String connId = connData.getSfId();
-                if (connId == null || (!connId.contains("CONNECTOR") && !connId.contains("connector"))) {
-                    e.setCancelled(true);
-                    Slimefun.getDatabaseManager().getBlockDataController().removeBlock(placed);
-                    e.getPlayer().sendMessage(ChatColors.color("&c只能在连接器正上方放置"));
-                    return;
-                }
-                var existingData = StorageCacheUtils.getDataContainer(placed);
-                if (existingData != null && !existingData.isPendingRemove()) {
-                    String existingId = existingData.getSfId();
-                    if ("ENERGY_METER".equals(existingId)) {
-                        e.setCancelled(true);
-                        Slimefun.getDatabaseManager().getBlockDataController().removeBlock(placed);
-                        e.getPlayer().sendMessage(ChatColors.color("&c该位置已有电量计数器，电量计数器与限电器只能二选一"));
-                        return;
-                    }
-                }
                 var data = StorageCacheUtils.getBlock(placed);
                 if (data != null) {
                     data.setData(OWNER_KEY, e.getPlayer().getUniqueId().toString());
@@ -125,6 +103,7 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
                     net.removeConnectorLimit(connLoc);
                 }
                 displayCache.remove(new BlockPosition(b.getLocation()));
+                clearPendingInputs(b.getLocation());
                 removeHologram(b);
             }
         };
@@ -133,14 +112,13 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
     private void tickLimiter(@Nonnull Block b, @Nonnull SlimefunBlockData data) {
         if (data.isPendingRemove()) return;
 
-        String limitStr = data.getData(LIMIT_KEY);
+        Long limit = readLimitValue(data);
         String display;
-        if (limitStr == null) {
+        if (limit == null) {
             display = "&7\u26A1 &f\u221E J/t";
-        } else if ("0".equals(limitStr)) {
+        } else if (limit == 0L) {
             display = "&4\u26A1 \u26D4 \u7981\u7528";
         } else {
-            long limit = parseLimit(limitStr);
             display = "&b\u26A1 &f\u2264 " + NumberUtils.getCompactDouble(limit) + " J/t";
         }
 
@@ -157,63 +135,100 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
         Player p = e.getPlayer();
         Block b = e.getClickedBlock().get();
         Location loc = b.getLocation();
+        var data = StorageCacheUtils.getBlock(loc);
+        if (data == null || data.isPendingRemove()) {
+            return;
+        }
 
         if (p.isSneaking()) {
-            String ownerStr = StorageCacheUtils.getBlock(loc).getData(OWNER_KEY);
+            String ownerStr = data.getData(OWNER_KEY);
             if (ownerStr != null && !ownerStr.isEmpty()) {
-                UUID ownerUuid = UUID.fromString(ownerStr);
+                UUID ownerUuid = parseUuidOrNull(data, ownerStr);
                 if (p.getUniqueId().equals(ownerUuid)) {
                     Location connLoc = loc.clone().subtract(0, 1, 0);
                     EnergyNet net = EnergyNet.getNetworkFromLocation(connLoc);
                     if (net != null) {
                         net.removeConnectorLimit(connLoc);
                     }
-                    StorageCacheUtils.getBlock(loc).removeData(LIMIT_KEY);
+                    data.removeData(LIMIT_KEY);
                     displayCache.remove(new BlockPosition(loc));
                     p.sendMessage(ChatColors.color("&a限电器已设为无限制"));
                     return;
                 }
             }
-            String limitStr = StorageCacheUtils.getBlock(loc).getData(LIMIT_KEY);
-            long limit = parseLimit(limitStr);
-            if (limit == 0 && (limitStr == null || "0".equals(limitStr))) {
-                p.sendMessage(ChatColors.color("&b\u26A1 &7当前限制: &f\u221E J/t &7(无限制)"));
-            } else if (limit == 0) {
-                p.sendMessage(ChatColors.color("&4\u26A1 &7当前限制: &c\u26D4 \u7981\u7528"));
-            } else {
-                p.sendMessage(ChatColors.color("&b\u26A1 &7当前限制: &f\u2264 " + limit + " J/t"));
-            }
+            sendLimitStatus(p, readLimitValue(data));
             return;
         }
 
-        String ownerStr = StorageCacheUtils.getBlock(loc).getData(OWNER_KEY);
+        String ownerStr = data.getData(OWNER_KEY);
         if (ownerStr == null || ownerStr.isEmpty()) return;
-        UUID ownerUuid = UUID.fromString(ownerStr);
+        UUID ownerUuid = parseUuidOrNull(data, ownerStr);
+        if (ownerUuid == null) {
+            sendLimitStatus(p, readLimitValue(data));
+            return;
+        }
         if (!p.getUniqueId().equals(ownerUuid)) {
-            String limitStr = StorageCacheUtils.getBlock(loc).getData(LIMIT_KEY);
-            long limit = parseLimit(limitStr);
-            if (limit == 0 && (limitStr == null || "0".equals(limitStr))) {
-                p.sendMessage(ChatColors.color("&b\u26A1 &7当前限制: &f\u221E J/t &7(无限制)"));
-            } else if (limit == 0) {
-                p.sendMessage(ChatColors.color("&4\u26A1 &7当前限制: &c\u26D4 \u7981\u7528"));
-            } else {
-                p.sendMessage(ChatColors.color("&b\u26A1 &7当前限制: &f\u2264 " + limit + " J/t"));
-            }
+            sendLimitStatus(p, readLimitValue(data));
             return;
         }
 
-        pendingInputs.put(p.getUniqueId(), loc);
+        PendingInput input = new PendingInput(loc.clone(), System.currentTimeMillis());
+        pendingInputs.put(p.getUniqueId(), input);
+        Bukkit.getScheduler()
+                .runTaskLater(
+                        Slimefun.instance(),
+                        () -> {
+                            if (pendingInputs.remove(p.getUniqueId(), input)) {
+                                p.sendMessage(ChatColors.color("&7限电器设置已超时，已取消修改"));
+                            }
+                        },
+                        PendingInput.TIMEOUT_TICKS);
         p.sendMessage(ChatColors.color("&b\u26A1 &7请在聊天栏输入限制值 (J/t):"));
         p.sendMessage(ChatColors.color("&7输入 &c0 &7禁用连接器 | 输入正整数设置限额 | 输入 &a取消 &7或等待30秒退出"));
     }
 
-    static long parseLimit(@Nullable String limitStr) {
-        if (limitStr == null) return 0;
+    private static void sendLimitStatus(@Nonnull Player p, @Nullable Long limit) {
+        if (limit == null) {
+            p.sendMessage(ChatColors.color("&b\u26A1 &7当前限制: &f\u221E J/t &7(无限制)"));
+        } else if (limit == 0L) {
+            p.sendMessage(ChatColors.color("&4\u26A1 &7当前限制: &c\u26D4 \u7981\u7528"));
+        } else {
+            p.sendMessage(ChatColors.color("&b\u26A1 &7当前限制: &f\u2264 " + limit + " J/t"));
+        }
+    }
+
+    private static UUID parseUuidOrNull(@Nonnull SlimefunBlockData data, @Nonnull String ownerStr) {
+        try {
+            return UUID.fromString(ownerStr);
+        } catch (IllegalArgumentException e) {
+            data.removeData(OWNER_KEY);
+            return null;
+        }
+    }
+
+    @Nullable private static Long readLimitValue(@Nonnull SlimefunBlockData data) {
+        String limitStr = data.getData(LIMIT_KEY);
+        if (limitStr == null) {
+            return null;
+        }
+
         try {
             return Long.parseLong(limitStr);
         } catch (NumberFormatException e) {
-            return 0;
+            return null;
         }
+    }
+
+    private static void clearPendingInputs(@Nonnull Location loc) {
+        pendingInputs.entrySet().removeIf(entry -> isSameBlock(entry.getValue().location, loc));
+    }
+
+    private static boolean isSameBlock(@Nonnull Location a, @Nonnull Location b) {
+        return a.getWorld() != null
+                && a.getWorld().equals(b.getWorld())
+                && a.getBlockX() == b.getBlockX()
+                && a.getBlockY() == b.getBlockY()
+                && a.getBlockZ() == b.getBlockZ();
     }
 
     private static void ensureChatListener() {
@@ -231,14 +246,21 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
         @EventHandler
         public void onChat(AsyncPlayerChatEvent e) {
             Player p = e.getPlayer();
-            Location loc = pendingInputs.remove(p.getUniqueId());
-            if (loc == null) return;
+            PendingInput input = pendingInputs.remove(p.getUniqueId());
+            if (input == null) return;
 
             e.setCancelled(true);
+            if (input.isExpired()) {
+                Bukkit.getScheduler()
+                        .runTask(Slimefun.instance(), () -> p.sendMessage(ChatColors.color("&7限电器设置已超时，已取消修改")));
+                return;
+            }
+
+            Location loc = input.location;
             String msg = e.getMessage().trim();
 
             if (msg.equalsIgnoreCase("取消") || msg.equalsIgnoreCase("cancel")) {
-                p.sendMessage(ChatColors.color("&7已取消设置"));
+                Bukkit.getScheduler().runTask(Slimefun.instance(), () -> p.sendMessage(ChatColors.color("&7已取消设置")));
                 return;
             }
 
@@ -246,15 +268,20 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
             try {
                 value = Long.parseLong(msg);
             } catch (NumberFormatException ex) {
-                p.sendMessage(ChatColors.color("&c请输入有效的非负整数"));
+                Bukkit.getScheduler()
+                        .runTask(Slimefun.instance(), () -> p.sendMessage(ChatColors.color("&c请输入有效的非负整数")));
                 return;
             }
 
             if (value < 0) {
-                p.sendMessage(ChatColors.color("&c请输入非负整数"));
+                Bukkit.getScheduler().runTask(Slimefun.instance(), () -> p.sendMessage(ChatColors.color("&c请输入非负整数")));
                 return;
             }
 
+            Bukkit.getScheduler().runTask(Slimefun.instance(), () -> applyInput(p, loc, value));
+        }
+
+        private void applyInput(@Nonnull Player p, @Nonnull Location loc, long value) {
             var data = StorageCacheUtils.getBlock(loc);
             if (data == null || data.isPendingRemove()) {
                 p.sendMessage(ChatColors.color("&c限电器已被拆除"));
@@ -282,6 +309,23 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
         @EventHandler
         public void onQuit(PlayerQuitEvent e) {
             pendingInputs.remove(e.getPlayer().getUniqueId());
+        }
+    }
+
+    private static final class PendingInput {
+        private static final long TIMEOUT_MILLIS = 30_000L;
+        private static final long TIMEOUT_TICKS = 20L * 30L;
+
+        private final Location location;
+        private final long createdAt;
+
+        private PendingInput(@Nonnull Location location, long createdAt) {
+            this.location = location;
+            this.createdAt = createdAt;
+        }
+
+        private boolean isExpired() {
+            return System.currentTimeMillis() - createdAt > TIMEOUT_MILLIS;
         }
     }
 }

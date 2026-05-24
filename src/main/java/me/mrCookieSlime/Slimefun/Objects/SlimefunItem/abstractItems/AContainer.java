@@ -14,6 +14,7 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineProcessHolder;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
+import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineProcessor;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -26,6 +27,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ChestMenu.AdvancedMenuClickHandler;
 import me.mrCookieSlime.CSCoreLibPlugin.general.Inventory.ClickAction;
@@ -72,6 +74,8 @@ public abstract class AContainer extends SlimefunItem
     private int energyCapacity = -1;
     private int processingSpeed = -1;
 
+    protected @Nullable MachineFeedbackType feedbackType = null;
+
     @ParametersAreNonnullByDefault
     protected AContainer(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
@@ -114,6 +118,10 @@ public abstract class AContainer extends SlimefunItem
     @Override
     public MachineProcessor<CraftingOperation> getMachineProcessor() {
         return processor;
+    }
+
+    @Nullable public MachineFeedbackType getMachineFeedbackType() {
+        return feedbackType;
     }
 
     protected void constructMenu(BlockMenuPreset preset) {
@@ -369,7 +377,6 @@ public abstract class AContainer extends SlimefunItem
     }
 
     protected void tick(Block b) {
-        // 检查机器是否损坏，如果损坏则跳过处理
         var data = StorageCacheUtils.getDataContainer(b.getLocation());
         if (data != null && Slimefun.getMachineDamageService().isMachineDamaged(data)) {
             return;
@@ -380,12 +387,12 @@ public abstract class AContainer extends SlimefunItem
 
         if (currentOperation != null) {
             if (takeCharge(b.getLocation())) {
-                // 处理机器损坏 - 用电器工作时尝试触发报废检查
                 Slimefun.getMachineDamageService().processMachineWork(b.getLocation(), this);
 
                 if (!currentOperation.isFinished()) {
                     processor.updateProgressBar(inv, 22, currentOperation);
                     currentOperation.addProgress(1);
+                    Slimefun.getMachineFeedbackService().onMachineTick(b, feedbackType, currentOperation);
                 } else {
                     inv.replaceExistingItem(22, new CustomItemStack(Material.BLACK_STAINED_GLASS_PANE, " "));
 
@@ -394,6 +401,7 @@ public abstract class AContainer extends SlimefunItem
                     }
 
                     processor.endOperation(b);
+                    Slimefun.getMachineFeedbackService().onMachineStop(b, feedbackType);
                 }
             }
         } else {
@@ -403,8 +411,8 @@ public abstract class AContainer extends SlimefunItem
                 currentOperation = new CraftingOperation(next);
                 processor.startOperation(b, currentOperation);
 
-                // Fixes #3534 - Update indicator immediately
                 processor.updateProgressBar(inv, 22, currentOperation);
+                Slimefun.getMachineFeedbackService().onMachineStart(b, feedbackType, currentOperation);
             }
         }
     }

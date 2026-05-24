@@ -51,6 +51,31 @@ commands:
   search: 搜索 Slimefun 物品
   open_guide: 使用命令打开 Slimefun 指南
   stats: 查看玩家的统计数据
+  grid:
+    description: '[管理员] 查看目标方块的电网信息'
+    player-only: '&c只有玩家可以使用此指令'
+    no-target: '&c请看向一个方块'
+  multimeter:
+    description: '[管理员] 调试指令，查看电网设备信息并可视化能量路径'
+    inspecting: '&6=== &e万用表 - 电网设备信息 &6==='
+    player-only: '&c只有玩家可以使用此指令'
+    no-target: '&c请看向一个方块'
+    no-slimefun: '&c这个位置没有 Slimefun 物品'
+    not-component: '&c这个物品不是电网组件'
+    no-network: '&c该机器不属于任何电网'
+    no-paths: '&e没有找到要显示的路径'
+    connector-load-shown: '&a已显示连接器负载 (15秒)'
+    paths-shown: '&a已开启路径显示 (15秒)'
+    paths-legend: '&f白色=共享段 &9蓝色=电容 &c红色/&6橙色/&e黄色/&d粉色=用电器'
+    paths-hidden: '&e已关闭路径显示'
+  machine-damage:
+    description: '[管理员] 查看和管理机器损坏'
+    no-target: '&c请看向一台机器'
+    not-machine: '&c这个方块不是 Slimefun 机器'
+    scrapped: '&a机器已报废'
+    repaired: '&a机器已修复'
+    info-header: '&6=== &e机器损坏信息 &6==='
+    unknown-subcommand: '&c未知子命令。用法: /sf machine-damage <scrap|repair|info>'
   research:
     description: 解锁/重置玩家的研究
     reset: '&c你已重置了 %player% 的所有研究'

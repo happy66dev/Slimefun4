@@ -146,6 +146,74 @@ public class MultimeterDisplayManager implements Listener {
         return false;
     }
 
+    private static boolean hasNearbyPlayerOnSegment(Location from, Location to) {
+        if (from.getWorld() == null || to.getWorld() == null || !from.getWorld().equals(to.getWorld())) {
+            return false;
+        }
+
+        double minX = Math.min(from.getX(), to.getX()) - MAX_DISTANCE;
+        double maxX = Math.max(from.getX(), to.getX()) + MAX_DISTANCE;
+        double minY = Math.min(from.getY(), to.getY()) - MAX_DISTANCE;
+        double maxY = Math.max(from.getY(), to.getY()) + MAX_DISTANCE;
+        double minZ = Math.min(from.getZ(), to.getZ()) - MAX_DISTANCE;
+        double maxZ = Math.max(from.getZ(), to.getZ()) + MAX_DISTANCE;
+        double maxDistanceSquared = MAX_DISTANCE * MAX_DISTANCE;
+
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            if (!online.getWorld().equals(from.getWorld())) {
+                continue;
+            }
+
+            Location playerLoc = online.getLocation();
+            if (playerLoc.getX() < minX
+                    || playerLoc.getX() > maxX
+                    || playerLoc.getY() < minY
+                    || playerLoc.getY() > maxY
+                    || playerLoc.getZ() < minZ
+                    || playerLoc.getZ() > maxZ) {
+                continue;
+            }
+
+            if (distanceSquaredToSegment(playerLoc, from, to) <= maxDistanceSquared) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static double distanceSquaredToSegment(Location point, Location from, Location to) {
+        double px = point.getX();
+        double py = point.getY();
+        double pz = point.getZ();
+        double ax = from.getX();
+        double ay = from.getY();
+        double az = from.getZ();
+        double bx = to.getX();
+        double by = to.getY();
+        double bz = to.getZ();
+
+        double dx = bx - ax;
+        double dy = by - ay;
+        double dz = bz - az;
+        double lengthSquared = dx * dx + dy * dy + dz * dz;
+        if (lengthSquared <= 0.0) {
+            return point.distanceSquared(from);
+        }
+
+        double t = ((px - ax) * dx + (py - ay) * dy + (pz - az) * dz) / lengthSquared;
+        t = Math.max(0.0, Math.min(1.0, t));
+
+        double closestX = ax + dx * t;
+        double closestY = ay + dy * t;
+        double closestZ = az + dz * t;
+
+        double diffX = px - closestX;
+        double diffY = py - closestY;
+        double diffZ = pz - closestZ;
+        return diffX * diffX + diffY * diffY + diffZ * diffZ;
+    }
+
     // ======================== PathDisplay ========================
 
     private static class PathDisplay {
@@ -243,7 +311,7 @@ public class MultimeterDisplayManager implements Listener {
                     Location from = fullPath.get(i);
                     Location to = fullPath.get(i + 1);
 
-                    if (!hasNearbyPlayer(from) && !hasNearbyPlayer(to)) continue;
+                    if (!hasNearbyPlayerOnSegment(from, to)) continue;
 
                     String segKey = segmentKey(from, to);
                     Set<Location> consumers = segmentConsumers.get(segKey);

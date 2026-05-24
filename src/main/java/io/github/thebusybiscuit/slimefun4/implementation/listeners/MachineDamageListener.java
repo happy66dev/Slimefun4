@@ -65,7 +65,7 @@ public class MachineDamageListener implements Listener {
             var config = damageManager.getMachineConfig(slimefunItem.getId());
             boolean enabled = config.isEnabled();
             double scale = config.getDamageChanceScale();
-            double exponent = config.getDamageChanceExponent();
+            double denominator = config.getDamageChanceExponent();
 
             ItemMeta meta = item.getItemMeta();
             if (meta != null) {
@@ -73,7 +73,7 @@ public class MachineDamageListener implements Listener {
                 boolean hasDamageLore = false;
                 if (meta.hasLore()) {
                     for (String line : meta.getLore()) {
-                        if (line.contains("损坏几率") || line.contains("损坏机制") || line.contains("缩放倍率") || line.contains("增长指数") || line.contains("增长公式")) {
+                        if (line.contains("损坏几率") || line.contains("损坏机制") || line.contains("缩放倍率") || line.contains("增长指数") || line.contains("增长公式") || line.contains("损坏上限") || line.contains("缓冲参数B") || line.contains("损坏公式")) {
                             hasDamageLore = true;
                             break;
                         }
@@ -87,9 +87,9 @@ public class MachineDamageListener implements Listener {
                     // Add damage chance lore
                     lore.add(ChatColor.GRAY + "损坏机制: " + (enabled ? ChatColor.GREEN + "启用" : ChatColor.RED + "禁用"));
                     if (enabled) {
-                        lore.add(ChatColor.GRAY + "缩放倍率: " + ChatColor.RED + String.format("%.8f", scale));
-                        lore.add(ChatColor.GRAY + "增长指数: " + ChatColor.RED + String.format("%.2f", exponent));
-                        lore.add(ChatColor.GRAY + "增长公式: 缩放倍率 × (工作刻或电容充放电/电容量*100^增长指数)");
+                        lore.add(ChatColor.GRAY + "损坏上限: " + ChatColor.RED + String.format("%.8f", scale));
+                        lore.add(ChatColor.GRAY + "缓冲参数B: " + ChatColor.RED + String.format("%.2f", denominator));
+                        lore.add(ChatColor.GRAY + "损坏公式: A × t² / (B + t²)");
                     }
 
                     meta.setLore(lore);
@@ -148,6 +148,7 @@ public class MachineDamageListener implements Listener {
 
                                 if (damageService.canRepair(data)) {
                                     damageService.repairMachine(location);
+                                    BlockListener.clearDamagedMachineBreakAttempts(location);
                                     player.sendMessage(ChatColor.GREEN + "机器已成功修复！");
                                 } else {
                                     player.sendMessage(ChatColor.YELLOW + "已提交修复物品，继续提交其他需要的物品...");
@@ -178,6 +179,9 @@ public class MachineDamageListener implements Listener {
         for (java.util.Map<String, Object> itemInfo : repairItems) {
             ItemStack item = (ItemStack) itemInfo.get("item");
             Integer submitted = (Integer) itemInfo.get("submitted");
+            Integer required = (Integer) itemInfo.get("required");
+            int requiredCount = required != null && required > 0 ? required : 1;
+            int submittedCount = submitted != null ? submitted : 0;
 
             if (item != null) {
                 String itemName;
@@ -189,11 +193,28 @@ public class MachineDamageListener implements Listener {
                     itemName = LocalizationUtils.getItemName(item.getType());
                 }
 
-                if (submitted != null && submitted > 0) {
-                    player.sendMessage(
-                            ChatColor.GREEN + "✓ " + itemName + ChatColor.GRAY + " (已提交: " + submitted + "/1)");
+                if (submittedCount >= requiredCount) {
+                    player.sendMessage(ChatColor.GREEN
+                            + "✓ "
+                            + itemName
+                            + ChatColor.GRAY
+                            + " (已提交: "
+                            + submittedCount
+                            + "/"
+                            + requiredCount
+                            + ")");
                 } else {
-                    player.sendMessage(ChatColor.RED + "✗ " + itemName + ChatColor.GRAY + " (需要: 1)");
+                    player.sendMessage(ChatColor.RED
+                            + "✗ "
+                            + itemName
+                            + ChatColor.GRAY
+                            + " (需要: "
+                            + requiredCount
+                            + ", 已提交: "
+                            + submittedCount
+                            + "/"
+                            + requiredCount
+                            + ")");
                 }
             }
         }

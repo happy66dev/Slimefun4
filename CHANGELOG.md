@@ -40,9 +40,28 @@
 
 ## Release Candidate 38 (TBD)
 
+#### Additions
+* 新增完整电网系统：连接器分级(7种, range 1-128)、长途连接器、全息负载显示
+* 新增机器损坏系统：S曲线概率公式、随机修复材料、登录提醒
+* 新增电量计数器(EnergyMeter)和限电器(CurrentLimiter)
+* 新增 `/sf grid`、`/sf machine-damage` 管理指令
+* 新增 AuraSkills 技能要求解锁研究
+* 新增可配置世界名映射 (`config.yml → world-name-mapping`)
+
+#### Changes
+* EnergyNet 自调度重构为三阶段异步架构：主线程I/O → 异步纯数学 → 主线程写回
+* 删除 `stop_on_damage` 配置项，损坏=停机不可逆
+* Vault/AuraSkills 改为硬依赖，启动时检查
+
 #### Fixes
 * Fix UI items dropping when breaking Slimefun blocks with non-standard inventories
 * Fix cargo node filter items not dropping when damaged machines are force-broken
+* Fix `Research.canUnlock()` NPE when AuraSkills user data not loaded
+* Fix `catch(Throwable)` → `catch(Exception)` in DataUtils serialization
+* Fix BlockListener damaged break attempts memory leak (30s timeout + periodic cleanup)
+* Fix `Particle.DRIP_WATER` → `DRIPPING_WATER` API compatibility
+* Fix world name mapping inconsistency in damage notifications
+* Fix `getDamagedBlockLocationsByOwner()` field reference error
 
 ## Release Candidate 37 (25 Feb 2024)
 

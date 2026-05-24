@@ -1233,6 +1233,42 @@ public class BlockDataController extends ADataController {
         return new HashSet<>(loadedChunk.values());
     }
 
+    public Set<ASlimefunDataContainer> getAllLoadedData() {
+        var re = new HashSet<ASlimefunDataContainer>();
+        for (var chunkData : loadedChunk.values()) {
+            re.addAll(chunkData.getAllBlockData());
+        }
+        re.addAll(loadedUniversalData.values());
+        return re;
+    }
+
+    @Nonnull
+    public List<Location> getDamagedBlockLocationsByOwner(@Nonnull String ownerUuid) {
+        List<Location> result = new ArrayList<>();
+        for (Map.Entry<String, SlimefunChunkData> chunkEntry : loadedChunk.entrySet()) {
+            SlimefunChunkData chunkData = chunkEntry.getValue();
+            if (!chunkData.isDataLoaded()) continue;
+            for (SlimefunBlockData data : chunkData.getAllBlockData()) {
+                if (!"true".equals(data.getData("machine_damage_damaged"))) continue;
+                if (!ownerUuid.equals(data.getData("machine_owner_uuid"))) continue;
+                if (data.getLocation() != null) {
+                    result.add(data.getLocation());
+                }
+            }
+        }
+        for (Map.Entry<UUID, SlimefunUniversalData> entry : loadedUniversalData.entrySet()) {
+            SlimefunUniversalData data = entry.getValue();
+            if (!(data instanceof SlimefunUniversalBlockData ubd)) continue;
+            if (!data.isDataLoaded()) continue;
+            if (!"true".equals(data.getData("machine_damage_damaged"))) continue;
+            if (!ownerUuid.equals(data.getData("machine_owner_uuid"))) continue;
+            if (ubd.getLastPresent() != null) {
+                result.add(ubd.getLastPresent().toLocation());
+            }
+        }
+        return result;
+    }
+
     public void removeAllDataInChunk(Chunk chunk) {
         var cKey = LocationUtils.getChunkKey(chunk);
         var cache = loadedChunk.remove(cKey);

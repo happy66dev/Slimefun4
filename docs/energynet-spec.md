@@ -1,6 +1,6 @@
 # EnergyNet 能源电网技术实现文档
 
-> 最后更新：2026-05-17 | 版本：v2.4（货运管理器电力接入 + 可变容量用电器支持）
+> 最后更新：2026-05-24 | 版本：v2.6（三阶段异步重构 + 功能完整性修复）
 
 ---
 
@@ -62,6 +62,7 @@ EnergyNet (extends Network)
 | 货运管理器 | `CONSUMER` | `REGULATOR` | 特殊用电器，货运网络调节器。可变容量 `128+4×输入节点数` J，每个tick消耗电力 |
 | 电容 | `CAPACITOR` | `CONNECTOR` | 储能设备。电容→电容仅6方向相邻，电容↔连接器/调节器6方向相邻 |
 | 连接器 | `CONNECTOR` | `CONNECTOR` | 明文连接器。有 `range` 属性控制轴向覆盖距离 |
+| 短路连接器 | `CONNECTOR` | `CONNECTOR` | `SHORT_CIRCUIT_ENERGY_CONNECTOR`，基于 `EnergyConnector`，range=1，当前为占位版本 |
 | 调节器 | *（不实现接口）* | `REGULATOR` | **特殊连接器**，RANGE=6（轴向）。可作为路径跳点 |
 
 > **特殊规则**：能源调节器不实现 `EnergyNetComponent`，但被当作特殊连接器处理——BFS 可以通过它路由，且每过一个调节器计1跳。
@@ -203,13 +204,42 @@ for each axis:
 
 ---
 
-## 6. 电力传输流程
+## 6. 电力传输流程 (v2.6 — 三阶段异步架构)
 
-### 6.1 `performEnergyTransfer()` [L1667](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L1667)
+### 6.0 架构概览
 
 ```
-tickAllGenerators() → 发电机产电，追踪 netNewEnergy + perGeneratorNewCharge
-totalProducedThisTick = netNewEnergy + calcNonChargeableRemaining()   ← 记录本tick总产出
+tickSelfMainThread() [主线程]
+├── Phase 1: tickAllGenerators() → 发电机产电
+│           tickAllCapacitors() → 清理损坏电容
+│           collectTickSnapshot() → 冻结状态 (11字段)
+├── Phase 2: GRID_TICK_EXECUTOR [异步]
+│           computeTransfers(snapshot)
+│               ├── transferFromGeneratorsSnapshot() → 最短路径 + 限电器
+│               ├── transferFromCapacitorsSnapshot() → 电容放电 + 限电器
+│               └── → TransferResult (deltas + excess)
+└── Phase 3: Slimefun.runSync [主线程]
+            applyTransferResult(result, snapshot)
+                ├── gen/cap/con charge delta 写回
+                ├── storeRemainingEnergy() → 多余电力存电容
+                ├── 能量克隆防护 (perGeneratorNewCharge 比例扣减)
+                ├── propagateToEnergyMeters() → 电量计数器
+                ├── ConnectorAgingManager.processAging() → 连接器老化
+                └── 统计 + 全息图
+```
+
+### 6.1 关键设计决策
+
+- `storeRemainingEnergy()` 保留在 Phase 3 (主线程)：它内部访问 StorageCacheUtils、MachineDamageService、component.setCharge()
+- Phase 2 只计算"用电器满足后还剩多少能量 (excessEnergy)"
+- 所有 snapshot 数据均为深拷贝 (HashMap new)，异步线程安全
+- 旧 `performEnergyTransfer()` / `transferFromGenerators()` / `transferFromCapacitors()` 保留为死代码
+
+### 6.2 `performEnergyTransfer()` [已移除 — 逻辑迁移至三阶段]
+
+旧版流程 (保留为死代码):
+```
+tickAllGenerators() → 发电机产电
 
 tickAllCapacitors() → 排除损坏电容
 
@@ -271,6 +301,13 @@ else:
 > - 长途连接器在 `processConnector()` 中扫描每个轴向，找到第一个 CONNECTOR 后 `break`（只连最近）
 > - 长途连接器在 `getNeighbors(CONNECTOR)` 中扫描6轴向，找到每个方向上最近的连接器，**双向校验**：目标连接器必须能用**自身的范围**沿轴向覆盖长途连接器，否则不建立邻居；普通连接器侧对长途连接器也附加 `isWithinRangeAxial(长途, 自身, 自身范围)` 校验。两侧等价（`distance ≤ target.range`），实现**完全隔离**。
 > - 长途连接器有老化机制，使用碳金能源连接器的配置（512/2000/8000, 碳金修复）
+
+> **短路连接器（SHORT_CIRCUIT_ENERGY_CONNECTOR）占位规则**：
+> - 使用 `EnergyConnector` 注册，`range=1`，只按普通连接器规则参与 6 轴向相邻/覆盖检查，不走 `LongRangeConnector` 的最近连接器隔离逻辑。
+> - 物品材质为 `LIGHT_GRAY_CONCRETE`，lore 标记为范围 1，用途是极近距离连接能源网络。
+> - 当前配方为 9 个淡灰色混凝土合成 1 个短路连接器，属于占位配方，后续可按正式玩法重新设计。
+> - 研究为 `short_circuit_connectors`，研究 id `284`，英文名 `Short-Circuit Connections`，中文名 `短路连接`。
+> - 老化参数暂与黑钻/长途连接器一致：512/2000/8000 J/t，预期寿命 27,648,000 tick，修复物品配置为碳金。
 
 ### 7.2 `validateConnection()` [L876](file:///d:/Users/Administrator/Desktop/Java项目/slimefun/Slimefun4-master/src/main/java/io/github/thebusybiscuit/slimefun4/core/networks/energy/EnergyNet.java#L876)
 
@@ -430,6 +467,7 @@ else:
 | 强化能源连接器 | 300 J/t | 750 J/t | 1,200 J/t | 6,912,000 | ~1.05B J | 从合成表随机 |
 | 黑钻能源连接器 | 512 J/t | 2,000 J/t | 8,000 J/t | 27,648,000 | ~7.15B J | 从合成表随机 |
 | 长途连接器 | 512 J/t | 2,000 J/t | 8,000 J/t | 27,648,000 | ~7.15B J | 从合成表随机 |
+| 短路连接器 | 512 J/t | 2,000 J/t | 8,000 J/t | 27,648,000 | ~7.15B J | 淡灰色混凝土占位配方 |
 
 > 预期总传输 = sweetPower × 有效寿命（含老化加速数值积分），在 sweet 功率下持续运行时的理论值。
 
@@ -851,26 +889,30 @@ public static class EnergyPath {
 
 ---
 
-## 12. 自调度架构 (Self-Tick)
+## 12. 自调度架构 (Self-Tick) — v2.6 三阶段异步
 
 ### 12.1 动机
 
-电网的 `tick()` 原本由 BlockTicker 驱动，而 BlockTicker 依赖 `chunk.isLoaded()`。当调节器区块卸载时，整个电网停摆。这对 LongRangeConnector（范围128格）超远跨区电网是致命问题。
+电网的 `tick()` 原本由 BlockTicker 驱动，BlockTicker 依赖 `chunk.isLoaded()`。LongRangeConnector（范围128格）超远跨区电网在调节器区块卸载时完全停摆。同时，原方案使用 `runTaskTimerAsynchronously` 在异步线程直接访问 Bukkit/Storage API，存在线程安全问题。
 
 ### 12.2 设计
 
 ```
 旧架构：BlockTicker → chunk.isLoaded()? → tick() → 电力逻辑+显示
-新架构：
-  显示层：BlockTicker → tick()            (仅全息刷新，无电力逻辑)
-  逻辑层：BukkitScheduler → tickSelf()    (电力传输+计数+老化，永不依赖区块)
+中间架构：BukkitScheduler → runTaskTimerAsynchronously → tickSelf() (异步+不安全)
+新架构：BukkitScheduler → runTaskTimer (主线程)
+         → tickSelfMainThread()
+            ├── Phase 1 [主线程]: tickAllGenerators + tickAllCapacitors + collectTickSnapshot
+            ├── Phase 2 [异步]:   GRID_TICK_EXECUTOR → computeTransfers(snapshot)
+            └── Phase 3 [主线程]: runSync → applyTransferResult(result, snapshot)
 ```
 
-- `tickSelf()` 在 `scheduleSelfTick()` 中注册为 Bukkit 异步周期任务（tick-based，TPS低时自动降速）
-- `tickSelf()` 开头有 `AtomicBoolean` 防重入守卫
+- `scheduleSelfTick()` 使用 `runTaskTimer` (主线程调度)，不再使用 `runTaskTimerAsynchronously`
+- `tickSelfMainThread()` 以 `AtomicBoolean` 防重入
+- Phase 1 在主线程执行 I/O，Phase 2 异步纯数学，Phase 3 主线程写回
 - 启动时机：`initializeNetworkAsync()` 成功后调用 `scheduleSelfTick()`
-- 停止时机：`markDirty(regulator)` → `cancelSelfTick()`；`initializeNetworkAsync` 开头也调用 `cancelSelfTick()` 清除旧任务
-- 自愈机制：`initializeNetworkAsync.finally` 中，若初始化被中断且 `!initialized && !destroyed && !pendingInit`，自动重试
+- 停止时机：`markDirty(regulator)` → `cancelSelfTick()`
+- 自愈机制：`initializeNetworkAsync.finally` 中自动重试
 
 ### 12.3 markDirty 直接提交
 
@@ -878,8 +920,8 @@ public static class EnergyPath {
 
 ### 12.4 全息刷新
 
-`tickSelf()` 通过 `regulator.getChunk().isLoaded()` 判断：
-- 加载 → `Slimefun.runSync(() -> updateHologram(...))` 
+`applyTransferResult()` (Phase 3) 中通过 `regulator.getChunk().isLoaded()` 判断：
+- 加载 → `updateHologram(data, lastSupply, lastDemand)`
 - 未加载 → 跳过（不报错，不影响电力逻辑）
 
 BlockTicker 的 `tick()` 作为显示层的补充，在区块加载时额外刷新全息。

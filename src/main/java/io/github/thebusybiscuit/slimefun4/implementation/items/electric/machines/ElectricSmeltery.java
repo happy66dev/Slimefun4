@@ -6,6 +6,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.NotHopperable;
+import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.items.multiblocks.Smeltery;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
@@ -43,6 +44,7 @@ public class ElectricSmeltery extends AContainer implements NotHopperable {
     @ParametersAreNonnullByDefault
     public ElectricSmeltery(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
+        this.feedbackType = MachineFeedbackType.SMELTING;
 
         new BlockMenuPreset(getId(), getItemName()) {
 

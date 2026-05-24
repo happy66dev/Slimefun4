@@ -8,6 +8,10 @@ commands:
   search: Searches your Guide for the given term
   open_guide: Opens Slimefun's guide without using the book
   stats: Shows some Stats about a Player
+  grid:
+    description: '[Admin] Inspect the energy grid at the target block'
+    player-only: '&cOnly players can use this command'
+    no-target: '&cYou are not looking at a block!'
 
   research:
     description: Unlock/Reset researches for a player
@@ -53,6 +57,19 @@ commands:
     not-component: '&cThis item is not an energy network component'
     no-network: '&cThis machine does not belong to any energy network'
     no-paths: '&eNo paths to display'
+    connector-load-shown: '&aConnector load display enabled (15s)'
+    paths-shown: '&aPath display enabled (15s)'
+    paths-legend: '&fWhite = shared segment &9Blue = capacitor &cRed/&6Orange/&eYellow/&dPink = consumers'
+    paths-hidden: '&ePath display disabled'
+
+  machine-damage:
+    description: '[Admin] Inspect and manage machine damage'
+    no-target: '&cYou are not looking at a machine!'
+    not-machine: '&cThis block is not a Slimefun machine'
+    scrapped: '&aThe machine has been scrapped'
+    repaired: '&aThe machine has been repaired'
+    info-header: '&6=== &eMachine Damage Info &6==='
+    unknown-subcommand: '&cUnknown subcommand. Use /sf machine-damage <scrap|repair|info>'
 
 placeholderapi:
   profile-loading: 'Loading...'

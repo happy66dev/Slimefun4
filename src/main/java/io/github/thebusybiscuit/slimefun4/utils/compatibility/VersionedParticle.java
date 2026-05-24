@@ -18,6 +18,7 @@ public class VersionedParticle {
     public static final Particle WITCH;
     public static final Particle FIREWORK;
     public static final Particle ENCHANT;
+    public static final Particle DRIP_WATER;
 
     static {
         MinecraftVersion version = Slimefun.getMinecraftVersion();
@@ -49,6 +50,10 @@ public class VersionedParticle {
 
         // ENCHANTMENT_TABLE is renamed to ENCHANT in 1.20.5
         ENCHANT = version.isAtLeast(MinecraftVersion.MINECRAFT_1_20_5) ? Particle.ENCHANT : getKey("ENCHANTMENT_TABLE");
+
+        // DRIP_WATER is renamed to DRIPPING_WATER in 1.20.5
+        DRIP_WATER =
+                version.isAtLeast(MinecraftVersion.MINECRAFT_1_20_5) ? Particle.DRIPPING_WATER : getKey("DRIP_WATER");
     }
 
     @Nullable private static Particle getKey(@Nonnull String key) {

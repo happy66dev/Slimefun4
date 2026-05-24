@@ -11,6 +11,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineProcessHolder;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
+import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineProcessor;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
@@ -48,6 +49,8 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
 
     private int energyProducedPerTick = -1;
     private int energyCapacity = -1;
+
+    protected @Nullable MachineFeedbackType feedbackType = null;
 
     @ParametersAreNonnullByDefault
     protected AGenerator(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
@@ -165,15 +168,14 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
 
                     if (canStore >= getEnergyProduction()) {
                         operation.addProgress(1);
+                        Slimefun.getMachineFeedbackService().onMachineTick(l.getBlock(), feedbackType, operation);
                         return getEnergyProduction();
-                    } else if (canStore > 0) {
-                        operation.addProgress(1);
-                        return (int) canStore;
                     }
 
                     return 0;
                 } else {
                     operation.addProgress(1);
+                    Slimefun.getMachineFeedbackService().onMachineTick(l.getBlock(), feedbackType, operation);
                     return getEnergyProduction();
                 }
             } else {
@@ -186,6 +188,7 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
                 inv.replaceExistingItem(22, new CustomItemStack(Material.BLACK_STAINED_GLASS_PANE, " "));
 
                 processor.endOperation(l);
+                Slimefun.getMachineFeedbackService().onMachineStop(l.getBlock(), feedbackType);
                 return 0;
             }
         } else {
@@ -197,7 +200,9 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
                     inv.consumeItem(entry.getKey(), entry.getValue());
                 }
 
-                processor.startOperation(l, new FuelOperation(fuel));
+                FuelOperation newOperation = new FuelOperation(fuel);
+                processor.startOperation(l, newOperation);
+                Slimefun.getMachineFeedbackService().onMachineStart(l.getBlock(), feedbackType, newOperation);
             }
 
             return 0;

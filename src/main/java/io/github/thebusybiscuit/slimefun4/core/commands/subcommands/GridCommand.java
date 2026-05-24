@@ -1,6 +1,5 @@
 package io.github.thebusybiscuit.slimefun4.core.commands.subcommands;
 
-import io.github.bakedlibs.dough.common.ChatColors;
 import io.github.thebusybiscuit.slimefun4.core.commands.SlimefunCommand;
 import io.github.thebusybiscuit.slimefun4.core.commands.SubCommand;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet;
@@ -17,9 +16,14 @@ class GridCommand extends SubCommand {
     }
 
     @Override
+    protected String getDescription() {
+        return "commands.grid.description";
+    }
+
+    @Override
     public void onExecute(@Nonnull CommandSender sender, @Nonnull String[] args) {
         if (!(sender instanceof Player p)) {
-            sender.sendMessage(ChatColors.color("&c只有玩家可以使用此指令"));
+            Slimefun.getLocalization().sendMessage(sender, "commands.grid.player-only", true);
             return;
         }
 
@@ -30,7 +34,7 @@ class GridCommand extends SubCommand {
 
         Block target = p.getTargetBlockExact(10);
         if (target == null) {
-            sender.sendMessage(ChatColors.color("&c请看向一个方块"));
+            Slimefun.getLocalization().sendMessage(sender, "commands.grid.no-target", true);
             return;
         }
 

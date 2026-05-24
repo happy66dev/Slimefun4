@@ -466,19 +466,36 @@ public class Research implements Keyed {
         AuraSkillsApi skillApi = AuraSkillsApi.get();
         SkillsUser playerSkill = skillApi.getUser(p.getUniqueId());
 
-        if (playerSkill.getSkillLevel(Skills.ARCHERY) < this.getArcheryLevelNeed()
-                || playerSkill.getSkillLevel(Skills.FARMING) < this.getFarmingLevelNeed()
-                || playerSkill.getSkillLevel(Skills.FIGHTING) < this.getFightingLevelNeed()
-                || playerSkill.getSkillLevel(Skills.FISHING) < this.getFishingLevelNeed()
-                || playerSkill.getSkillLevel(Skills.FORAGING) < this.getForagingLevelNeed()
-                || playerSkill.getSkillLevel(Skills.MINING) < this.getMiningLevelNeed()
-                || playerSkill.getSkillLevel(Skills.AGILITY) < this.getAgilityLevelNeed()
-                || playerSkill.getSkillLevel(Skills.DEFENSE) < this.getDefenseLevelNeed()
-                || playerSkill.getSkillLevel(Skills.EXCAVATION) < this.getExcavationLevelNeed()
-                || playerSkill.getSkillLevel(Skills.ALCHEMY) < this.getAlchemyLevelNeed()
-                || playerSkill.getSkillLevel(Skills.ENCHANTING) < this.getEnchantingLevelNeed()) {
-            Slimefun.getLocalization().sendMessage(p, "messages.not-enough-skill", true);
-            return false;
+        if (playerSkill == null) {
+            if (this.getArcheryLevelNeed() > 0
+                    || this.getFarmingLevelNeed() > 0
+                    || this.getFightingLevelNeed() > 0
+                    || this.getFishingLevelNeed() > 0
+                    || this.getForagingLevelNeed() > 0
+                    || this.getMiningLevelNeed() > 0
+                    || this.getAgilityLevelNeed() > 0
+                    || this.getDefenseLevelNeed() > 0
+                    || this.getExcavationLevelNeed() > 0
+                    || this.getAlchemyLevelNeed() > 0
+                    || this.getEnchantingLevelNeed() > 0) {
+                Slimefun.getLocalization().sendMessage(p, "messages.not-enough-skill", true);
+                return false;
+            }
+        } else {
+            if (playerSkill.getSkillLevel(Skills.ARCHERY) < this.getArcheryLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.FARMING) < this.getFarmingLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.FIGHTING) < this.getFightingLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.FISHING) < this.getFishingLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.FORAGING) < this.getForagingLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.MINING) < this.getMiningLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.AGILITY) < this.getAgilityLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.DEFENSE) < this.getDefenseLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.EXCAVATION) < this.getExcavationLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.ALCHEMY) < this.getAlchemyLevelNeed()
+                    || playerSkill.getSkillLevel(Skills.ENCHANTING) < this.getEnchantingLevelNeed()) {
+                Slimefun.getLocalization().sendMessage(p, "messages.not-enough-skill", true);
+                return false;
+            }
         }
 
         if (profileOptional.isPresent() && !hasUnlockNeed) {

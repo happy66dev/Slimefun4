@@ -20,6 +20,7 @@ import io.github.thebusybiscuit.slimefun4.core.handlers.BlockPlaceHandler;
 import io.github.thebusybiscuit.slimefun4.core.handlers.ToolUseHandler;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import io.github.thebusybiscuit.slimefun4.implementation.items.cargo.CargoNode;
 import io.github.thebusybiscuit.slimefun4.utils.compatibility.VersionedEnchantment;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
 import java.util.ArrayList;
@@ -27,6 +28,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -48,6 +50,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
@@ -68,11 +71,43 @@ public class BlockListener implements Listener {
         BlockFace.WEST, BlockFace.EAST, BlockFace.NORTH, BlockFace.SOUTH, BlockFace.DOWN, BlockFace.UP
     };
 
+    // 损坏机器/连接器挖掘二次确认超时: 30秒
+    private static final long DAMAGED_BREAK_TIMEOUT_MS = 30_000L;
+
     // 存储玩家第一次挖掘损坏机器的时间戳
-    private final Map<Player, Map<Location, Long>> damagedMachineBreakAttempts = new HashMap<>();
+    private static final Map<UUID, Map<Location, Long>> damagedMachineBreakAttempts = new HashMap<>();
 
     public BlockListener(@Nonnull Slimefun plugin) {
         plugin.getServer().getPluginManager().registerEvents(this, plugin);
+        // 每30秒清理过期的挖掘尝试记录，防止内存泄漏
+        Bukkit.getScheduler().runTaskTimer(plugin, BlockListener::cleanupExpiredAttempts, 600L, 600L);
+    }
+
+    @EventHandler
+    public void onPlayerQuit(PlayerQuitEvent e) {
+        damagedMachineBreakAttempts.remove(e.getPlayer().getUniqueId());
+    }
+
+    public static void clearDamagedMachineBreakAttempts(@Nonnull Location location) {
+        damagedMachineBreakAttempts.values().forEach(attempts -> attempts.remove(location));
+        damagedMachineBreakAttempts
+                .entrySet()
+                .removeIf(entry -> entry.getValue().isEmpty());
+    }
+
+    private static void cleanupEmptyAttemptBucket(@Nonnull UUID playerId, @Nonnull Map<Location, Long> attempts) {
+        if (attempts.isEmpty()) {
+            damagedMachineBreakAttempts.remove(playerId);
+        }
+    }
+
+    private static void cleanupExpiredAttempts() {
+        long now = System.currentTimeMillis();
+        damagedMachineBreakAttempts.entrySet().removeIf(entry -> {
+            Map<Location, Long> attempts = entry.getValue();
+            attempts.entrySet().removeIf(attempt -> now - attempt.getValue() > DAMAGED_BREAK_TIMEOUT_MS);
+            return attempts.isEmpty();
+        });
     }
 
     @EventHandler(priority = EventPriority.NORMAL, ignoreCancelled = true)
@@ -101,6 +136,7 @@ public class BlockListener implements Listener {
 
                 // 清理机器数据和处理器数据
                 Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
+                clearDamagedMachineBreakAttempts(loc);
 
                 // 清理处理器操作数据
                 if (sfItem
@@ -122,6 +158,7 @@ public class BlockListener implements Listener {
             var blockData = StorageCacheUtils.getDataContainer(loc);
             if (blockData != null) {
                 Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
+                clearDamagedMachineBreakAttempts(loc);
 
                 // 清理处理器操作数据
                 SlimefunItem sfItem = SlimefunItem.getById(blockData.getSfId());
@@ -229,8 +266,9 @@ public class BlockListener implements Listener {
             if (e.getPlayer() != null) {
                 // 玩家主动挖掘
                 // 获取玩家的挖掘记录
-                damagedMachineBreakAttempts.putIfAbsent(player, new HashMap<>());
-                Map<Location, Long> playerAttempts = damagedMachineBreakAttempts.get(player);
+                UUID playerId = player.getUniqueId();
+                damagedMachineBreakAttempts.putIfAbsent(playerId, new HashMap<>());
+                Map<Location, Long> playerAttempts = damagedMachineBreakAttempts.get(playerId);
                 Long lastAttemptTime = playerAttempts.get(location);
                 long currentTime = System.currentTimeMillis();
 
@@ -238,10 +276,10 @@ public class BlockListener implements Listener {
                     // 第一次挖掘，提示玩家
                     e.setCancelled(true);
                     player.sendMessage("§c机器损坏！如果你硬是要挖掘这个机器，则不会掉落任何东西！");
-                    player.sendMessage("§c10秒内再次挖掘就会直接破坏机器");
+                    player.sendMessage("§c30秒内再次挖掘就会直接破坏机器");
                     playerAttempts.put(location, currentTime);
-                } else if (currentTime - lastAttemptTime < 10000) {
-                    // 10秒内二次挖掘，直接破坏机器且不掉落物品
+                } else if (currentTime - lastAttemptTime < DAMAGED_BREAK_TIMEOUT_MS) {
+                    // 30秒内二次挖掘，直接破坏机器且不掉落物品
                     e.setDropItems(false);
                     callCargoNodeBreakHandler(e, heldItem, sfItem);
                     BlockMenu inv = StorageCacheUtils.getMenu(location);
@@ -260,15 +298,18 @@ public class BlockListener implements Listener {
                     // 移除机器数据
                     Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
                     // 移除悬浮字
-                    Location hologramLocation = location.clone().add(0.5, 1.5, 0.5);
+                    Location hologramLocation =
+                            location.clone().add(Slimefun.getHologramsService().getDefaultOffset());
                     Slimefun.getHologramsService().removeHologram(hologramLocation);
+                    clearDamagedMachineBreakAttempts(location);
                     // 清理记录
                     playerAttempts.remove(location);
+                    cleanupEmptyAttemptBucket(playerId, playerAttempts);
                 } else {
-                    // 超过10秒，视为第一次挖掘
+                    // 超过30秒，视为第一次挖掘
                     e.setCancelled(true);
                     player.sendMessage("§c机器损坏！如果你硬是要挖掘这个机器，则不会掉落任何东西！");
-                    player.sendMessage("§c10秒内再次挖掘就会直接破坏机器");
+                    player.sendMessage("§c30秒内再次挖掘就会直接破坏机器");
                     playerAttempts.put(location, currentTime);
                 }
                 return;
@@ -287,8 +328,10 @@ public class BlockListener implements Listener {
                 // 移除机器数据
                 Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
                 // 移除悬浮字
-                Location hologramLocation = location.clone().add(0.5, 1.5, 0.5);
+                Location hologramLocation =
+                        location.clone().add(Slimefun.getHologramsService().getDefaultOffset());
                 Slimefun.getHologramsService().removeHologram(hologramLocation);
+                clearDamagedMachineBreakAttempts(location);
                 return;
             }
         }
@@ -298,25 +341,28 @@ public class BlockListener implements Listener {
                 && ConnectorAgingManager.getConfig(location) != null
                 && ConnectorAgingManager.getDurability(location) <= 0.99f) {
             if (e.getPlayer() != null) {
-                damagedMachineBreakAttempts.putIfAbsent(player, new HashMap<>());
-                Map<Location, Long> playerAttempts = damagedMachineBreakAttempts.get(player);
+                UUID playerId = player.getUniqueId();
+                damagedMachineBreakAttempts.putIfAbsent(playerId, new HashMap<>());
+                Map<Location, Long> playerAttempts = damagedMachineBreakAttempts.get(playerId);
                 Long lastAttemptTime = playerAttempts.get(location);
                 long currentTime = System.currentTimeMillis();
 
                 if (lastAttemptTime == null) {
                     e.setCancelled(true);
                     player.sendMessage("§c连接器已老化！挖掘将不会掉落任何东西！");
-                    player.sendMessage("§c10秒内再次挖掘就会直接破坏连接器");
+                    player.sendMessage("§c30秒内再次挖掘就会直接破坏连接器");
                     playerAttempts.put(location, currentTime);
-                } else if (currentTime - lastAttemptTime < 10000) {
+                } else if (currentTime - lastAttemptTime < DAMAGED_BREAK_TIMEOUT_MS) {
                     e.setDropItems(false);
                     ConnectorAgingManager.removeDamageHologram(location);
                     Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
+                    clearDamagedMachineBreakAttempts(location);
                     playerAttempts.remove(location);
+                    cleanupEmptyAttemptBucket(playerId, playerAttempts);
                 } else {
                     e.setCancelled(true);
                     player.sendMessage("§c连接器已老化！挖掘将不会掉落任何东西！");
-                    player.sendMessage("§c10秒内再次挖掘就会直接破坏连接器");
+                    player.sendMessage("§c30秒内再次挖掘就会直接破坏连接器");
                     playerAttempts.put(location, currentTime);
                 }
                 return;
@@ -324,6 +370,7 @@ public class BlockListener implements Listener {
                 e.setDropItems(false);
                 ConnectorAgingManager.removeDamageHologram(location);
                 Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
+                clearDamagedMachineBreakAttempts(location);
                 return;
             }
         }
@@ -434,9 +481,11 @@ public class BlockListener implements Listener {
 
             drops.addAll(sfItem.getDrops());
             Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
+            clearDamagedMachineBreakAttempts(loc);
 
             // 移除机器上方的悬浮字
-            Location hologramLocation = loc.clone().add(0, 1.5, 0);
+            Location hologramLocation =
+                    loc.clone().add(Slimefun.getHologramsService().getDefaultOffset());
             Slimefun.getHologramsService().removeHologram(hologramLocation);
         }
     }

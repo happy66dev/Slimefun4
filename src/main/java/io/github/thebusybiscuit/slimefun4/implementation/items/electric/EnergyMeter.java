@@ -13,9 +13,9 @@ import io.github.thebusybiscuit.slimefun4.core.attributes.HologramOwner;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockPlaceHandler;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockUseHandler;
 import io.github.thebusybiscuit.slimefun4.utils.NumberUtils;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -30,7 +30,7 @@ public class EnergyMeter extends SlimefunItem implements HologramOwner {
     private static final String COUNTER_KEY = "energy-counter";
     private static final String OWNER_KEY = "energy-meter-owner";
 
-    private final Map<BlockPosition, String> displayCache = new HashMap<>();
+    private final Map<BlockPosition, String> displayCache = new ConcurrentHashMap<>();
 
     @ParametersAreNonnullByDefault
     public EnergyMeter(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
@@ -63,6 +63,10 @@ public class EnergyMeter extends SlimefunItem implements HologramOwner {
         addItemHandler(new BlockPlaceHandler(false) {
             @Override
             public void onPlayerPlace(BlockPlaceEvent e) {
+                if (!EnergyAccessoryPlacement.validate(
+                        e, "ENERGY_METER", "&c只能在连接器正上方放置", "&c该位置已有另一种附件，电量计数器与限电器只能二选一")) {
+                    return;
+                }
                 var data = StorageCacheUtils.getBlock(e.getBlock().getLocation());
                 if (data != null) {
                     data.setData(OWNER_KEY, e.getPlayer().getUniqueId().toString());
@@ -74,8 +78,7 @@ public class EnergyMeter extends SlimefunItem implements HologramOwner {
     private void tickMeter(@Nonnull Block b, @Nonnull SlimefunBlockData data) {
         if (data.isPendingRemove()) return;
 
-        String counterStr = data.getData(COUNTER_KEY);
-        long accumulated = counterStr != null ? Long.parseLong(counterStr) : 0L;
+        long accumulated = parseLongOrZero(data, COUNTER_KEY);
         String display = NumberUtils.getCompactDouble(accumulated) + " J \u26A1";
 
         BlockPosition pos = new BlockPosition(b.getLocation());
@@ -90,13 +93,17 @@ public class EnergyMeter extends SlimefunItem implements HologramOwner {
         if (!e.getClickedBlock().isPresent()) return;
         Player p = e.getPlayer();
         Block b = e.getClickedBlock().get();
+        var data = StorageCacheUtils.getBlock(b.getLocation());
+        if (data == null || data.isPendingRemove()) {
+            return;
+        }
 
         if (p.isSneaking()) {
-            String ownerStr = StorageCacheUtils.getBlock(b.getLocation()).getData(OWNER_KEY);
+            String ownerStr = data.getData(OWNER_KEY);
             if (ownerStr != null && !ownerStr.isEmpty()) {
-                UUID ownerUuid = UUID.fromString(ownerStr);
+                UUID ownerUuid = parseUuidOrNull(data, ownerStr);
                 if (p.getUniqueId().equals(ownerUuid)) {
-                    StorageCacheUtils.getBlock(b.getLocation()).setData(COUNTER_KEY, "0");
+                    data.setData(COUNTER_KEY, "0");
                     displayCache.remove(new BlockPosition(b.getLocation()));
                     p.sendMessage(ChatColors.color("&a电量计数器已清零"));
                     return;
@@ -104,8 +111,30 @@ public class EnergyMeter extends SlimefunItem implements HologramOwner {
             }
         }
 
-        String counterStr = StorageCacheUtils.getBlock(b.getLocation()).getData(COUNTER_KEY);
-        long accumulated = counterStr != null ? Long.parseLong(counterStr) : 0L;
+        long accumulated = parseLongOrZero(data, COUNTER_KEY);
         p.sendMessage(ChatColors.color("&6\u26A1 &e累计通过电量: &f" + accumulated + " &7J"));
+    }
+
+    private static long parseLongOrZero(@Nonnull SlimefunBlockData data, @Nonnull String key) {
+        String value = data.getData(key);
+        if (value == null || value.isEmpty()) {
+            return 0L;
+        }
+
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            data.removeData(key);
+            return 0L;
+        }
+    }
+
+    private static UUID parseUuidOrNull(@Nonnull SlimefunBlockData data, @Nonnull String ownerStr) {
+        try {
+            return UUID.fromString(ownerStr);
+        } catch (IllegalArgumentException e) {
+            data.removeData(OWNER_KEY);
+            return null;
+        }
     }
 }

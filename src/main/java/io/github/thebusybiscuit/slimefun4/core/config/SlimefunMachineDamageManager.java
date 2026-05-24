@@ -36,22 +36,19 @@ public class SlimefunMachineDamageManager {
         boolean defaultEnabled = config.contains("defaults.enabled") ? config.getBoolean("defaults.enabled") : true;
         double damageChanceScale = config.contains("defaults.damage_chance_scale")
                 ? config.getDouble("defaults.damage_chance_scale")
-                : 1.0e-8;
+                : 7.5e-6;
         double damageChanceExponent = config.contains("defaults.damage_chance_exponent")
                 ? config.getDouble("defaults.damage_chance_exponent")
-                : 1.5;
+                : 2.5e11;
         double maxDamageChance =
-                config.contains("defaults.max_damage_chance") ? config.getDouble("defaults.max_damage_chance") : 0.01;
-        boolean stopOnDamage =
-                config.contains("defaults.stop_on_damage") ? config.getBoolean("defaults.stop_on_damage") : true;
-
+                config.contains("defaults.max_damage_chance") ? config.getDouble("defaults.max_damage_chance") : 7.5e-6;
         // 确保配置值在有效范围内
         damageChanceScale = Math.max(0.0, damageChanceScale);
-        damageChanceExponent = Math.max(1.0, damageChanceExponent);
+        damageChanceExponent = Math.max(0.0, damageChanceExponent);
         maxDamageChance = Math.max(0.0, Math.min(1.0, maxDamageChance));
 
-        defaultConfig = new MachineDamageConfig(
-                defaultEnabled, damageChanceScale, damageChanceExponent, maxDamageChance, stopOnDamage);
+        defaultConfig =
+                new MachineDamageConfig(defaultEnabled, damageChanceScale, damageChanceExponent, maxDamageChance);
 
         // 加载具体机器配置
         if (config.contains("machines")) {
@@ -72,17 +69,12 @@ public class SlimefunMachineDamageManager {
                         ? config.getDouble("machines." + machineId + ".max_damage_chance")
                         : defaultConfig.getMaxDamageChance();
 
-                boolean machineStopOnDamage = config.contains("machines." + machineId + ".stop_on_damage")
-                        ? config.getBoolean("machines." + machineId + ".stop_on_damage")
-                        : defaultConfig.isStopOnDamage();
-
                 // 确保配置值在有效范围内
                 scale = Math.max(0.0, scale);
-                exponent = Math.max(1.0, exponent);
+                exponent = Math.max(0.0, exponent);
                 maxChance = Math.max(0.0, Math.min(1.0, maxChance));
 
-                machineConfigs.put(
-                        machineId, new MachineDamageConfig(enabled, scale, exponent, maxChance, machineStopOnDamage));
+                machineConfigs.put(machineId, new MachineDamageConfig(enabled, scale, exponent, maxChance));
             }
         }
     }
@@ -106,19 +98,13 @@ public class SlimefunMachineDamageManager {
         private final double damageChanceScale;
         private final double damageChanceExponent;
         private final double maxDamageChance;
-        private final boolean stopOnDamage;
 
         public MachineDamageConfig(
-                boolean enabled,
-                double damageChanceScale,
-                double damageChanceExponent,
-                double maxDamageChance,
-                boolean stopOnDamage) {
+                boolean enabled, double damageChanceScale, double damageChanceExponent, double maxDamageChance) {
             this.enabled = enabled;
             this.damageChanceScale = damageChanceScale;
             this.damageChanceExponent = damageChanceExponent;
             this.maxDamageChance = maxDamageChance;
-            this.stopOnDamage = stopOnDamage;
         }
 
         public boolean isEnabled() {
@@ -135,10 +121,6 @@ public class SlimefunMachineDamageManager {
 
         public double getMaxDamageChance() {
             return maxDamageChance;
-        }
-
-        public boolean isStopOnDamage() {
-            return stopOnDamage;
         }
     }
 }

@@ -1,6 +1,7 @@
 package io.github.thebusybiscuit.slimefun4.core.services;
 
 import city.norain.slimefun4.utils.LocalizationUtils;
+import city.norain.slimefun4.utils.WorldNameMapper;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
@@ -8,6 +9,11 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.config.SlimefunMachineDamageManager;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
 import org.bukkit.Location;
@@ -15,6 +21,7 @@ import org.bukkit.inventory.ItemStack;
 
 public class MachineDamageService {
 
+    private static final com.google.gson.Gson GSON = new com.google.gson.Gson();
     private static final String WORK_TICKS_KEY = "machine_damage_work_ticks";
     private static final String DAMAGED_KEY = "machine_damage_damaged";
     private static final String DAMAGE_CHANCE_KEY = "machine_damage_chance";
@@ -22,36 +29,13 @@ public class MachineDamageService {
     private static final String SUBMITTED_ITEMS_KEY = "machine_damage_submitted_items";
     private static final String REPAIR_ITEM_COUNT_KEY = "machine_damage_repair_item_count";
 
+    private final Map<UUID, Set<Location>> damagedBlockIndex = new ConcurrentHashMap<>();
+
     /**
      * 获取友好的世界名称
      */
     private String getFriendlyWorldName(String worldName) {
-        switch (worldName.toLowerCase()) {
-            case "worlds":
-                return "主世界";
-            case "worlds_nether":
-                return "地狱";
-            case "worlds_the_end":
-                return "末地";
-            case "world_galactifun_earth_orbit":
-                return "地球轨道";
-            case "world_galactifun_enceladus":
-                return "土卫二";
-            case "world_galactifun_europa":
-                return "木卫二";
-            case "world_galactifun_io":
-                return "木卫一";
-            case "world_galactifun_mars":
-                return "火星";
-            case "world_galactifun_the_moon":
-                return "月球";
-            case "world_galactifun_titan":
-                return "土卫六";
-            case "world_galactifun_venus":
-                return "金星";
-            default:
-                return worldName;
-        }
+        return WorldNameMapper.getFriendlyName(worldName);
     }
 
     private final SlimefunMachineDamageManager damageManager;
@@ -84,8 +68,8 @@ public class MachineDamageService {
             return;
         }
 
-        // 检查机器是否已经损坏或已停止
-        if (isMachineDamaged(data) || "false".equals(data.getData("machine_damage_enabled"))) {
+        // 检查机器是否已经损坏
+        if (isMachineDamaged(data)) {
             return;
         }
 
@@ -94,7 +78,7 @@ public class MachineDamageService {
         data.setData(WORK_TICKS_KEY, String.valueOf(workTicks));
 
         // 计算当前损坏概率
-        double damageChance = calculateDamageRate(workTicks);
+        double damageChance = calculateDamageRate(workTicks, config);
         data.setData(DAMAGE_CHANCE_KEY, String.valueOf(damageChance));
 
         // 检测是否损坏
@@ -148,12 +132,12 @@ public class MachineDamageService {
                 }
 
                 // 存储修复物品列表（JSON格式）
-                String repairItemsJson = new com.google.gson.Gson().toJson(repairItemsList);
+                String repairItemsJson = GSON.toJson(repairItemsList);
                 data.setData(REPAIR_ITEMS_KEY, repairItemsJson);
                 data.setData(REPAIR_ITEM_COUNT_KEY, String.valueOf(repairItemsList.size()));
 
-                // 初始化已提交物品（空JSON数组）
-                data.setData(SUBMITTED_ITEMS_KEY, "[]");
+                // 初始化已提交物品（空JSON对象）
+                data.setData(SUBMITTED_ITEMS_KEY, "{}");
 
                 // 输出修复物品的详细信息
                 Slimefun.logger().info("Selected repair items count: " + repairItemsList.size());
@@ -167,7 +151,7 @@ public class MachineDamageService {
                                 + repairItemsList.size() + " items to repair");
 
                 // 在机器上面显示悬浮字
-                Location hologramLocation = location.clone().add(0.5, 1.5, 0.5);
+                Location hologramLocation = getDamageHologramLocation(location);
                 Slimefun.getHologramsService().setHologramLabel(hologramLocation, "§c机器损坏");
 
                 // 通知在线的机器主人
@@ -175,6 +159,7 @@ public class MachineDamageService {
                 if (ownerUUIDStr != null) {
                     try {
                         java.util.UUID ownerUUID = java.util.UUID.fromString(ownerUUIDStr);
+                        markDamaged(location, ownerUUID);
                         org.bukkit.OfflinePlayer offlinePlayer = org.bukkit.Bukkit.getOfflinePlayer(ownerUUID);
                         if (offlinePlayer != null && offlinePlayer.isOnline()) {
                             org.bukkit.entity.Player player = offlinePlayer.getPlayer();
@@ -193,12 +178,7 @@ public class MachineDamageService {
                     }
                 }
 
-                // 如果配置为损坏后停止工作，则停止机器
-                var config = damageManager.getMachineConfig(item.getId());
-                if (config.isStopOnDamage()) {
-                    // 设置机器为停止状态
-                    data.setData("machine_damage_enabled", "false");
-                }
+                // 机器损坏后自动停止工作
             } else {
                 // 输出信息
                 Slimefun.logger()
@@ -265,38 +245,21 @@ public class MachineDamageService {
                 return null;
             }
 
-            java.util.List<java.util.Map<String, String>> repairItemsList = new com.google.gson.Gson()
-                    .fromJson(
-                            repairItemsJson,
-                            new com.google.gson.reflect.TypeToken<
-                                    java.util.List<java.util.Map<String, String>>>() {}.getType());
+            java.util.List<java.util.Map<String, String>> repairItemsList = GSON.fromJson(
+                    repairItemsJson,
+                    new com.google.gson.reflect.TypeToken<
+                            java.util.List<java.util.Map<String, String>>>() {}.getType());
 
-            if (repairItemsList == null || repairItemsList.isEmpty()) {
+            java.util.Map<String, RepairRequirement> requirements = aggregateRepairRequirements(repairItemsList);
+            if (requirements.isEmpty()) {
                 return null;
             }
 
-            java.util.Map<String, String> firstItemData = repairItemsList.get(0);
-            String itemId = firstItemData.get("id");
-            String itemType = firstItemData.get("type");
-
-            ItemStack repairItem = null;
-            if ("slimefun".equals(itemType)) {
-                SlimefunItem slimefunItem = SlimefunItem.getById(itemId);
-                if (slimefunItem != null) {
-                    repairItem = slimefunItem.getItem();
-                    Slimefun.logger().info("Retrieved Slimefun repair item: " + itemId);
-                } else {
-                    Slimefun.logger().info("Slimefun item not found: " + itemId);
-                }
-            } else if ("vanilla".equals(itemType)) {
-                try {
-                    org.bukkit.Material material = org.bukkit.Material.valueOf(itemId);
-                    repairItem = new ItemStack(material);
-                    Slimefun.logger().info("Retrieved vanilla repair item: " + itemId);
-                } catch (IllegalArgumentException e) {
-                    Slimefun.logger().info("Invalid vanilla material: " + itemId);
-                }
-            }
+            RepairRequirement firstRequirement =
+                    requirements.values().iterator().next();
+            ItemStack repairItem = firstRequirement.item;
+            String itemId = firstRequirement.id;
+            String itemType = firstRequirement.type;
 
             if (repairItem != null) {
                 try {
@@ -336,50 +299,22 @@ public class MachineDamageService {
                 return result;
             }
 
-            java.util.List<java.util.Map<String, String>> repairItemsList = new com.google.gson.Gson()
-                    .fromJson(
-                            repairItemsJson,
-                            new com.google.gson.reflect.TypeToken<
-                                    java.util.List<java.util.Map<String, String>>>() {}.getType());
+            java.util.List<java.util.Map<String, String>> repairItemsList = GSON.fromJson(
+                    repairItemsJson,
+                    new com.google.gson.reflect.TypeToken<
+                            java.util.List<java.util.Map<String, String>>>() {}.getType());
 
-            java.util.Map<String, Integer> submittedItemsMap = new java.util.HashMap<>();
-            if (submittedItemsJson != null && !submittedItemsJson.isEmpty()) {
-                java.util.Map<String, Number> tempMap = new com.google.gson.Gson()
-                        .fromJson(
-                                submittedItemsJson,
-                                new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>() {}.getType());
-                for (java.util.Map.Entry<String, Number> entry : tempMap.entrySet()) {
-                    submittedItemsMap.put(entry.getKey(), entry.getValue().intValue());
-                }
-            }
+            java.util.Map<String, RepairRequirement> requirements = aggregateRepairRequirements(repairItemsList);
+            java.util.Map<String, Integer> submittedItemsMap = readSubmittedCounts(submittedItemsJson);
 
-            if (repairItemsList != null) {
-                for (java.util.Map<String, String> itemData : repairItemsList) {
-                    java.util.Map<String, Object> itemInfo = new java.util.HashMap<>();
-                    String itemId = itemData.get("id");
-                    String itemType = itemData.get("type");
-
-                    ItemStack repairItem = null;
-                    if ("slimefun".equals(itemType)) {
-                        SlimefunItem slimefunItem = SlimefunItem.getById(itemId);
-                        if (slimefunItem != null) {
-                            repairItem = slimefunItem.getItem();
-                        }
-                    } else if ("vanilla".equals(itemType)) {
-                        try {
-                            org.bukkit.Material material = org.bukkit.Material.valueOf(itemId);
-                            repairItem = new ItemStack(material);
-                        } catch (IllegalArgumentException e) {
-                            // ignore
-                        }
-                    }
-
-                    itemInfo.put("id", itemId);
-                    itemInfo.put("type", itemType);
-                    itemInfo.put("item", repairItem);
-                    itemInfo.put("submitted", submittedItemsMap.getOrDefault(itemId, 0));
-                    result.add(itemInfo);
-                }
+            for (RepairRequirement requirement : requirements.values()) {
+                java.util.Map<String, Object> itemInfo = new java.util.HashMap<>();
+                itemInfo.put("id", requirement.id);
+                itemInfo.put("type", requirement.type);
+                itemInfo.put("item", requirement.item);
+                itemInfo.put("required", requirement.requiredCount);
+                itemInfo.put("submitted", getSubmittedCount(submittedItemsMap, requirement));
+                result.add(itemInfo);
             }
         } catch (Exception e) {
             Slimefun.logger().info("Error getting repair items: " + e.getMessage());
@@ -398,20 +333,19 @@ public class MachineDamageService {
             data.setData(DAMAGED_KEY, "false");
             data.setData(WORK_TICKS_KEY, "0");
             data.setData(DAMAGE_CHANCE_KEY, "0.0");
-            data.setData("machine_damage_enabled", "true");
-            data.setData("machine_damage_charge_counter", "0.0");
             data.removeData(REPAIR_ITEMS_KEY);
             data.removeData(REPAIR_ITEM_COUNT_KEY);
             data.removeData(SUBMITTED_ITEMS_KEY);
 
             // 输出信息
             if (data.getLocation() != null) {
+                markRepaired(data.getLocation());
                 Slimefun.logger().info("Machine repaired: " + data.getSfId() + " at " + data.getLocation());
             }
 
             // 移除全息图
             if (data.getLocation() != null) {
-                Location hologramLocation = data.getLocation().clone().add(0, 1.5, 0);
+                Location hologramLocation = getDamageHologramLocation(data.getLocation());
                 Slimefun.getHologramsService().removeHologram(hologramLocation);
             }
         } catch (IllegalStateException e) {
@@ -435,44 +369,38 @@ public class MachineDamageService {
                 return false;
             }
 
-            java.util.List<java.util.Map<String, String>> repairItemsList = new com.google.gson.Gson()
-                    .fromJson(
-                            repairItemsJson,
-                            new com.google.gson.reflect.TypeToken<
-                                    java.util.List<java.util.Map<String, String>>>() {}.getType());
+            java.util.List<java.util.Map<String, String>> repairItemsList = GSON.fromJson(
+                    repairItemsJson,
+                    new com.google.gson.reflect.TypeToken<
+                            java.util.List<java.util.Map<String, String>>>() {}.getType());
 
-            java.util.Map<String, Integer> submittedItemsMap = new java.util.HashMap<>();
-            if (submittedItemsJson != null && !submittedItemsJson.isEmpty()) {
-                java.util.Map<String, Number> tempMap = new com.google.gson.Gson()
-                        .fromJson(
-                                submittedItemsJson,
-                                new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>() {}.getType());
-                for (java.util.Map.Entry<String, Number> entry : tempMap.entrySet()) {
-                    submittedItemsMap.put(entry.getKey(), entry.getValue().intValue());
-                }
-            }
+            java.util.Map<String, RepairRequirement> requirements = aggregateRepairRequirements(repairItemsList);
+            java.util.Map<String, Integer> submittedItemsMap = readSubmittedCounts(submittedItemsJson);
 
             SlimefunItem slimefunItem = SlimefunItem.getByItem(item);
             String itemId =
                     slimefunItem != null ? slimefunItem.getId() : item.getType().name();
             String itemType = slimefunItem != null ? "slimefun" : "vanilla";
+            String repairKey = repairKey(itemType, itemId);
 
-            for (java.util.Map<String, String> repairItemData : repairItemsList) {
-                String repairId = repairItemData.get("id");
-                String repairType = repairItemData.get("type");
-
-                if (repairId.equals(itemId) && repairType.equals(itemType)) {
-                    int currentSubmitted = submittedItemsMap.getOrDefault(itemId, 0);
-                    currentSubmitted++;
-                    submittedItemsMap.put(itemId, currentSubmitted);
-
-                    String newSubmittedJson = new com.google.gson.Gson().toJson(submittedItemsMap);
-                    data.setData(SUBMITTED_ITEMS_KEY, newSubmittedJson);
-
-                    Slimefun.logger().info("Submitted repair item: " + itemId + ", count: " + currentSubmitted);
-
-                    return true;
+            RepairRequirement requirement = requirements.get(repairKey);
+            if (requirement != null) {
+                int currentSubmitted = getSubmittedCount(submittedItemsMap, requirement);
+                if (currentSubmitted >= requirement.requiredCount) {
+                    return false;
                 }
+
+                submittedItemsMap.put(repairKey, currentSubmitted + 1);
+                submittedItemsMap.remove(itemId);
+
+                String newSubmittedJson = GSON.toJson(submittedItemsMap);
+                data.setData(SUBMITTED_ITEMS_KEY, newSubmittedJson);
+
+                Slimefun.logger()
+                        .info("Submitted repair item: " + repairKey + ", count: " + (currentSubmitted + 1) + "/"
+                                + requirement.requiredCount);
+
+                return true;
             }
         } catch (Exception e) {
             Slimefun.logger().info("Error submitting repair item: " + e.getMessage());
@@ -495,31 +423,21 @@ public class MachineDamageService {
                 return false;
             }
 
-            java.util.List<java.util.Map<String, String>> repairItemsList = new com.google.gson.Gson()
-                    .fromJson(
-                            repairItemsJson,
-                            new com.google.gson.reflect.TypeToken<
-                                    java.util.List<java.util.Map<String, String>>>() {}.getType());
+            java.util.List<java.util.Map<String, String>> repairItemsList = GSON.fromJson(
+                    repairItemsJson,
+                    new com.google.gson.reflect.TypeToken<
+                            java.util.List<java.util.Map<String, String>>>() {}.getType());
 
-            java.util.Map<String, Integer> submittedItemsMap = new java.util.HashMap<>();
-            if (submittedItemsJson != null && !submittedItemsJson.isEmpty()) {
-                java.util.Map<String, Number> tempMap = new com.google.gson.Gson()
-                        .fromJson(
-                                submittedItemsJson,
-                                new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>() {}.getType());
-                for (java.util.Map.Entry<String, Number> entry : tempMap.entrySet()) {
-                    submittedItemsMap.put(entry.getKey(), entry.getValue().intValue());
-                }
-            }
+            java.util.Map<String, RepairRequirement> requirements = aggregateRepairRequirements(repairItemsList);
+            java.util.Map<String, Integer> submittedItemsMap = readSubmittedCounts(submittedItemsJson);
 
-            if (repairItemsList == null) {
+            if (requirements.isEmpty()) {
                 return false;
             }
 
-            for (java.util.Map<String, String> repairItemData : repairItemsList) {
-                String repairId = repairItemData.get("id");
-                int submitted = submittedItemsMap.getOrDefault(repairId, 0);
-                if (submitted == 0) {
+            for (RepairRequirement requirement : requirements.values()) {
+                int submitted = getSubmittedCount(submittedItemsMap, requirement);
+                if (submitted < requirement.requiredCount) {
                     return false;
                 }
             }
@@ -548,6 +466,92 @@ public class MachineDamageService {
         }
     }
 
+    @Nonnull
+    private static Location getDamageHologramLocation(@Nonnull Location location) {
+        return location.clone().add(Slimefun.getHologramsService().getDefaultOffset());
+    }
+
+    @Nonnull
+    private static Map<String, RepairRequirement> aggregateRepairRequirements(
+            java.util.List<java.util.Map<String, String>> repairItemsList) {
+        Map<String, RepairRequirement> requirements = new LinkedHashMap<>();
+        if (repairItemsList == null) {
+            return requirements;
+        }
+
+        for (java.util.Map<String, String> itemData : repairItemsList) {
+            if (itemData == null) {
+                continue;
+            }
+
+            String itemId = itemData.get("id");
+            String itemType = itemData.get("type");
+            if (itemId == null || itemType == null) {
+                continue;
+            }
+
+            ItemStack repairItem = createRepairItem(itemType, itemId);
+            String key = repairKey(itemType, itemId);
+            RepairRequirement requirement = requirements.get(key);
+            if (requirement == null) {
+                requirements.put(key, new RepairRequirement(itemType, itemId, repairItem, 1));
+            } else {
+                requirement.requiredCount++;
+            }
+        }
+
+        return requirements;
+    }
+
+    private static ItemStack createRepairItem(@Nonnull String itemType, @Nonnull String itemId) {
+        if ("slimefun".equals(itemType)) {
+            SlimefunItem slimefunItem = SlimefunItem.getById(itemId);
+            return slimefunItem != null ? slimefunItem.getItem() : null;
+        } else if ("vanilla".equals(itemType)) {
+            try {
+                org.bukkit.Material material = org.bukkit.Material.valueOf(itemId);
+                return new ItemStack(material);
+            } catch (IllegalArgumentException e) {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private static Map<String, Integer> readSubmittedCounts(String submittedItemsJson) {
+        Map<String, Integer> submittedItemsMap = new java.util.HashMap<>();
+        if (submittedItemsJson == null || submittedItemsJson.isEmpty()) {
+            return submittedItemsMap;
+        }
+
+        try {
+            java.util.Map<String, Number> tempMap = GSON.fromJson(
+                    submittedItemsJson,
+                    new com.google.gson.reflect.TypeToken<java.util.Map<String, Number>>() {}.getType());
+            if (tempMap != null) {
+                for (java.util.Map.Entry<String, Number> entry : tempMap.entrySet()) {
+                    submittedItemsMap.put(entry.getKey(), entry.getValue().intValue());
+                }
+            }
+        } catch (Exception ignored) {
+            // Older data used [] for an empty submission list. Treat malformed data as empty.
+        }
+
+        return submittedItemsMap;
+    }
+
+    private static int getSubmittedCount(
+            @Nonnull Map<String, Integer> submittedItemsMap, @Nonnull RepairRequirement requirement) {
+        return Math.max(
+                submittedItemsMap.getOrDefault(repairKey(requirement.type, requirement.id), 0),
+                submittedItemsMap.getOrDefault(requirement.id, 0));
+    }
+
+    private static String repairKey(@Nonnull String type, @Nonnull String id) {
+        return type + ":" + id;
+    }
+
     /**
      * 计算机器在连续工作指定粘液刻数后的损坏概率（每个粘液刻独立判定）。
      * 公式设计目标：平均工作寿命约为 500,000 粘液刻。
@@ -556,18 +560,55 @@ public class MachineDamageService {
      * @return 损坏概率（介于 0 到 1 之间的 double 值）
      */
     public static double calculateDamageRate(long continuousTicks) {
-        // 常量定义
-        final double A = 7.5e-6; // 最大损坏率渐近值
-        final double B = 2.5e11; // 半饱和参数，控制曲线形状
+        return calculateDamageRate(
+                continuousTicks, new SlimefunMachineDamageManager.MachineDamageConfig(true, 7.5e-6, 2.5e11, 7.5e-6));
+    }
 
-        // 将 ticks 转换为 double 进行计算，避免整数溢出
+    public static double calculateDamageRate(
+            long continuousTicks, @Nonnull SlimefunMachineDamageManager.MachineDamageConfig config) {
+        if (continuousTicks <= 0 || !config.isEnabled()) {
+            return 0.0;
+        }
+
         double ticks = (double) continuousTicks;
-
-        // 应用公式：rate = A * (ticks^2) / (B + ticks^2)
         double ticksSquared = ticks * ticks;
-        double rate = A * ticksSquared / (B + ticksSquared);
+        double denominator = config.getDamageChanceExponent() + ticksSquared;
+        double rate = denominator <= 0.0
+                ? config.getDamageChanceScale()
+                : config.getDamageChanceScale() * ticksSquared / denominator;
+        return Math.max(0.0, Math.min(config.getMaxDamageChance(), rate));
+    }
 
-        return rate;
+    private static final class RepairRequirement {
+        private final String type;
+        private final String id;
+        private final ItemStack item;
+        private int requiredCount;
+
+        private RepairRequirement(String type, String id, ItemStack item, int requiredCount) {
+            this.type = type;
+            this.id = id;
+            this.item = item;
+            this.requiredCount = requiredCount;
+        }
+    }
+
+    public void markDamaged(@Nonnull Location location, @Nonnull UUID ownerUuid) {
+        damagedBlockIndex
+                .computeIfAbsent(ownerUuid, k -> ConcurrentHashMap.newKeySet())
+                .add(location);
+    }
+
+    public void markRepaired(@Nonnull Location location) {
+        for (Set<Location> locations : damagedBlockIndex.values()) {
+            locations.remove(location);
+        }
+        damagedBlockIndex.entrySet().removeIf(e -> e.getValue().isEmpty());
+    }
+
+    @Nonnull
+    public Set<Location> getDamagedLocationsByOwner(@Nonnull UUID ownerUuid) {
+        return damagedBlockIndex.getOrDefault(ownerUuid, java.util.Collections.emptySet());
     }
 
     public String getMachineInfo(@Nonnull Location location, @Nonnull SlimefunItem item) {
@@ -579,15 +620,6 @@ public class MachineDamageService {
         long workTicks = getWorkTicks(data);
         double damageChance = getDamageChance(data);
         boolean isDamaged = isMachineDamaged(data);
-        boolean isEnabled = true;
-        try {
-            if (data.isDataLoaded()) {
-                isEnabled = !"false".equals(data.getData("machine_damage_enabled"));
-            }
-        } catch (IllegalStateException e) {
-            // 数据在检查后被卸载，使用默认值
-            isEnabled = true;
-        }
 
         var config = damageManager.getMachineConfig(item.getId());
         boolean enabled = config.isEnabled();
@@ -598,9 +630,7 @@ public class MachineDamageService {
         info.append("§a当前报废几率: §f")
                 .append(String.format("%.10f%%", damageChance * 100))
                 .append("\n");
-        info.append("§a状态: §f")
-                .append(isDamaged ? "已损坏" : (isEnabled ? "正常运行" : "已停止"))
-                .append("\n");
+        info.append("§a状态: §f").append(isDamaged ? "已损坏" : "正常运行").append("\n");
         info.append("§a损坏机制: §f").append(enabled ? "启用" : "禁用").append("\n");
 
         // 添加修复物品信息
@@ -611,6 +641,7 @@ public class MachineDamageService {
                 for (java.util.Map<String, Object> itemInfo : repairItemsList) {
                     ItemStack repairItem = (ItemStack) itemInfo.get("item");
                     Integer submitted = (Integer) itemInfo.get("submitted");
+                    Integer required = (Integer) itemInfo.get("required");
 
                     if (repairItem != null) {
                         String itemName = repairItem.getItemMeta() != null
@@ -622,14 +653,26 @@ public class MachineDamageService {
                                 ? repairItem.getItemMeta().getDisplayName()
                                 : LocalizationUtils.getItemName(repairItem.getType());
 
-                        if (submitted != null && submitted > 0) {
+                        int requiredCount = required != null && required > 0 ? required : 1;
+                        int submittedCount = submitted != null ? submitted : 0;
+                        if (submittedCount >= requiredCount) {
                             info.append("§a✓ ")
                                     .append(itemName)
                                     .append(" (已提交: ")
-                                    .append(submitted)
-                                    .append("/1)\n");
+                                    .append(submittedCount)
+                                    .append("/")
+                                    .append(requiredCount)
+                                    .append(")\n");
                         } else {
-                            info.append("§c✗ ").append(itemName).append(" (需要: 1)\n");
+                            info.append("§c✗ ")
+                                    .append(itemName)
+                                    .append(" (需要: ")
+                                    .append(requiredCount)
+                                    .append(", 已提交: ")
+                                    .append(submittedCount)
+                                    .append("/")
+                                    .append(requiredCount)
+                                    .append(")\n");
                         }
                     }
                 }

@@ -46,7 +46,7 @@ public class DataUtils {
             }
 
             return itemStr;
-        } catch (Throwable e) {
+        } catch (Exception e) {
             Slimefun.logger().log(Level.SEVERE, "序列化物品时出现错误, 将存储空值", e);
             return "";
         }
@@ -83,7 +83,7 @@ public class DataUtils {
             }
 
             return result;
-        } catch (Throwable ex) {
+        } catch (Exception ex) {
             Slimefun.logger().log(Level.SEVERE, "反序列化物品时出现错误, 对应物品无法显示", ex);
             return null;
         }
