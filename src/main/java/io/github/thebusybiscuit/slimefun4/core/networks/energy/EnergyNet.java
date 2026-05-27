@@ -3,6 +3,8 @@ package io.github.thebusybiscuit.slimefun4.core.networks.energy;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.bakedlibs.dough.common.ChatColors;
+import java.util.LinkedHashSet;
+import com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer;
 import io.github.thebusybiscuit.slimefun4.api.ErrorReport;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.network.Network;
@@ -1264,7 +1266,7 @@ public class EnergyNet extends Network implements HologramOwner {
      * 使用父节点回溯的广度优先搜索（避免路径克隆消耗）
      */
     private Set<EnergyPath> findShortestPathsFromSource(Location source, int totalSources) {
-        Set<EnergyPath> shortestPaths = new HashSet<>();
+        Set<EnergyPath> shortestPaths = new LinkedHashSet<>();
         Map<Location, Integer> shortestDistances = new HashMap<>();
         Map<Location, Integer> connectorShortest = new HashMap<>();
 
@@ -1449,7 +1451,7 @@ public class EnergyNet extends Network implements HologramOwner {
                 int existingDistance = shortestDistances.getOrDefault(currentLoc, Integer.MAX_VALUE);
 
                 if (currentLength < existingDistance) {
-                    Set<EnergyPath> newPaths = new HashSet<>();
+                    Set<EnergyPath> newPaths = new LinkedHashSet<>();
                     newPaths.add(
                             new EnergyPath(source, currentLoc, extractConnectorsFromPath(nodes, head - 1, currentLoc)));
                     result.put(currentLoc, newPaths);
@@ -2335,11 +2337,7 @@ public class EnergyNet extends Network implements HologramOwner {
             var data = StorageCacheUtils.getDataContainer(above);
             if (data == null || data.isPendingRemove()) continue;
             if (!"ENERGY_METER".equals(data.getSfId())) continue;
-            long acc = 0;
-            String counterStr = data.getData("energy-counter");
-            if (counterStr != null) {
-                acc = Long.parseLong(counterStr);
-            }
+            long acc = parseLongOrZero(data, "energy-counter");
             acc = NumberUtils.flowSafeAddition(acc, load);
             data.setData("energy-counter", String.valueOf(acc));
         }
@@ -3040,6 +3038,19 @@ public class EnergyNet extends Network implements HologramOwner {
             count += paths.size();
         }
         return count;
+    }
+    private static long parseLongOrZero(@Nonnull ASlimefunDataContainer data, @Nonnull String key) {
+        String value = data.getData(key);
+        if (value == null || value.isEmpty()) {
+            return 0L;
+        }
+
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            data.removeData(key);
+            return 0L;
+        }
     }
 
     /**
