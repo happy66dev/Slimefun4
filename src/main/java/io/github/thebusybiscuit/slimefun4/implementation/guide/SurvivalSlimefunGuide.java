@@ -322,92 +322,109 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
             List<String> skillLore = new ArrayList<>();
             boolean hasSkill = false;
 
-            if (research.getArcheryLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.ARCHERY) >= research.getArcheryLevelNeed()) {
-                    skillLore.add("&b弓箭手 &e" + research.getArcheryLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b弓箭手 &e" + research.getArcheryLevelNeed() + "级&c×");
+            if (playerSkill == null) {
+                if (research.getArcheryLevelNeed() > 0
+                        || research.getFarmingLevelNeed() > 0
+                        || research.getFightingLevelNeed() > 0
+                        || research.getFishingLevelNeed() > 0
+                        || research.getForagingLevelNeed() > 0
+                        || research.getMiningLevelNeed() > 0
+                        || research.getAgilityLevelNeed() > 0
+                        || research.getDefenseLevelNeed() > 0
+                        || research.getExcavationLevelNeed() > 0
+                        || research.getAlchemyLevelNeed() > 0
+                        || research.getEnchantingLevelNeed() > 0) {
+                    skillLore.add("&cAuraSkills 未加载或数据不可用");
+                    hasSkill = true;
                 }
-            }
-            if (research.getFightingLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.FIGHTING) >= research.getFightingLevelNeed()) {
-                    skillLore.add("&b战士 &e" + research.getFightingLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b战士 &e" + research.getFightingLevelNeed() + "级&c×");
+            } else {
+                if (research.getArcheryLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.ARCHERY) >= research.getArcheryLevelNeed()) {
+                        skillLore.add("&b弓箭手 &e" + research.getArcheryLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b弓箭手 &e" + research.getArcheryLevelNeed() + "级&c×");
+                    }
                 }
-            }
-            if (research.getDefenseLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.DEFENSE) >= research.getDefenseLevelNeed()) {
-                    skillLore.add("&b防御 &e" + research.getDefenseLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b防御 &e" + research.getDefenseLevelNeed() + "级&c×");
+                if (research.getFightingLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.FIGHTING) >= research.getFightingLevelNeed()) {
+                        skillLore.add("&b战士 &e" + research.getFightingLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b战士 &e" + research.getFightingLevelNeed() + "级&c×");
+                    }
                 }
-            }
-            if (research.getFarmingLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.FARMING) >= research.getFarmingLevelNeed()) {
-                    skillLore.add("&b草药学 &e" + research.getFarmingLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b草药学 &e" + research.getFarmingLevelNeed() + "级&c×");
+                if (research.getDefenseLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.DEFENSE) >= research.getDefenseLevelNeed()) {
+                        skillLore.add("&b防御 &e" + research.getDefenseLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b防御 &e" + research.getDefenseLevelNeed() + "级&c×");
+                    }
                 }
-            }
-            if (research.getForagingLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.FORAGING) >= research.getForagingLevelNeed()) {
-                    skillLore.add("&b伐树 &e" + research.getForagingLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b伐树 &e" + research.getForagingLevelNeed() + "级&c×");
+                if (research.getFarmingLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.FARMING) >= research.getFarmingLevelNeed()) {
+                        skillLore.add("&b草药学 &e" + research.getFarmingLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b草药学 &e" + research.getFarmingLevelNeed() + "级&c×");
+                    }
                 }
-            }
-            if (research.getMiningLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.MINING) >= research.getMiningLevelNeed()) {
-                    skillLore.add("&b采掘 &e" + research.getMiningLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b采掘 &e" + research.getMiningLevelNeed() + "级&c×");
+                if (research.getForagingLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.FORAGING) >= research.getForagingLevelNeed()) {
+                        skillLore.add("&b伐树 &e" + research.getForagingLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b伐树 &e" + research.getForagingLevelNeed() + "级&c×");
+                    }
                 }
-            }
-            if (research.getFishingLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.FISHING) >= research.getFishingLevelNeed()) {
-                    skillLore.add("&b钓鱼 &e" + research.getFishingLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b钓鱼 &e" + research.getFishingLevelNeed() + "级&c×");
+                if (research.getMiningLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.MINING) >= research.getMiningLevelNeed()) {
+                        skillLore.add("&b采掘 &e" + research.getMiningLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b采掘 &e" + research.getMiningLevelNeed() + "级&c×");
+                    }
                 }
-            }
-            if (research.getExcavationLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.EXCAVATION) >= research.getExcavationLevelNeed()) {
-                    skillLore.add("&b挖掘 &e" + research.getExcavationLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b挖掘 &e" + research.getExcavationLevelNeed() + "级&c×");
+                if (research.getFishingLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.FISHING) >= research.getFishingLevelNeed()) {
+                        skillLore.add("&b钓鱼 &e" + research.getFishingLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b钓鱼 &e" + research.getFishingLevelNeed() + "级&c×");
+                    }
                 }
-            }
-            if (research.getAgilityLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.AGILITY) >= research.getAgilityLevelNeed()) {
-                    skillLore.add("&b敏捷 &e" + research.getAgilityLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b敏捷 &e" + research.getAgilityLevelNeed() + "级&c×");
+                if (research.getExcavationLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.EXCAVATION) >= research.getExcavationLevelNeed()) {
+                        skillLore.add("&b挖掘 &e" + research.getExcavationLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b挖掘 &e" + research.getExcavationLevelNeed() + "级&c×");
+                    }
                 }
-            }
-            if (research.getAlchemyLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.ALCHEMY) >= research.getAlchemyLevelNeed()) {
-                    skillLore.add("&b炼金术 &e" + research.getAlchemyLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b炼金术 &e" + research.getAlchemyLevelNeed() + "级&c×");
+                if (research.getAgilityLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.AGILITY) >= research.getAgilityLevelNeed()) {
+                        skillLore.add("&b敏捷 &e" + research.getAgilityLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b敏捷 &e" + research.getAgilityLevelNeed() + "级&c×");
+                    }
                 }
-            }
-            if (research.getEnchantingLevelNeed() > 1) {
-                hasSkill = true;
-                if (playerSkill.getSkillLevel(Skills.ENCHANTING) >= research.getEnchantingLevelNeed()) {
-                    skillLore.add("&b附魔 &e" + research.getEnchantingLevelNeed() + "级&a√");
-                } else {
-                    skillLore.add("&b附魔 &e" + research.getEnchantingLevelNeed() + "级&c×");
+                if (research.getAlchemyLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.ALCHEMY) >= research.getAlchemyLevelNeed()) {
+                        skillLore.add("&b炼金术 &e" + research.getAlchemyLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b炼金术 &e" + research.getAlchemyLevelNeed() + "级&c×");
+                    }
+                }
+                if (research.getEnchantingLevelNeed() > 1) {
+                    hasSkill = true;
+                    if (playerSkill.getSkillLevel(Skills.ENCHANTING) >= research.getEnchantingLevelNeed()) {
+                        skillLore.add("&b附魔 &e" + research.getEnchantingLevelNeed() + "级&a√");
+                    } else {
+                        skillLore.add("&b附魔 &e" + research.getEnchantingLevelNeed() + "级&c×");
+                    }
                 }
             }
             if (research.getMoneyCost() > 0) {
