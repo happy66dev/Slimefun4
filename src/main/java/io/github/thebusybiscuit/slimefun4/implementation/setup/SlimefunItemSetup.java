@@ -52,6 +52,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.blocks.EnhancedFu
 import io.github.thebusybiscuit.slimefun4.implementation.items.blocks.HardenedGlass;
 import io.github.thebusybiscuit.slimefun4.implementation.items.blocks.HologramProjector;
 import io.github.thebusybiscuit.slimefun4.implementation.items.blocks.IgnitionChamber;
+import io.github.thebusybiscuit.slimefun4.implementation.items.blocks.MachineStateClearer;
 import io.github.thebusybiscuit.slimefun4.implementation.items.blocks.OutputChest;
 import io.github.thebusybiscuit.slimefun4.implementation.items.blocks.RainbowBlock;
 import io.github.thebusybiscuit.slimefun4.implementation.items.blocks.RepairedSpawner;
@@ -8121,6 +8122,17 @@ public final class SlimefunItemSetup {
                             null,
                             SlimefunItems.ELECTRIC_MOTOR,
                             null
+                        })
+                .register(plugin);
+
+        new MachineStateClearer(
+                        itemGroups.basicMachines,
+                        SlimefunItems.MACHINE_STATE_CLEARER,
+                        RecipeType.ENHANCED_CRAFTING_TABLE,
+                        new ItemStack[] {
+                            null, null, null,
+                            null, null, null,
+                            null, null, null
                         })
                 .register(plugin);
 

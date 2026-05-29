@@ -4,6 +4,7 @@ import io.github.bakedlibs.dough.blocks.BlockPosition;
 import io.github.thebusybiscuit.slimefun4.api.events.AsyncMachineOperationFinishEvent;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineProcessHolder;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
+import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nonnull;
@@ -234,6 +235,16 @@ public class MachineProcessor<T extends MachineOperation> {
         } else {
             return false;
         }
+    }
+
+    /**
+     * This returns an unmodifiable view of all active {@link MachineOperation}s.
+     *
+     * @return An unmodifiable map of all active operations
+     */
+    @Nonnull
+    public Map<BlockPosition, T> getActiveOperations() {
+        return Collections.unmodifiableMap(machines);
     }
 
     public void updateProgressBar(@Nonnull BlockMenu inv, int slot, @Nonnull T operation) {

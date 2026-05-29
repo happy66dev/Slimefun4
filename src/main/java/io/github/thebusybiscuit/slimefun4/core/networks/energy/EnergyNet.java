@@ -1,10 +1,9 @@
 package io.github.thebusybiscuit.slimefun4.core.networks.energy;
 
+import com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer;
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.bakedlibs.dough.common.ChatColors;
-import java.util.LinkedHashSet;
-import com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer;
 import io.github.thebusybiscuit.slimefun4.api.ErrorReport;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.network.Network;
@@ -22,7 +21,9 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -169,7 +170,6 @@ public class EnergyNet extends Network implements HologramOwner {
     private long totalConsumedThisTick = 0;
     private long totalStoredThisTick = 0;
     private long totalNetStoredThisTick = 0;
-    private long lastConsumerCharge = 0;
     private long lastTotalCharge = 0;
 
     private int selfTickTaskId = -1;
@@ -178,31 +178,43 @@ public class EnergyNet extends Network implements HologramOwner {
     private volatile boolean firstTickDone = false;
     private final AtomicBoolean selfTicking = new AtomicBoolean(false);
 
-    private static final AtomicInteger bfsDbQueryCount = new AtomicInteger(0);
+    private final AtomicInteger bfsDbQueryCount = new AtomicInteger(0);
     private static final int BFS_DB_QUERY_THROTTLE = 10;
     private static final int MAX_BFS_NODES = 100_000;
-    private static final Set<Location> bfsDbQueried = new HashSet<>();
+    private final Set<Location> bfsDbQueried = new HashSet<>();
 
     private static final ExecutorService GRID_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "Slimefun-Grid-Init");
         return t;
     });
 
+    private static final ExecutorService GRID_TICK_EXECUTOR =
+            Executors.newFixedThreadPool(Math.max(2, Runtime.getRuntime().availableProcessors() / 2), r -> {
+                Thread t = new Thread(r, "Slimefun-Grid-Tick");
+                t.setDaemon(true);
+                return t;
+            });
+
     static {
         Runtime.getRuntime()
                 .addShutdownHook(new Thread(
                         () -> {
-                            GRID_EXECUTOR.shutdown();
-                            try {
-                                if (!GRID_EXECUTOR.awaitTermination(5, TimeUnit.SECONDS)) {
-                                    GRID_EXECUTOR.shutdownNow();
-                                }
-                            } catch (InterruptedException e) {
-                                GRID_EXECUTOR.shutdownNow();
-                                Thread.currentThread().interrupt();
-                            }
+                            shutdownExecutor(GRID_EXECUTOR);
+                            shutdownExecutor(GRID_TICK_EXECUTOR);
                         },
                         "Slimefun-Grid-Shutdown"));
+    }
+
+    private static void shutdownExecutor(@Nonnull ExecutorService executor) {
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(5, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            executor.shutdownNow();
+            Thread.currentThread().interrupt();
+        }
     }
 
     protected EnergyNet(@Nonnull Location l) {
@@ -845,6 +857,15 @@ public class EnergyNet extends Network implements HologramOwner {
                 data.getLocation().getBlock(), data::isPendingRemove, netLine, prodConsLine, storageLine);
     }
 
+    private void updateHologramOnMain(@Nonnull Location loc, @Nonnull String message) {
+        Runnable update = () -> updateHologram(loc.getBlock(), message, () -> false);
+        if (Bukkit.isPrimaryThread()) {
+            update.run();
+        } else {
+            Slimefun.runSync(update);
+        }
+    }
+
     @Nullable private static EnergyNetComponent getComponent(@Nonnull Location l) {
         var data = StorageCacheUtils.getDataContainer(l);
         if (data == null || data.isPendingRemove()) {
@@ -859,7 +880,22 @@ public class EnergyNet extends Network implements HologramOwner {
         return null;
     }
 
-    @Nullable private static SlimefunItem querySlimefunItemFromDb(@Nonnull Location l) {
+    private boolean isConnectorLocation(@Nonnull Location loc) {
+        EnergyNetComponent component = getComponent(loc);
+        if (component != null) {
+            return component.getEnergyComponentType() == EnergyNetComponentType.CONNECTOR;
+        }
+
+        SlimefunItem item = StorageCacheUtils.getSlimefunItem(loc);
+        if (item == null) {
+            item = querySlimefunItemFromDb(loc);
+        }
+
+        return item instanceof EnergyNetComponent energyComponent
+                && energyComponent.getEnergyComponentType() == EnergyNetComponentType.CONNECTOR;
+    }
+
+    @Nullable private SlimefunItem querySlimefunItemFromDb(@Nonnull Location l) {
         if (!bfsDbQueried.add(l)) {
             return null;
         }
@@ -1525,11 +1561,6 @@ public class EnergyNet extends Network implements HologramOwner {
             Location source) {
         // 调节器本身作为特殊连接器，通过它需要+1跳
         int regLength = currentLength + 1;
-        for (Location genLoc : generators.keySet()) {
-            if (!genLoc.equals(source) && isWithinRangeAxial(regulator, genLoc, regRange) && bfsVisited.add(genLoc)) {
-                nodes.add(new BFSNode(genLoc, parentIndex, regLength));
-            }
-        }
         for (Location conLoc : consumers.keySet()) {
             boolean inRange = isWithinRangeAxial(regulator, conLoc, regRange);
             boolean added = inRange && bfsVisited.add(conLoc);
@@ -1640,16 +1671,19 @@ public class EnergyNet extends Network implements HologramOwner {
                         for (int i = 1; i <= connRange; i++) {
                             Location targetLoc = location.clone().add(axis[0] * i, axis[1] * i, axis[2] * i);
                             EnergyNetComponent targetComp = getComponent(targetLoc);
-                            if (targetComp != null) {
-                                if (targetComp.getEnergyComponentType() == EnergyNetComponentType.CONNECTOR
-                                        && connectors.containsKey(targetLoc)) {
-                                    // 双向校验：目标连接器必须能用自身范围反向覆盖长途连接器
-                                    if (isWithinRangeAxial(targetLoc, location, targetComp.getRange())) {
-                                        neighbors.add(targetLoc);
-                                    }
-                                }
-                                break;
+                            if (targetComp == null
+                                    || targetComp.getEnergyComponentType() != EnergyNetComponentType.CONNECTOR) {
+                                continue;
                             }
+
+                            // Long range connectors stop at the nearest connector, even if it is unusable.
+                            if (connectors.containsKey(targetLoc)
+                                    && !ConnectorAgingManager.isConnectorDamaged(targetLoc)
+                                    && !isConnectorBlocked(targetLoc)
+                                    && isWithinRangeAxial(targetLoc, location, targetComp.getRange())) {
+                                neighbors.add(targetLoc);
+                            }
+                            break;
                         }
                     }
                 } else {
@@ -1678,18 +1712,6 @@ public class EnergyNet extends Network implements HologramOwner {
                             }
                             if (valid) {
                                 neighbors.add(otherConnector);
-                            }
-                        }
-                    }
-                    // 连接器到发电机：连接器沿轴向覆盖发电机即可
-                    for (Location terminus : generators.keySet()) {
-                        if (isWithinRangeAxial(location, terminus, connRange)) {
-                            if (validateConnection(
-                                    location,
-                                    terminus,
-                                    EnergyNetComponentType.CONNECTOR,
-                                    EnergyNetComponentType.GENERATOR)) {
-                                neighbors.add(terminus);
                             }
                         }
                     }
@@ -1836,9 +1858,8 @@ public class EnergyNet extends Network implements HologramOwner {
                                 this.conflictPartner = otherNet;
                                 otherNet.conflictPartner = this;
                             }
-                            updateHologram(targetLoc.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false);
-                            Slimefun.runSync(
-                                    () -> updateHologram(regulator.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false));
+                            updateHologramOnMain(targetLoc, "&c电网冲突：多个能源调节器相连");
+                            updateHologramOnMain(regulator, "&c电网冲突：多个能源调节器相连");
                             addConflictHologramsToConnectors();
                             return false;
                         }
@@ -1922,9 +1943,9 @@ public class EnergyNet extends Network implements HologramOwner {
                             otherNet.conflictPartner = this;
                         }
                         // 在冲突调节器上显示冲突悬浮字
-                        updateHologram(current.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false);
+                        updateHologramOnMain(current, "&c电网冲突：多个能源调节器相连");
                         // 在本电网调节器上也显示冲突悬浮字
-                        Slimefun.runSync(() -> updateHologram(regulator.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false));
+                        updateHologramOnMain(regulator, "&c电网冲突：多个能源调节器相连");
                         addConflictHologramsToConnectors();
                         return false;
                     }
@@ -1942,12 +1963,11 @@ public class EnergyNet extends Network implements HologramOwner {
                     otherNet.conflictMode = true;
                     this.conflictPartner = otherNet;
                     otherNet.conflictPartner = this;
-                    Slimefun.runSync(
-                            () -> otherNet.updateHologram(otherNet.regulator.getBlock(), "&c电网冲突：电网交叉", () -> false));
+                    otherNet.updateHologramOnMain(otherNet.regulator, "&c电网冲突：电网交叉");
                 }
-                updateHologram(current.getBlock(), "&c电网冲突：该机器已属于其他电网", () -> false);
+                updateHologramOnMain(current, "&c电网冲突：该机器已属于其他电网");
                 // 本电网调节器也显示冲突
-                Slimefun.runSync(() -> updateHologram(regulator.getBlock(), "&c电网冲突：电网交叉", () -> false));
+                updateHologramOnMain(regulator, "&c电网冲突：电网交叉");
                 addConflictHologramsToConnectors();
                 return false;
             }
@@ -2045,7 +2065,7 @@ public class EnergyNet extends Network implements HologramOwner {
         Set<Location> targets = new HashSet<>(connectorNodes);
         targets.addAll(conflictHologramTargets);
         for (Location connector : targets) {
-            Slimefun.runSync(() -> updateHologram(connector.getBlock(), "&c电网冲突：电网交叉", () -> false));
+            updateHologramOnMain(connector, "&c电网冲突：电网交叉");
         }
     }
 
@@ -2056,12 +2076,12 @@ public class EnergyNet extends Network implements HologramOwner {
             @Nonnull String otherMessage) {
         this.conflictMode = true;
         conflictHologramTargets.add(conflictLoc);
-        updateHologram(conflictLoc.getBlock(), ownMessage, () -> false);
+        updateHologramOnMain(conflictLoc, ownMessage);
         if (otherNet != null && otherNet != this) {
             otherNet.conflictMode = true;
             this.conflictPartner = otherNet;
             otherNet.conflictPartner = this;
-            Slimefun.runSync(() -> otherNet.updateHologram(otherNet.regulator.getBlock(), otherMessage, () -> false));
+            otherNet.updateHologramOnMain(otherNet.regulator, otherMessage);
         }
         addConflictHologramsToConnectors();
     }
@@ -2087,6 +2107,9 @@ public class EnergyNet extends Network implements HologramOwner {
                 Location targetLoc = connectorLoc.clone().add(axis[0] * i, axis[1] * i, axis[2] * i);
 
                 if (visited.contains(targetLoc)) {
+                    if (isLongRange && isConnectorLocation(targetLoc)) {
+                        break;
+                    }
                     continue;
                 }
 
@@ -2110,9 +2133,16 @@ public class EnergyNet extends Network implements HologramOwner {
 
                     if (targetType == EnergyNetComponentType.CONNECTOR) {
                         if (ConnectorAgingManager.isConnectorDamaged(targetLoc)) {
+                            visited.remove(targetLoc);
+                            if (isLongRange) {
+                                break;
+                            }
                             continue;
                         }
                         if (isConnectorBlocked(targetLoc)) {
+                            if (isLongRange) {
+                                break;
+                            }
                             continue;
                         }
                         visited.add(targetLoc);
@@ -2160,10 +2190,17 @@ public class EnergyNet extends Network implements HologramOwner {
 
                     if (targetType == EnergyNetComponentType.CONNECTOR) {
                         if (ConnectorAgingManager.isConnectorDamaged(targetLoc)) {
+                            visited.remove(targetLoc);
+                            if (isLongRange) {
+                                break;
+                            }
                             continue;
                         }
                         if (isConnectorBlocked(targetLoc)) {
                             visited.remove(targetLoc);
+                            if (isLongRange) {
+                                break;
+                            }
                             continue;
                         }
                         queue.add(targetLoc);
@@ -2192,8 +2229,8 @@ public class EnergyNet extends Network implements HologramOwner {
                             this.conflictPartner = otherNet;
                             otherNet.conflictPartner = this;
                         }
-                        updateHologram(targetLoc.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false);
-                        Slimefun.runSync(() -> updateHologram(regulator.getBlock(), "&c电网冲突：多个能源调节器相连", () -> false));
+                        updateHologramOnMain(targetLoc, "&c电网冲突：多个能源调节器相连");
+                        updateHologramOnMain(regulator, "&c电网冲突：多个能源调节器相连");
                         addConflictHologramsToConnectors();
                         return false;
                     }
@@ -2242,13 +2279,24 @@ public class EnergyNet extends Network implements HologramOwner {
                 continue;
             }
 
-            if (targetType == EnergyNetComponentType.CONNECTOR
-                    && !checkRangeValidation(targetLoc, capacitorLoc, EnergyNetComponentType.CAPACITOR)) {
-                continue;
+            if (targetType == EnergyNetComponentType.CONNECTOR) {
+                if (ConnectorAgingManager.isConnectorDamaged(targetLoc) || isConnectorBlocked(targetLoc)) {
+                    continue;
+                }
+                if (!checkRangeValidation(targetLoc, capacitorLoc, EnergyNetComponentType.CAPACITOR)) {
+                    continue;
+                }
+            }
+
+            if (targetType == EnergyNetComponentType.CAPACITOR) {
+                var data = StorageCacheUtils.getDataContainer(targetLoc);
+                if (data != null && Slimefun.getMachineDamageService().isMachineDamaged(data)) {
+                    continue;
+                }
             }
 
             if (isLocationInOtherGrid(targetLoc)) {
-                updateHologram(targetLoc.getBlock(), "&c电网冲突：该机器已属于其他电网", () -> false);
+                updateHologramOnMain(targetLoc, "&c电网冲突：该机器已属于其他电网");
                 return false;
             }
 
@@ -2256,74 +2304,6 @@ public class EnergyNet extends Network implements HologramOwner {
             queue.add(targetLoc);
         }
         return true;
-    }
-
-    /**
-     * 基于预计算路径执行能量传输
-     */
-    private void performEnergyTransfer() {
-        // 清空连接器负载记录
-        connectorLoad.replaceAll((loc, load) -> 0L);
-
-        // 先让发电机产出电力（燃烧燃料、更新charge）
-        // 返回值包含可储电发电机(charge)和不可储电发电机(太阳能)的总供电
-        long generatorSupply = tickAllGenerators(timestamp -> {});
-        // 排除已损坏的电容
-        tickAllCapacitors();
-
-        // 记录本tick总产出
-        totalProducedThisTick = netNewEnergy + calcNonChargeableRemaining();
-
-        // 计算用电器实际耗电：上次tick传输后电荷 - 本次传输前电荷
-        long currentConsumerCharge = 0;
-        for (Map.Entry<Location, EnergyNetComponent> entry : consumers.entrySet()) {
-            currentConsumerCharge += entry.getValue().getChargeLong(entry.getKey());
-        }
-        totalConsumedThisTick = Math.max(0, lastConsumerCharge - currentConsumerCharge);
-        lastConsumerCharge = currentConsumerCharge;
-        totalStoredThisTick = 0;
-
-        // 计算总需求
-        long totalDemand = calculateTotalDemand();
-
-        // 根据规格说明实现传输逻辑
-        if (generatorSupply >= totalDemand) {
-            // 发电机供电充足，多余电力存入电容
-            transferFromGenerators(totalDemand);
-            long totalNew = netNewEnergy + calcNonChargeableRemaining();
-            long usedFromNew = Math.min(totalNew, totalDemand);
-            long excess = totalNew - usedFromNew;
-            long stored = storeRemainingEnergy(excess);
-            totalStoredThisTick = stored;
-            // 存完电容后扣减发电机，避免能量克隆（只扣实际存入电容的量）
-            if (stored > 0 && netNewEnergy > 0) {
-                for (Map.Entry<Location, Long> entry : perGeneratorNewCharge.entrySet()) {
-                    Location genLoc = entry.getKey();
-                    long newCharge = entry.getValue();
-                    if (newCharge <= 0) continue;
-                    EnergyNetProvider gen = generators.get(genLoc);
-                    if (gen != null && gen.isChargeable()) {
-                        double fraction = (double) newCharge / netNewEnergy;
-                        long reduction = (long) (fraction * stored);
-                        if (reduction > 0) {
-                            gen.setCharge(genLoc, Math.max(0, gen.getChargeLong(genLoc) - reduction));
-                        }
-                    }
-                }
-            }
-        } else {
-            // 先用发电机供电，然后用电容供电
-            long supplyLeft = transferFromGenerators(generatorSupply);
-            long remainingDemand = totalDemand - (generatorSupply - supplyLeft);
-            if (remainingDemand > 0) {
-                transferFromCapacitors(remainingDemand);
-            }
-            // 电容放出能量，存入量为 0
-            totalStoredThisTick = 0;
-        }
-
-        // 连接器老化处理（在所有负载记录完成后）
-        ConnectorAgingManager.processAging(this);
     }
 
     /**
@@ -2347,7 +2327,7 @@ public class EnergyNet extends Network implements HologramOwner {
         cancelSelfTick();
         int delay = Slimefun.getCfg().getInt("URID.custom-ticker-delay");
         selfTickTaskId = Bukkit.getScheduler()
-                .runTaskTimerAsynchronously(Slimefun.instance(), this::tickSelf, delay, delay)
+                .runTaskTimer(Slimefun.instance(), this::tickSelfMainThread, delay, delay)
                 .getTaskId();
         debugLog("scheduleSelfTick: 自调度已启动 delay=" + delay);
     }
@@ -2360,10 +2340,11 @@ public class EnergyNet extends Network implements HologramOwner {
         }
     }
 
-    private void tickSelf() {
+    private void tickSelfMainThread() {
         if (!selfTicking.compareAndSet(false, true)) {
             return;
         }
+        boolean submitted = false;
         try {
             if (destroyed || !initialized || initializing || conflictMode) {
                 return;
@@ -2374,107 +2355,197 @@ public class EnergyNet extends Network implements HologramOwner {
                 return;
             }
 
-            performEnergyTransfer();
-            if (destroyed) {
+            // Phase 1: Bukkit/Storage I/O stays on the main thread.
+            tickAllGenerators(timestamp -> {});
+            tickAllCapacitors();
+
+            totalProducedThisTick = netNewEnergy + calcNonChargeableRemaining();
+
+            GridTickSnapshot snapshot = collectTickSnapshot();
+            if (snapshot == null) {
                 return;
             }
-            propagateToEnergyMeters();
 
-            long currentTotalCharge = calculateTotalCharge();
-            totalNetStoredThisTick = currentTotalCharge - lastTotalCharge;
-            lastTotalCharge = currentTotalCharge;
-            lastSupply = calculateTotalSupply();
-            lastDemand = calculateTotalDemand();
-            firstTickDone = true;
+            GRID_TICK_EXECUTOR.submit(() -> {
+                TransferResult result;
+                if (destroyed) {
+                    selfTicking.set(false);
+                    return;
+                }
+                try {
+                    result = computeTransfers(snapshot);
+                } catch (Exception | LinkageError throwable) {
+                    Slimefun.logger()
+                            .log(java.util.logging.Level.SEVERE, "EnergyNet self tick calculation failed", throwable);
+                    selfTicking.set(false);
+                    return;
+                }
 
-            debugLog("tickSelf: 电力传输完成 | 发电=" + lastSupply + " 用电=" + lastDemand
-                    + " | 发电机=" + generators.size() + " 连接器=" + connectors.size()
-                    + " 电容=" + capacitors.size() + " 用电器=" + consumers.size()
-                    + " 路径=" + (countTotalPaths(generatorPaths) + countTotalPaths(capacitorPaths)));
-
-            if (regulator.getChunk().isLoaded()) {
-                Slimefun.runSync(() -> {
-                    if (!destroyed && regulator.getChunk().isLoaded()) {
-                        var data = StorageCacheUtils.getBlock(regulator);
-                        if (data != null && !data.isPendingRemove()) {
-                            updateHologram(data, lastSupply, lastDemand);
+                var writebackTask = Slimefun.runSync(() -> {
+                    try {
+                        if (!destroyed && initialized && !initializing && !conflictMode) {
+                            applyTransferResult(result);
                         }
+                    } catch (Exception | LinkageError throwable) {
+                        Slimefun.logger()
+                                .log(java.util.logging.Level.SEVERE, "EnergyNet self tick writeback failed", throwable);
+                    } finally {
+                        selfTicking.set(false);
                     }
                 });
-            }
+                if (writebackTask == null) {
+                    selfTicking.set(false);
+                }
+            });
+            submitted = true;
         } finally {
-            selfTicking.set(false);
+            if (!submitted) {
+                selfTicking.set(false);
+            }
         }
     }
 
-    /**
-     * 从发电机传输能量到消费者
-     * @param maxEnergy 最大传输能量
-     * @return 剩余的未满足需求
-     */
-    private long transferFromGenerators(long maxEnergy) {
-        long remainingEnergy = maxEnergy;
-
-        // 按路径长度分组排序
-        List<EnergyPath> sortedPaths = getSortedPaths(generatorPaths);
-
-        // 按(源, 目标, 长度)分组路径（LinkedHashMap保留排序顺序）
-        Map<String, List<EnergyPath>> pathGroups = new LinkedHashMap<>();
-        for (EnergyPath path : sortedPaths) {
-            String key = path.source.getBlockX() + "," + path.source.getBlockY() + "," + path.source.getBlockZ() + ","
-                    + path.consumer.getBlockX() + "," + path.consumer.getBlockY() + "," + path.consumer.getBlockZ()
-                    + ","
-                    + path.length;
-            pathGroups.computeIfAbsent(key, k -> new ArrayList<>()).add(path);
+    @Nullable private GridTickSnapshot collectTickSnapshot() {
+        Map<Location, Long> generatorCharges = new HashMap<>();
+        Map<Location, Long> generatorCapacities = new HashMap<>();
+        for (Map.Entry<Location, EnergyNetProvider> entry : generators.entrySet()) {
+            Location loc = entry.getKey();
+            EnergyNetProvider generator = entry.getValue();
+            if (generator.isChargeable()) {
+                generatorCharges.put(loc, generator.getChargeLong(loc));
+            }
+            generatorCapacities.put(loc, generator.getChargeCapacityLong(loc));
         }
 
-        // 处理每组路径
-        for (List<EnergyPath> pathGroup : pathGroups.values()) {
+        Map<Location, Long> capacitorCharges = new HashMap<>();
+        Map<Location, Long> capacitorCapacities = new HashMap<>();
+        for (Map.Entry<Location, EnergyNetComponent> entry : capacitors.entrySet()) {
+            Location loc = entry.getKey();
+            EnergyNetComponent capacitor = entry.getValue();
+            capacitorCharges.put(loc, capacitor.getChargeLong(loc));
+            capacitorCapacities.put(loc, capacitor.getChargeCapacityLong(loc));
+        }
+
+        Map<Location, Long> consumerCharges = new HashMap<>();
+        Map<Location, Long> consumerCapacities = new HashMap<>();
+        for (Map.Entry<Location, EnergyNetComponent> entry : consumers.entrySet()) {
+            Location loc = entry.getKey();
+            EnergyNetComponent consumer = entry.getValue();
+            consumerCharges.put(loc, consumer.getChargeLong(loc));
+            consumerCapacities.put(loc, consumer.getChargeCapacityLong(loc));
+        }
+
+        return new GridTickSnapshot(
+                generatorCharges,
+                generatorCapacities,
+                new HashMap<>(nonChargeableSupply),
+                capacitorCharges,
+                capacitorCapacities,
+                consumerCharges,
+                consumerCapacities,
+                new HashMap<>(connectorLimits),
+                Collections.unmodifiableMap(generatorPaths),
+                Collections.unmodifiableMap(capacitorPaths),
+                netNewEnergy);
+    }
+
+    @Nonnull
+    private static TransferResult computeTransfers(@Nonnull GridTickSnapshot snap) {
+        Map<Location, Long> generatorDeltas = new HashMap<>();
+        Map<Location, Long> capacitorDeltas = new HashMap<>();
+        Map<Location, Long> consumerDeltas = new HashMap<>();
+        Map<Location, Long> connectorLoads = new HashMap<>();
+        Map<Location, Long> remainingGeneratorCharges = new HashMap<>(snap.generatorCharges);
+        Map<Location, Long> remainingNonChargeableSupply = new HashMap<>(snap.nonChargeableSupply);
+
+        long generatorSupply = 0;
+        for (long charge : snap.generatorCharges.values()) {
+            generatorSupply = NumberUtils.flowSafeAddition(generatorSupply, charge);
+        }
+        for (long charge : snap.nonChargeableSupply.values()) {
+            generatorSupply = NumberUtils.flowSafeAddition(generatorSupply, charge);
+        }
+
+        long totalDemand = calculateTotalDemandSnapshot(snap.consumerCharges, snap.consumerCapacities);
+        long maxGeneratorTransfer = generatorSupply >= totalDemand ? totalDemand : generatorSupply;
+        long supplyLeft = transferFromGeneratorsSnapshot(
+                snap,
+                remainingGeneratorCharges,
+                remainingNonChargeableSupply,
+                generatorDeltas,
+                consumerDeltas,
+                connectorLoads,
+                maxGeneratorTransfer);
+        long generatorTransferred = Math.max(0, maxGeneratorTransfer - supplyLeft);
+
+        long remainingDemand = totalDemand - generatorTransferred;
+        if (remainingDemand > 0) {
+            transferFromCapacitorsSnapshot(snap, capacitorDeltas, consumerDeltas, connectorLoads, remainingDemand);
+        }
+
+        long nonChargeableExcessEnergy = 0;
+        long chargeableExcessEnergy = 0;
+        if (generatorSupply >= totalDemand) {
+            nonChargeableExcessEnergy = sumValues(remainingNonChargeableSupply);
+            long chargeableTransferred = 0;
+            for (long delta : generatorDeltas.values()) {
+                if (delta < 0) {
+                    chargeableTransferred = NumberUtils.flowSafeAddition(chargeableTransferred, -delta);
+                }
+            }
+            chargeableExcessEnergy = Math.max(0, snap.netNewEnergy - chargeableTransferred);
+        }
+        long excessEnergy = NumberUtils.flowSafeAddition(nonChargeableExcessEnergy, chargeableExcessEnergy);
+
+        return new TransferResult(
+                generatorDeltas,
+                capacitorDeltas,
+                consumerDeltas,
+                connectorLoads,
+                remainingNonChargeableSupply,
+                excessEnergy,
+                nonChargeableExcessEnergy);
+    }
+
+    private static long transferFromGeneratorsSnapshot(
+            @Nonnull GridTickSnapshot snap,
+            @Nonnull Map<Location, Long> generatorCharges,
+            @Nonnull Map<Location, Long> nonChargeableSupply,
+            @Nonnull Map<Location, Long> generatorDeltas,
+            @Nonnull Map<Location, Long> consumerDeltas,
+            @Nonnull Map<Location, Long> connectorLoads,
+            long maxEnergy) {
+        long remainingEnergy = maxEnergy;
+
+        for (List<EnergyPath> pathGroup : groupPathsBySourceConsumerAndLength(snap.generatorPaths)) {
             if (remainingEnergy <= 0) {
                 break;
             }
 
-            // 组内所有路径具有相同的源、目标和长度
             EnergyPath firstPath = pathGroup.get(0);
             Location generatorLoc = firstPath.source;
             Location consumerLoc = firstPath.consumer;
-
-            // 获取发电机和消费者组件
-            EnergyNetProvider generator = generators.get(generatorLoc);
-            EnergyNetComponent consumer = consumers.get(consumerLoc);
-
-            if (generator == null || consumer == null) {
-                continue;
-            }
-
-            // 检查发电机是否有电，消费者是否已满
-            boolean isNonChargeable = !generator.isChargeable();
-            long generatorCharge = isNonChargeable
+            boolean nonChargeable = !snap.generatorCharges.containsKey(generatorLoc);
+            long generatorCharge = nonChargeable
                     ? nonChargeableSupply.getOrDefault(generatorLoc, 0L)
-                    : generator.getChargeLong(generatorLoc);
-            long consumerCharge = consumer.getChargeLong(consumerLoc);
-            long consumerCapacity = consumer.getChargeCapacityLong(consumerLoc);
+                    : generatorCharges.getOrDefault(generatorLoc, 0L);
+            long consumerCharge =
+                    snap.consumerCharges.getOrDefault(consumerLoc, 0L) + consumerDeltas.getOrDefault(consumerLoc, 0L);
+            long consumerCapacity = snap.consumerCapacities.getOrDefault(consumerLoc, 0L);
 
             if (generatorCharge <= 0 || consumerCharge >= consumerCapacity) {
                 continue;
             }
 
-            // 计算可传输的电量
-            long availableFromGenerator = generatorCharge;
-            long neededByConsumer = consumerCapacity - consumerCharge;
-            long transferAmount = Math.min(Math.min(availableFromGenerator, neededByConsumer), remainingEnergy);
-
+            long transferAmount =
+                    Math.min(Math.min(generatorCharge, consumerCapacity - consumerCharge), remainingEnergy);
+            transferAmount = Math.min(
+                    transferAmount, computeLimiterCapSnapshot(pathGroup, snap.connectorLimits, connectorLoads));
             if (transferAmount <= 0) {
                 continue;
             }
 
-            transferAmount = Math.min(transferAmount, computeLimiterCap(pathGroup));
-            if (transferAmount <= 0) {
-                continue;
-            }
-
-            // 执行能量传输
-            if (isNonChargeable) {
+            if (nonChargeable) {
                 long remaining = nonChargeableSupply.getOrDefault(generatorLoc, 0L) - transferAmount;
                 if (remaining <= 0) {
                     nonChargeableSupply.remove(generatorLoc);
@@ -2482,111 +2553,291 @@ public class EnergyNet extends Network implements HologramOwner {
                     nonChargeableSupply.put(generatorLoc, remaining);
                 }
             } else {
-                generator.setCharge(generatorLoc, generatorCharge - transferAmount);
+                generatorDeltas.merge(generatorLoc, -transferAmount, Long::sum);
+                generatorCharges.merge(generatorLoc, -transferAmount, Long::sum);
             }
-            consumer.setCharge(consumerLoc, consumerCharge + transferAmount);
+
+            consumerDeltas.merge(consumerLoc, transferAmount, Long::sum);
             remainingEnergy -= transferAmount;
-
-            // 记录连接器负载 - 将传输量均摊到组内的所有路径
-            long loadPerPath = transferAmount / pathGroup.size();
-            long remainder = transferAmount % pathGroup.size(); // 余数，如果有
-
-            for (int i = 0; i < pathGroup.size(); i++) {
-                EnergyPath path = pathGroup.get(i);
-                // 分配负载，如果有余数则前几条路径多分配1
-                long pathLoad = loadPerPath + (i < remainder ? 1 : 0);
-                if (pathLoad > 0) {
-                    recordConnectorLoad(path, pathLoad);
-                }
-            }
+            recordConnectorLoadSnapshot(pathGroup, transferAmount, connectorLoads);
         }
 
-        return Math.max(0, remainingEnergy); // 返回剩余的未满足需求
+        return Math.max(0, remainingEnergy);
     }
 
-    /**
-     * 从电容传输能量到消费者
-     * @param maxEnergy 最大传输能量
-     * @return 剩余的未满足需求
-     */
-    private long transferFromCapacitors(long maxEnergy) {
+    private static long transferFromCapacitorsSnapshot(
+            @Nonnull GridTickSnapshot snap,
+            @Nonnull Map<Location, Long> capacitorDeltas,
+            @Nonnull Map<Location, Long> consumerDeltas,
+            @Nonnull Map<Location, Long> connectorLoads,
+            long maxEnergy) {
         long remainingEnergy = maxEnergy;
+        Map<Location, Long> capacitorCharges = new HashMap<>(snap.capacitorCharges);
 
-        // 按路径长度分组排序
-        List<EnergyPath> sortedPaths = getSortedPaths(capacitorPaths);
-
-        // 按(源, 目标, 长度)分组路径（LinkedHashMap保留排序顺序）
-        Map<String, List<EnergyPath>> pathGroups = new LinkedHashMap<>();
-        for (EnergyPath path : sortedPaths) {
-            String key = path.source.getBlockX() + "," + path.source.getBlockY() + "," + path.source.getBlockZ() + ","
-                    + path.consumer.getBlockX() + "," + path.consumer.getBlockY() + "," + path.consumer.getBlockZ()
-                    + ","
-                    + path.length;
-            pathGroups.computeIfAbsent(key, k -> new ArrayList<>()).add(path);
-        }
-
-        // 处理每组路径
-        for (List<EnergyPath> pathGroup : pathGroups.values()) {
+        for (List<EnergyPath> pathGroup : groupPathsBySourceConsumerAndLength(snap.capacitorPaths)) {
             if (remainingEnergy <= 0) {
                 break;
             }
 
-            // 组内所有路径具有相同的源、目标和长度
             EnergyPath firstPath = pathGroup.get(0);
             Location capacitorLoc = firstPath.source;
             Location consumerLoc = firstPath.consumer;
-
-            // 获取电容和消费者组件
-            EnergyNetComponent capacitor = capacitors.get(capacitorLoc);
-            EnergyNetComponent consumer = consumers.get(consumerLoc);
-
-            if (capacitor == null || consumer == null) {
-                continue;
-            }
-
-            // 检查电容是否有电，消费者是否已满
-            long capacitorCharge = capacitor.getChargeLong(capacitorLoc);
-            long consumerCharge = consumer.getChargeLong(consumerLoc);
-            long consumerCapacity = consumer.getChargeCapacityLong(consumerLoc);
+            long capacitorCharge = capacitorCharges.getOrDefault(capacitorLoc, 0L);
+            long consumerCharge =
+                    snap.consumerCharges.getOrDefault(consumerLoc, 0L) + consumerDeltas.getOrDefault(consumerLoc, 0L);
+            long consumerCapacity = snap.consumerCapacities.getOrDefault(consumerLoc, 0L);
 
             if (capacitorCharge <= 0 || consumerCharge >= consumerCapacity) {
                 continue;
             }
 
-            // 计算可传输的电量
-            long availableFromCapacitor = capacitorCharge;
-            long neededByConsumer = consumerCapacity - consumerCharge;
-            long transferAmount = Math.min(Math.min(availableFromCapacitor, neededByConsumer), remainingEnergy);
-
+            long transferAmount =
+                    Math.min(Math.min(capacitorCharge, consumerCapacity - consumerCharge), remainingEnergy);
+            transferAmount = Math.min(
+                    transferAmount, computeLimiterCapSnapshot(pathGroup, snap.connectorLimits, connectorLoads));
             if (transferAmount <= 0) {
                 continue;
             }
 
-            transferAmount = Math.min(transferAmount, computeLimiterCap(pathGroup));
-            if (transferAmount <= 0) {
-                continue;
-            }
-
-            // 执行能量传输
-            capacitor.setCharge(capacitorLoc, capacitorCharge - transferAmount);
-            consumer.setCharge(consumerLoc, consumerCharge + transferAmount);
+            capacitorDeltas.merge(capacitorLoc, -transferAmount, Long::sum);
+            capacitorCharges.merge(capacitorLoc, -transferAmount, Long::sum);
+            consumerDeltas.merge(consumerLoc, transferAmount, Long::sum);
             remainingEnergy -= transferAmount;
+            recordConnectorLoadSnapshot(pathGroup, transferAmount, connectorLoads);
+        }
 
-            // 记录连接器负载 - 将传输量均摊到组内的所有路径
-            long loadPerPath = transferAmount / pathGroup.size();
-            long remainder = transferAmount % pathGroup.size(); // 余数，如果有
+        return Math.max(0, remainingEnergy);
+    }
 
-            for (int i = 0; i < pathGroup.size(); i++) {
-                EnergyPath path = pathGroup.get(i);
-                // 分配负载，如果有余数则前几条路径多分配1
-                long pathLoad = loadPerPath + (i < remainder ? 1 : 0);
-                if (pathLoad > 0) {
-                    recordConnectorLoad(path, pathLoad);
+    @Nonnull
+    private static Collection<List<EnergyPath>> groupPathsBySourceConsumerAndLength(
+            @Nonnull Map<Location, Set<EnergyPath>> pathMap) {
+        Map<PathGroupKey, List<EnergyPath>> pathGroups = new LinkedHashMap<>();
+        for (EnergyPath path : getSortedPathsStatic(pathMap)) {
+            PathGroupKey key = new PathGroupKey(
+                    path.source.getBlockX(),
+                    path.source.getBlockY(),
+                    path.source.getBlockZ(),
+                    path.consumer.getBlockX(),
+                    path.consumer.getBlockY(),
+                    path.consumer.getBlockZ(),
+                    path.length);
+            pathGroups.computeIfAbsent(key, k -> new ArrayList<>()).add(path);
+        }
+        return pathGroups.values();
+    }
+
+    private record PathGroupKey(
+            int sourceX, int sourceY, int sourceZ, int consumerX, int consumerY, int consumerZ, int length) {}
+
+    @Nonnull
+    private static List<EnergyPath> getSortedPathsStatic(@Nonnull Map<Location, Set<EnergyPath>> pathMap) {
+        List<EnergyPath> allPaths = new ArrayList<>();
+        for (Set<EnergyPath> paths : pathMap.values()) {
+            allPaths.addAll(paths);
+        }
+        allPaths.sort((p1, p2) -> Integer.compare(p1.length, p2.length));
+        return allPaths;
+    }
+
+    private static long computeLimiterCapSnapshot(
+            @Nonnull List<EnergyPath> pathGroup,
+            @Nonnull Map<Location, Long> limits,
+            @Nonnull Map<Location, Long> currentLoads) {
+        long cap = Long.MAX_VALUE;
+        for (EnergyPath path : pathGroup) {
+            for (Location connLoc : path.connectors) {
+                if (path.source.equals(connLoc)) {
+                    continue;
+                }
+                Long limit = limits.get(connLoc);
+                if (limit == null) {
+                    continue;
+                }
+                if (limit == 0) {
+                    return 0;
+                }
+                long currentLoad = currentLoads.getOrDefault(connLoc, 0L);
+                long remaining = limit - currentLoad;
+                if (remaining <= 0) {
+                    return 0;
+                }
+                if (remaining < cap) {
+                    cap = remaining;
                 }
             }
         }
+        return cap;
+    }
 
-        return Math.max(0, remainingEnergy); // 返回剩余的未满足需求
+    private static void recordConnectorLoadSnapshot(
+            @Nonnull List<EnergyPath> pathGroup, long transferAmount, @Nonnull Map<Location, Long> connectorLoads) {
+        long loadPerPath = transferAmount / pathGroup.size();
+        long remainder = transferAmount % pathGroup.size();
+        for (int i = 0; i < pathGroup.size(); i++) {
+            long pathLoad = loadPerPath + (i < remainder ? 1 : 0);
+            if (pathLoad <= 0) {
+                continue;
+            }
+            for (Location connectorLoc : pathGroup.get(i).connectors) {
+                connectorLoads.merge(connectorLoc, pathLoad, Long::sum);
+            }
+        }
+    }
+
+    private static long calculateTotalDemandSnapshot(
+            @Nonnull Map<Location, Long> consumerCharges, @Nonnull Map<Location, Long> consumerCapacities) {
+        long demand = 0;
+        for (Map.Entry<Location, Long> entry : consumerCharges.entrySet()) {
+            long capacity = consumerCapacities.getOrDefault(entry.getKey(), 0L);
+            long charge = entry.getValue();
+            if (charge < capacity) {
+                demand = NumberUtils.flowSafeAddition(demand, capacity - charge);
+            }
+        }
+        return demand;
+    }
+
+    private static long sumValues(@Nonnull Map<Location, Long> values) {
+        long total = 0;
+        for (long value : values.values()) {
+            total = NumberUtils.flowSafeAddition(total, value);
+        }
+        return total;
+    }
+
+    private void applyTransferResult(@Nonnull TransferResult result) {
+        for (Map.Entry<Location, Long> entry : result.generatorChargeDeltas.entrySet()) {
+            EnergyNetProvider generator = generators.get(entry.getKey());
+            if (generator != null && generator.isChargeable()) {
+                long oldCharge = generator.getChargeLong(entry.getKey());
+                generator.setCharge(entry.getKey(), Math.max(0, oldCharge + entry.getValue()));
+            }
+        }
+
+        for (Map.Entry<Location, Long> entry : result.consumerChargeDeltas.entrySet()) {
+            EnergyNetComponent consumer = consumers.get(entry.getKey());
+            if (consumer != null) {
+                long oldCharge = consumer.getChargeLong(entry.getKey());
+                long capacity = consumer.getChargeCapacityLong(entry.getKey());
+                consumer.setCharge(entry.getKey(), Math.min(capacity, oldCharge + entry.getValue()));
+            }
+        }
+
+        for (Map.Entry<Location, Long> entry : result.capacitorChargeDeltas.entrySet()) {
+            EnergyNetComponent capacitor = capacitors.get(entry.getKey());
+            if (capacitor != null) {
+                long oldCharge = capacitor.getChargeLong(entry.getKey());
+                capacitor.setCharge(entry.getKey(), Math.max(0, oldCharge + entry.getValue()));
+            }
+        }
+
+        long consumedByGrid = 0;
+        for (long delta : result.consumerChargeDeltas.values()) {
+            if (delta > 0) {
+                consumedByGrid = NumberUtils.flowSafeAddition(consumedByGrid, delta);
+            }
+        }
+        totalConsumedThisTick = consumedByGrid;
+
+        connectorLoad.clear();
+        connectorLoad.putAll(result.connectorLoads);
+        nonChargeableSupply.clear();
+        nonChargeableSupply.putAll(result.remainingNonChargeableSupply);
+
+        long stored = storeRemainingEnergy(result.excessEnergy);
+        totalStoredThisTick = stored;
+        long nonChargeableStored = Math.min(stored, result.nonChargeableExcessEnergy);
+        long chargeableStored = Math.max(0, stored - nonChargeableStored);
+        if (nonChargeableStored > 0) {
+            reduceSupply(result.remainingNonChargeableSupply, nonChargeableStored);
+        }
+        nonChargeableSupply.clear();
+        nonChargeableSupply.putAll(result.remainingNonChargeableSupply);
+        reduceStoredChargeableEnergy(chargeableStored);
+
+        propagateToEnergyMeters();
+        ConnectorAgingManager.processAging(this);
+
+        long currentTotalCharge = calculateTotalCharge();
+        totalNetStoredThisTick = currentTotalCharge - lastTotalCharge;
+        lastTotalCharge = currentTotalCharge;
+        lastSupply = calculateTotalSupply();
+        lastDemand = calculateTotalDemand();
+        firstTickDone = true;
+
+        debugLog("tickSelf: 电力传输完成 | 发电=" + lastSupply + " 用电=" + lastDemand
+                + " | 发电机=" + generators.size() + " 连接器=" + connectors.size()
+                + " 电容=" + capacitors.size() + " 用电器=" + consumers.size()
+                + " 路径=" + (countTotalPaths(generatorPaths) + countTotalPaths(capacitorPaths)));
+
+        if (regulator.getWorld() != null && regulator.getChunk().isLoaded()) {
+            var data = StorageCacheUtils.getBlock(regulator);
+            if (data != null && !data.isPendingRemove()) {
+                updateHologram(data, lastSupply, lastDemand);
+            }
+        }
+    }
+
+    private void reduceStoredChargeableEnergy(long chargeableStored) {
+        if (chargeableStored <= 0 || netNewEnergy <= 0) {
+            return;
+        }
+
+        long targetReduction = Math.min(chargeableStored, netNewEnergy);
+        long allocated = 0;
+        Map<Location, Long> reductions = new HashMap<>();
+        for (Map.Entry<Location, Long> entry : perGeneratorNewCharge.entrySet()) {
+            long newCharge = entry.getValue();
+            if (newCharge <= 0 || allocated >= targetReduction) {
+                continue;
+            }
+            long reduction = Math.min((newCharge * targetReduction) / netNewEnergy, targetReduction - allocated);
+            if (reduction > 0) {
+                reductions.put(entry.getKey(), Math.min(reduction, newCharge));
+                allocated += reductions.get(entry.getKey());
+            }
+        }
+
+        long remaining = targetReduction - allocated;
+        for (Map.Entry<Location, Long> entry : perGeneratorNewCharge.entrySet()) {
+            if (remaining <= 0) {
+                break;
+            }
+            long newCharge = entry.getValue();
+            long already = reductions.getOrDefault(entry.getKey(), 0L);
+            long available = newCharge - already;
+            if (available <= 0) {
+                continue;
+            }
+            long extra = Math.min(available, remaining);
+            reductions.merge(entry.getKey(), extra, Long::sum);
+            remaining -= extra;
+        }
+
+        for (Map.Entry<Location, Long> entry : reductions.entrySet()) {
+            EnergyNetProvider generator = generators.get(entry.getKey());
+            if (generator != null && generator.isChargeable()) {
+                generator.setCharge(
+                        entry.getKey(), Math.max(0, generator.getChargeLong(entry.getKey()) - entry.getValue()));
+            }
+        }
+    }
+
+    private static void reduceSupply(@Nonnull Map<Location, Long> supply, long amount) {
+        long remaining = amount;
+        for (Iterator<Map.Entry<Location, Long>> it = supply.entrySet().iterator(); it.hasNext() && remaining > 0; ) {
+            Map.Entry<Location, Long> entry = it.next();
+            long current = entry.getValue();
+            long reduction = Math.min(current, remaining);
+            long updated = current - reduction;
+            if (updated <= 0) {
+                it.remove();
+            } else {
+                entry.setValue(updated);
+            }
+            remaining -= reduction;
+        }
     }
 
     /**
@@ -2660,20 +2911,6 @@ public class EnergyNet extends Network implements HologramOwner {
     }
 
     /**
-     * 获取按路径长度排序的能量路径列表
-     */
-    private List<EnergyPath> getSortedPaths(Map<Location, Set<EnergyPath>> pathMap) {
-        List<EnergyPath> allPaths = new ArrayList<>();
-        for (Set<EnergyPath> paths : pathMap.values()) {
-            allPaths.addAll(paths);
-        }
-
-        // 按路径长度排序
-        allPaths.sort((p1, p2) -> Integer.compare(p1.length, p2.length));
-        return allPaths;
-    }
-
-    /**
      * 记录连接器负载
      * transferAmount已经是分摊到该路径的电量
      */
@@ -2683,23 +2920,6 @@ public class EnergyNet extends Network implements HologramOwner {
             long currentLoad = connectorLoad.getOrDefault(connectorLoc, 0L);
             connectorLoad.put(connectorLoc, currentLoad + transferAmount);
         }
-    }
-
-    private long computeLimiterCap(List<EnergyPath> pathGroup) {
-        long cap = Long.MAX_VALUE;
-        for (EnergyPath path : pathGroup) {
-            for (Location connLoc : path.connectors) {
-                if (connLoc.equals(regulator)) continue;
-                Long limit = connectorLimits.get(connLoc);
-                if (limit == null) continue;
-                if (limit == 0) return 0;
-                long currentLoad = connectorLoad.getOrDefault(connLoc, 0L);
-                long remaining = limit - currentLoad;
-                if (remaining <= 0) return 0;
-                if (remaining < cap) cap = remaining;
-            }
-        }
-        return cap;
     }
 
     private boolean isConnectorBlocked(@Nonnull Location connLoc) {
@@ -3039,6 +3259,7 @@ public class EnergyNet extends Network implements HologramOwner {
         }
         return count;
     }
+
     private static long parseLongOrZero(@Nonnull ASlimefunDataContainer data, @Nonnull String key) {
         String value = data.getData(key);
         if (value == null || value.isEmpty()) {
@@ -3273,6 +3494,72 @@ public class EnergyNet extends Network implements HologramOwner {
             if (net instanceof EnergyNet energyNet && energyNet.initializing) {
                 energyNet.abortRequested = true;
             }
+        }
+    }
+
+    private static final class GridTickSnapshot {
+        final Map<Location, Long> generatorCharges;
+        final Map<Location, Long> generatorCapacities;
+        final Map<Location, Long> nonChargeableSupply;
+        final Map<Location, Long> capacitorCharges;
+        final Map<Location, Long> capacitorCapacities;
+        final Map<Location, Long> consumerCharges;
+        final Map<Location, Long> consumerCapacities;
+        final Map<Location, Long> connectorLimits;
+        final Map<Location, Set<EnergyPath>> generatorPaths;
+        final Map<Location, Set<EnergyPath>> capacitorPaths;
+        final long netNewEnergy;
+
+        GridTickSnapshot(
+                @Nonnull Map<Location, Long> generatorCharges,
+                @Nonnull Map<Location, Long> generatorCapacities,
+                @Nonnull Map<Location, Long> nonChargeableSupply,
+                @Nonnull Map<Location, Long> capacitorCharges,
+                @Nonnull Map<Location, Long> capacitorCapacities,
+                @Nonnull Map<Location, Long> consumerCharges,
+                @Nonnull Map<Location, Long> consumerCapacities,
+                @Nonnull Map<Location, Long> connectorLimits,
+                @Nonnull Map<Location, Set<EnergyPath>> generatorPaths,
+                @Nonnull Map<Location, Set<EnergyPath>> capacitorPaths,
+                long netNewEnergy) {
+            this.generatorCharges = generatorCharges;
+            this.generatorCapacities = generatorCapacities;
+            this.nonChargeableSupply = nonChargeableSupply;
+            this.capacitorCharges = capacitorCharges;
+            this.capacitorCapacities = capacitorCapacities;
+            this.consumerCharges = consumerCharges;
+            this.consumerCapacities = consumerCapacities;
+            this.connectorLimits = connectorLimits;
+            this.generatorPaths = generatorPaths;
+            this.capacitorPaths = capacitorPaths;
+            this.netNewEnergy = netNewEnergy;
+        }
+    }
+
+    private static final class TransferResult {
+        final Map<Location, Long> generatorChargeDeltas;
+        final Map<Location, Long> capacitorChargeDeltas;
+        final Map<Location, Long> consumerChargeDeltas;
+        final Map<Location, Long> connectorLoads;
+        final Map<Location, Long> remainingNonChargeableSupply;
+        final long excessEnergy;
+        final long nonChargeableExcessEnergy;
+
+        TransferResult(
+                @Nonnull Map<Location, Long> generatorChargeDeltas,
+                @Nonnull Map<Location, Long> capacitorChargeDeltas,
+                @Nonnull Map<Location, Long> consumerChargeDeltas,
+                @Nonnull Map<Location, Long> connectorLoads,
+                @Nonnull Map<Location, Long> remainingNonChargeableSupply,
+                long excessEnergy,
+                long nonChargeableExcessEnergy) {
+            this.generatorChargeDeltas = generatorChargeDeltas;
+            this.capacitorChargeDeltas = capacitorChargeDeltas;
+            this.consumerChargeDeltas = consumerChargeDeltas;
+            this.connectorLoads = connectorLoads;
+            this.remainingNonChargeableSupply = remainingNonChargeableSupply;
+            this.excessEnergy = excessEnergy;
+            this.nonChargeableExcessEnergy = nonChargeableExcessEnergy;
         }
     }
 

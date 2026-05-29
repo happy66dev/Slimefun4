@@ -8,6 +8,8 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager;
 import io.github.thebusybiscuit.slimefun4.core.services.MachineDamageService;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import java.util.HashSet;
+import java.util.Set;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -33,10 +35,36 @@ public class MachineDamageNotificationListener implements Listener {
         var playerUUID = player.getUniqueId();
         var controller = Slimefun.getDatabaseManager().getBlockDataController();
         var damageService = Slimefun.getMachineDamageService();
+        String playerUUIDString = playerUUID.toString();
+        Set<String> checkedData = new HashSet<>();
 
         for (var data : controller.getAllLoadedData()) {
-            checkMachineDamage(data, player, playerUUID.toString(), damageService);
+            if (checkedData.add(getNotificationKey(data))) {
+                checkMachineDamage(data, player, playerUUIDString, damageService);
+            }
         }
+
+        controller
+                .getDamagedDataByOwnerAsync(playerUUIDString)
+                .thenAccept(dataList -> Slimefun.runSync(() -> {
+                    if (!player.isOnline()) {
+                        return;
+                    }
+
+                    for (var data : dataList) {
+                        if (checkedData.add(getNotificationKey(data))) {
+                            checkMachineDamage(data, player, playerUUIDString, damageService);
+                        }
+                    }
+                }))
+                .exceptionally(throwable -> {
+                    Slimefun.logger()
+                            .log(
+                                    java.util.logging.Level.WARNING,
+                                    "Failed to query damaged machines for login notification",
+                                    throwable);
+                    return null;
+                });
     }
 
     private void checkMachineDamage(
@@ -45,30 +73,16 @@ public class MachineDamageNotificationListener implements Listener {
             return;
         }
 
-        // 检查是否是该玩家的机器
         String ownerUUID = data.getData("machine_owner_uuid");
         if (ownerUUID == null || !ownerUUID.equals(playerUUID)) {
             return;
         }
 
-        // 检查机器是否损坏
         if (damageService.isMachineDamaged(data)) {
-            // 获取机器信息
-            SlimefunItem item = null;
-            Location location = null;
-
-            if (data instanceof SlimefunBlockData blockData) {
-                item = SlimefunItem.getById(blockData.getSfId());
-                location = blockData.getLocation();
-            } else if (data instanceof SlimefunUniversalBlockData ubd) {
-                item = SlimefunItem.getById(ubd.getSfId());
-                if (ubd.getLastPresent() != null) {
-                    location = ubd.getLastPresent().toLocation();
-                }
-            }
+            SlimefunItem item = getSlimefunItem(data);
+            Location location = getLocation(data);
 
             if (item != null && location != null) {
-                // 获取修复物品列表
                 var repairItems = damageService.getRepairItems(data);
                 if (!repairItems.isEmpty()) {
                     sendMachineDamageNotification(player, item, location, repairItems);
@@ -77,28 +91,49 @@ public class MachineDamageNotificationListener implements Listener {
             }
         }
 
-        if (data instanceof SlimefunBlockData blockData) {
-            Location location = blockData.getLocation();
-            if (location != null
-                    && ConnectorAgingManager.getConfig(location) != null
-                    && ConnectorAgingManager.isConnectorDamaged(location)) {
-                SlimefunItem item = SlimefunItem.getById(blockData.getSfId());
-                if (item != null) {
-                    sendConnectorDamageNotification(player, item, location);
-                }
-            }
-        } else if (data instanceof SlimefunUniversalBlockData ubd) {
-            if (ubd.getLastPresent() != null) {
-                Location location = ubd.getLastPresent().toLocation();
-                if (ConnectorAgingManager.getConfig(location) != null
-                        && ConnectorAgingManager.isConnectorDamaged(location)) {
-                    SlimefunItem item = SlimefunItem.getById(ubd.getSfId());
-                    if (item != null) {
-                        sendConnectorDamageNotification(player, item, location);
-                    }
-                }
-            }
+        SlimefunItem item = getSlimefunItem(data);
+        Location location = getLocation(data);
+        if (item != null && location != null && isConnectorDamaged(data, location)) {
+            sendConnectorDamageNotification(player, item, location);
         }
+    }
+
+    private SlimefunItem getSlimefunItem(ASlimefunDataContainer data) {
+        if (data instanceof SlimefunBlockData blockData) {
+            return SlimefunItem.getById(blockData.getSfId());
+        } else if (data instanceof SlimefunUniversalBlockData ubd) {
+            return SlimefunItem.getById(ubd.getSfId());
+        }
+        return null;
+    }
+
+    private Location getLocation(ASlimefunDataContainer data) {
+        if (data instanceof SlimefunBlockData blockData) {
+            return blockData.getLocation();
+        } else if (data instanceof SlimefunUniversalBlockData ubd && ubd.getLastPresent() != null) {
+            return ubd.getLastPresent().toLocation();
+        }
+        return null;
+    }
+
+    private boolean isConnectorDamaged(ASlimefunDataContainer data, Location location) {
+        if (location == null) {
+            return false;
+        }
+
+        try {
+            if ("true".equals(data.getData("connector_damaged"))) {
+                return true;
+            }
+        } catch (IllegalStateException ignored) {
+            return false;
+        }
+
+        return ConnectorAgingManager.getConfig(location) != null && ConnectorAgingManager.isConnectorDamaged(location);
+    }
+
+    private String getNotificationKey(ASlimefunDataContainer data) {
+        return Slimefun.getDatabaseManager().getBlockDataController().getContainerKey(data);
     }
 
     private void sendMachineDamageNotification(
@@ -118,10 +153,11 @@ public class MachineDamageNotificationListener implements Listener {
             int submittedCount = submitted != null ? submitted : 0;
 
             if (itemStack != null) {
-                String itemName = itemStack.getItemMeta() != null
-                                && itemStack.getItemMeta().getDisplayName() != null
-                                && !itemStack.getItemMeta().getDisplayName().isEmpty()
-                        ? itemStack.getItemMeta().getDisplayName()
+                org.bukkit.inventory.meta.ItemMeta meta = itemStack.getItemMeta();
+                String itemName = meta != null
+                                && meta.hasDisplayName()
+                                && !meta.getDisplayName().isEmpty()
+                        ? meta.getDisplayName()
                         : city.norain.slimefun4.utils.LocalizationUtils.getItemName(itemStack.getType());
 
                 if (submittedCount >= requiredCount) {

@@ -378,6 +378,10 @@ machines:
     full-chest: '&c你的工业矿机的箱子已经满了!'
     no-permission: '&4你没有权限操作这台工业矿机!'
     finished: '&e你的工业矿机采矿已完成! 总共开采了 %ores% 个矿石!'
+  MACHINE_STATE_CLEARER:
+    no-item: '&c你手中没有物品!'
+    no-state: '&c该物品没有机器状态数据!'
+    success: '&a机器状态已清除! 物品现在可以堆叠了.'
 anvil:
   not-working: '&4你不能在铁砧里使用 Slimefun 的物品'
   mcmmo-salvaging: '&4你不能分解 Slimefun 物品!'

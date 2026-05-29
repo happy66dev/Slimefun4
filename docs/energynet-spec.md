@@ -232,12 +232,12 @@ tickSelfMainThread() [主线程]
 
 - `storeRemainingEnergy()` 保留在 Phase 3 (主线程)：它内部访问 StorageCacheUtils、MachineDamageService、component.setCharge()
 - Phase 2 只计算"用电器满足后还剩多少能量 (excessEnergy)"
-- 所有 snapshot 数据均为深拷贝 (HashMap new)，异步线程安全
-- 旧 `performEnergyTransfer()` / `transferFromGenerators()` / `transferFromCapacitors()` 保留为死代码
+- 路径映射使用不可变视图 (`Collections.unmodifiableMap`)，避免每 tick 深拷贝开销
+- 旧 `performEnergyTransfer()` / `transferFromGenerators()` / `transferFromCapacitors()` 已移除，逻辑迁移至三阶段架构
 
 ### 6.2 `performEnergyTransfer()` [已移除 — 逻辑迁移至三阶段]
 
-旧版流程 (保留为死代码):
+旧版流程 (已移除):
 ```
 tickAllGenerators() → 发电机产电
 
@@ -833,19 +833,24 @@ tick()
 │   │   └── processCapacitor()
 │   ├── precomputePaths()
 │   └── 初始化完成 → scheduleSelfTick() → 更新全息(等待首个tick)
-└── [显示层] 全息刷新（无电力逻辑）← 电力逻辑由 tickSelf() 接管
+└── [显示层] 全息刷新（无电力逻辑）← 电力逻辑由 tickSelfMainThread() 接管
 
-tickSelf() (BukkitScheduler 异步自调度，不依赖 chunk.isLoaded())
-├── performEnergyTransfer()
+tickSelfMainThread() (BukkitScheduler 主线程自调度，三阶段异步)
+├── Phase 1 [主线程]:
 │   ├── tickAllGenerators()       → 记录 totalProducedThisTick
 │   ├── tickAllCapacitors()
-│   ├── calculateTotalDemand()
-│   ├── transferFromGenerators()  → + transferFromCapacitors() → 记录 totalConsumedThisTick
-│   ├── storeRemainingEnergy()
-│   └── ConnectorAgingManager.processAging()
-├── propagateToEnergyMeters()
-├── 统计计算 (lastSupply, lastDemand, totalNetStoredThisTick)
-└── 全息刷新 (regulator区块加载 → runSync 刷新 / 未加载 → 跳过)
+│   └── collectTickSnapshot()     → 冻结状态快照
+├── Phase 2 [GRID_TICK_EXECUTOR 异步]:
+│   └── computeTransfers(snapshot) → 纯数学计算 → TransferResult
+└── Phase 3 [runSync 主线程]:
+    └── applyTransferResult(result)
+        ├── 写回 gen/cap/con charge deltas
+        ├── storeRemainingEnergy() → 多余电力存电容
+        ├── reduceStoredChargeableEnergy() → 能量克隆防护
+        ├── propagateToEnergyMeters() → 电量计数器
+        ├── ConnectorAgingManager.processAging() → 连接器老化
+        ├── 统计计算 (totalConsumedThisTick, lastSupply, lastDemand)
+        └── 全息刷新 (regulator区块加载 → 更新 / 未加载 → 跳过)
 
 MultimeterDisplayManager (独立于tick)
 ├── PathDisplay.start()

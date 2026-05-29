@@ -26,6 +26,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,6 +61,10 @@ import org.bukkit.scheduler.BukkitTask;
  * @author NoRainCity
  */
 public class BlockDataController extends ADataController {
+    private static final String MACHINE_OWNER_UUID_KEY = "machine_owner_uuid";
+    private static final String MACHINE_DAMAGED_KEY = "machine_damage_damaged";
+    private static final String CONNECTOR_DAMAGED_KEY = "connector_damaged";
+
     /**
      * 延迟写数据任务队列
      */
@@ -1245,28 +1250,197 @@ public class BlockDataController extends ADataController {
     @Nonnull
     public List<Location> getDamagedBlockLocationsByOwner(@Nonnull String ownerUuid) {
         List<Location> result = new ArrayList<>();
-        for (Map.Entry<String, SlimefunChunkData> chunkEntry : loadedChunk.entrySet()) {
-            SlimefunChunkData chunkData = chunkEntry.getValue();
-            if (!chunkData.isDataLoaded()) continue;
-            for (SlimefunBlockData data : chunkData.getAllBlockData()) {
-                if (!"true".equals(data.getData("machine_damage_damaged"))) continue;
-                if (!ownerUuid.equals(data.getData("machine_owner_uuid"))) continue;
-                if (data.getLocation() != null) {
-                    result.add(data.getLocation());
-                }
-            }
-        }
-        for (Map.Entry<UUID, SlimefunUniversalData> entry : loadedUniversalData.entrySet()) {
-            SlimefunUniversalData data = entry.getValue();
-            if (!(data instanceof SlimefunUniversalBlockData ubd)) continue;
-            if (!data.isDataLoaded()) continue;
-            if (!"true".equals(data.getData("machine_damage_damaged"))) continue;
-            if (!ownerUuid.equals(data.getData("machine_owner_uuid"))) continue;
-            if (ubd.getLastPresent() != null) {
-                result.add(ubd.getLastPresent().toLocation());
+        for (ASlimefunDataContainer data : getDamagedDataByOwner(ownerUuid)) {
+            Location location = getContainerLocation(data);
+            if (location != null) {
+                result.add(location);
             }
         }
         return result;
+    }
+
+    @Nonnull
+    public CompletableFuture<List<ASlimefunDataContainer>> getDamagedDataByOwnerAsync(@Nonnull String ownerUuid) {
+        // loadBlockData/loadUniversalData 内部使用 lock 机制保证线程安全
+        return CompletableFuture.supplyAsync(() -> getDamagedDataByOwner(ownerUuid), readExecutor);
+    }
+
+    @Nonnull
+    private List<ASlimefunDataContainer> getDamagedDataByOwner(@Nonnull String ownerUuid) {
+        Map<String, ASlimefunDataContainer> result = new LinkedHashMap<>();
+
+        for (ASlimefunDataContainer data : getAllLoadedData()) {
+            if (isOwnedDamagedData(data, ownerUuid)) {
+                result.put(getContainerKey(data), data);
+            }
+        }
+
+        for (String locationKey : queryOwnedDamagedBlockKeys(ownerUuid)) {
+            SlimefunBlockData data = loadBlockDataByLocationKey(locationKey);
+            if (isOwnedDamagedData(data, ownerUuid)) {
+                result.put(getContainerKey(data), data);
+            }
+        }
+
+        for (String uuidKey : queryOwnedDamagedUniversalKeys(ownerUuid)) {
+            SlimefunUniversalBlockData data = loadUniversalBlockDataByUuidKey(uuidKey);
+            if (isOwnedDamagedData(data, ownerUuid)) {
+                result.put(getContainerKey(data), data);
+            }
+        }
+
+        return new ArrayList<>(result.values());
+    }
+
+    private boolean isOwnedDamagedData(@Nullable ASlimefunDataContainer data, @Nonnull String ownerUuid) {
+        if (data == null || !data.isDataLoaded()) {
+            return false;
+        }
+
+        try {
+            return ownerUuid.equals(data.getData(MACHINE_OWNER_UUID_KEY))
+                    && ("true".equals(data.getData(MACHINE_DAMAGED_KEY))
+                            || "true".equals(data.getData(CONNECTOR_DAMAGED_KEY)));
+        } catch (IllegalStateException ignored) {
+            // Data container was unloaded between isDataLoaded() check and getData() call
+            return false;
+        }
+    }
+
+    @Nonnull
+    private Set<String> queryOwnedDamagedBlockKeys(@Nonnull String ownerUuid) {
+        Set<String> result = new HashSet<>();
+        for (String locationKey :
+                queryDataKeys(DataScope.BLOCK_DATA, MACHINE_OWNER_UUID_KEY, ownerUuid, FieldKey.LOCATION)) {
+            if (hasDataValue(DataScope.BLOCK_DATA, FieldKey.LOCATION, locationKey, MACHINE_DAMAGED_KEY, "true")
+                    || hasDataValue(
+                            DataScope.BLOCK_DATA, FieldKey.LOCATION, locationKey, CONNECTOR_DAMAGED_KEY, "true")) {
+                result.add(locationKey);
+            }
+        }
+        return result;
+    }
+
+    @Nonnull
+    private Set<String> queryOwnedDamagedUniversalKeys(@Nonnull String ownerUuid) {
+        Set<String> result = new HashSet<>();
+        for (String uuidKey :
+                queryDataKeys(DataScope.UNIVERSAL_DATA, MACHINE_OWNER_UUID_KEY, ownerUuid, FieldKey.UNIVERSAL_UUID)) {
+            if (hasDataValue(DataScope.UNIVERSAL_DATA, FieldKey.UNIVERSAL_UUID, uuidKey, MACHINE_DAMAGED_KEY, "true")
+                    || hasDataValue(
+                            DataScope.UNIVERSAL_DATA,
+                            FieldKey.UNIVERSAL_UUID,
+                            uuidKey,
+                            CONNECTOR_DAMAGED_KEY,
+                            "true")) {
+                result.add(uuidKey);
+            }
+        }
+        return result;
+    }
+
+    @Nonnull
+    private Set<String> queryDataKeys(
+            @Nonnull DataScope scope,
+            @Nonnull String dataKey,
+            @Nonnull String rawValue,
+            @Nonnull FieldKey resultField) {
+        RecordKey key = new RecordKey(scope);
+        key.addCondition(FieldKey.DATA_KEY, dataKey);
+        key.addCondition(FieldKey.DATA_VALUE, DataUtils.blockDataBase64(rawValue));
+        key.addField(resultField);
+
+        Set<String> result = new HashSet<>();
+        for (RecordSet recordSet : getData(key, true)) {
+            String value = recordSet.get(resultField);
+            if (value != null) {
+                result.add(value);
+            }
+        }
+        return result;
+    }
+
+    private boolean hasDataValue(
+            @Nonnull DataScope scope,
+            @Nonnull FieldKey locationField,
+            @Nonnull String locationValue,
+            @Nonnull String dataKey,
+            @Nonnull String rawValue) {
+        RecordKey key = new RecordKey(scope);
+        key.addCondition(locationField, locationValue);
+        key.addCondition(FieldKey.DATA_KEY, dataKey);
+        key.addField(FieldKey.DATA_VALUE);
+        return hasRawDataValue(key, rawValue);
+    }
+
+    private boolean hasRawDataValue(@Nonnull RecordKey key, @Nonnull String rawValue) {
+        for (RecordSet recordSet : getData(key)) {
+            if (rawValue.equals(DataUtils.blockDataDebase64(recordSet.get(FieldKey.DATA_VALUE)))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Loads block data by location key.
+     * Note: This method has side effects - it creates BlockMenu and initializes block data.
+     * Thread safety: loadBlockData() uses internal locking mechanism.
+     */
+    @Nullable private SlimefunBlockData loadBlockDataByLocationKey(@Nonnull String locationKey) {
+        Location location = parseLoadedWorldLocation(locationKey);
+        if (location == null) {
+            return null;
+        }
+
+        RecordKey recordKey = new RecordKey(DataScope.BLOCK_RECORD);
+        recordKey.addCondition(FieldKey.LOCATION, locationKey);
+        recordKey.addField(FieldKey.SLIMEFUN_ID);
+        List<RecordSet> records = getData(recordKey);
+        if (records.isEmpty()) {
+            return null;
+        }
+
+        SlimefunBlockData data = new SlimefunBlockData(location, records.get(0).get(FieldKey.SLIMEFUN_ID));
+        loadBlockData(data);
+        return data;
+    }
+
+    @Nullable private SlimefunUniversalBlockData loadUniversalBlockDataByUuidKey(@Nonnull String uuidKey) {
+        try {
+            SlimefunUniversalBlockData data = getUniversalBlockData(UUID.fromString(uuidKey));
+            if (data != null) {
+                loadUniversalData(data);
+            }
+            return data;
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    @Nullable private Location getContainerLocation(@Nullable ASlimefunDataContainer data) {
+        if (data instanceof SlimefunBlockData blockData) {
+            return blockData.getLocation();
+        }
+        if (data instanceof SlimefunUniversalBlockData universalBlockData
+                && universalBlockData.getLastPresent() != null) {
+            return universalBlockData.getLastPresent().toLocation();
+        }
+        return null;
+    }
+
+    @Nonnull
+    public String getContainerKey(@Nonnull ASlimefunDataContainer data) {
+        return data instanceof SlimefunUniversalBlockData ? "U:" + data.getKey() : "B:" + data.getKey();
+    }
+
+    @Nullable private Location parseLoadedWorldLocation(@Nonnull String locationKey) {
+        try {
+            Location location = LocationUtils.toLocation(locationKey);
+            return location != null && location.getWorld() != null ? location : null;
+        } catch (RuntimeException ex) {
+            return null;
+        }
     }
 
     public void removeAllDataInChunk(Chunk chunk) {

@@ -21,6 +21,7 @@ import io.github.thebusybiscuit.slimefun4.core.handlers.ToolUseHandler;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.items.cargo.CargoNode;
+import io.github.thebusybiscuit.slimefun4.utils.MachineStatePersistence;
 import io.github.thebusybiscuit.slimefun4.utils.compatibility.VersionedEnchantment;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
 import java.util.ArrayList;
@@ -232,6 +233,11 @@ public class BlockListener implements Listener {
                         blockData.setData(
                                 "machine_owner_uuid",
                                 e.getPlayer().getUniqueId().toString());
+                    }
+
+                    // 恢复机器状态
+                    if (MachineStatePersistence.hasState(item)) {
+                        MachineStatePersistence.loadState(item, block.getLocation(), sfItem);
                     }
 
                     sfItem.callItemHandler(BlockPlaceHandler.class, handler -> handler.onPlayerPlace(e));
@@ -462,6 +468,8 @@ public class BlockListener implements Listener {
         SlimefunItem sfItem = StorageCacheUtils.getSlimefunItem(loc);
 
         if (sfItem != null && !sfItem.useVanillaBlockBreaking()) {
+            ItemStack stateItem = MachineStatePersistence.saveState(loc, sfItem);
+
             sfItem.callItemHandler(BlockBreakHandler.class, handler -> handler.onPlayerBreak(e, item, drops));
 
             if (e.isCancelled()) {
@@ -479,7 +487,13 @@ public class BlockListener implements Listener {
                 generator.getMachineProcessor().endOperation(e.getBlock());
             }
 
-            drops.addAll(sfItem.getDrops());
+            // 尝试保存机器状态到掉落物
+            if (stateItem != null) {
+                drops.add(stateItem);
+            } else {
+                drops.addAll(sfItem.getDrops());
+            }
+
             Slimefun.getDatabaseManager().getBlockDataController().removeBlock(loc);
             clearDamagedMachineBreakAttempts(loc);
 

@@ -2879,6 +2879,15 @@ public final class SlimefunItems {
             LoreBuilder.powerBuffer(128),
             LoreBuilder.powerPerSecond(36));
 
+    public static final SlimefunItemStack MACHINE_STATE_CLEARER = new SlimefunItemStack(
+            "MACHINE_STATE_CLEARER",
+            Material.SMITHING_TABLE,
+            "&6机器状态清除器",
+            "",
+            "&7手持带有状态的机器物品",
+            "&7右键此方块清除状态数据",
+            "&7使其恢复为可堆叠状态");
+
     // 别删
     public static final SlimefunItemStack CRAFTER_SMART_PORT = new SlimefunItemStack(
             "CRAFTER_SMART_PORT", Material.LIME_STAINED_GLASS, "&a合成机智能交互接口", "", "&5可以根据合成表材料数量分配输入数量", "&5并拥有指定输出槽");

@@ -308,19 +308,30 @@ private final Map<BlockPosition, Integer> particleTickCounters;
 **触发逻辑 (伪代码):**
 
 ```java
-int prevPercent = (operation.getProgress() - 1) * 100 / operation.getTotalTicks();
 int currPercent = operation.getProgress() * 100 / operation.getTotalTicks();
 
+// 找到当前 tick 新达到的最高里程碑
+int highestNewMilestone = -1;
 for (int milestone : new int[]{25, 50, 75}) {
-    if (prevPercent < milestone && currPercent >= milestone
-            && !firedMilestones.get(pos).contains(milestone)) {
-        block.getWorld().playSound(
-            block.getLocation(), type.getDefaultSound(), SoundCategory.BLOCKS, 1.0f, 1.0f
-        );
-        firedMilestones.get(pos).add(milestone);
+    if (currPercent >= milestone && !firedMilestones.get(pos).contains(milestone)) {
+        highestNewMilestone = milestone;
     }
 }
+
+// 标记该里程碑及以下所有未标记里程碑，仅播放一次声音
+if (highestNewMilestone >= 0) {
+    for (int milestone : new int[]{25, 50, 75}) {
+        if (milestone <= highestNewMilestone) {
+            firedMilestones.get(pos).add(milestone);
+        }
+    }
+    block.getWorld().playSound(
+        block.getLocation(), type.getDefaultSound(), SoundCategory.BLOCKS, 1.0f, 1.0f
+    );
+}
 ```
+
+> 设计说明: 大跳跃（如 25%→75%）只播放最高里程碑声音；精确跳过（如 46→49→52 跳过 50%）仍能触发。
 
 ### 6.2 操作完成/停止清理
 

@@ -19,6 +19,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.handlers.SimpleBlockBre
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.AbstractEnergyProvider;
 import io.github.thebusybiscuit.slimefun4.implementation.operations.FuelOperation;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
+import io.github.thebusybiscuit.slimefun4.utils.MachineStatePersistence;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import io.github.thebusybiscuit.slimefun4.utils.itemstack.ItemStackWrapper;
 import java.util.HashMap;
@@ -105,6 +106,7 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
                 }
 
                 processor.endOperation(b);
+                Slimefun.getMachineFeedbackService().onMachineStop(b, feedbackType);
             }
         };
     }
@@ -154,6 +156,11 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
 
     @Override
     public int getGeneratedOutput(@Nonnull Location l, @Nonnull ASlimefunDataContainer data) {
+        // 尝试从数据库恢复操作（仅当无活跃操作时）
+        if (processor.getOperation(l) == null) {
+            MachineStatePersistence.loadOperationFromDatabaseOnce(l, this, processor);
+        }
+
         BlockMenu inv = StorageCacheUtils.getMenu(l);
         FuelOperation operation = processor.getOperation(l);
 

@@ -4,10 +4,9 @@ import io.github.bakedlibs.dough.blocks.BlockPosition;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineOperation;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
@@ -24,14 +23,22 @@ import org.bukkit.block.data.Lightable;
 
 public class MachineFeedbackService {
 
+    private static final int[] MILESTONES = {25, 50, 75};
+
     private final Slimefun plugin;
 
-    private final Set<BlockPosition> activeBlockStates = new HashSet<>();
-    private final Map<BlockPosition, Set<Integer>> firedMilestones = new HashMap<>();
-    private final Map<BlockPosition, Integer> particleTickCounters = new HashMap<>();
+    private final Set<BlockPosition> activeBlockStates = ConcurrentHashMap.newKeySet();
+    private final Map<BlockPosition, Set<Integer>> firedMilestones = new ConcurrentHashMap<>();
+    private final Map<BlockPosition, Integer> particleTickCounters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<BlockPosition, BlockPosition> positionCache = new ConcurrentHashMap<>();
 
     public MachineFeedbackService(@Nonnull Slimefun plugin) {
         this.plugin = plugin;
+    }
+
+    @Nonnull
+    private BlockPosition getPosition(@Nonnull Block block) {
+        return positionCache.computeIfAbsent(new BlockPosition(block), k -> k);
     }
 
     public void onMachineStart(
@@ -40,10 +47,9 @@ public class MachineFeedbackService {
             return;
         }
 
-        BlockPosition pos = new BlockPosition(block);
+        BlockPosition pos = getPosition(block);
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (hasLitProperty(block.getType())) {
-                activeBlockStates.add(pos);
                 BlockData data = block.getBlockData();
                 if (data instanceof Lightable lightable) {
                     lightable.setLit(true);
@@ -52,7 +58,11 @@ public class MachineFeedbackService {
             }
         });
 
-        firedMilestones.put(pos, new HashSet<>());
+        if (hasLitProperty(block.getType())) {
+            activeBlockStates.add(pos);
+        }
+
+        firedMilestones.put(pos, ConcurrentHashMap.newKeySet());
         particleTickCounters.put(pos, 0);
 
         spawnParticles(block, type);
@@ -64,7 +74,7 @@ public class MachineFeedbackService {
             return;
         }
 
-        BlockPosition pos = new BlockPosition(block);
+        BlockPosition pos = getPosition(block);
 
         int counter = particleTickCounters.getOrDefault(pos, 0);
         counter++;
@@ -79,20 +89,29 @@ public class MachineFeedbackService {
             return;
         }
 
-        int prevPercent = (operation.getProgress() - 1) * 100 / totalTicks;
-        int currPercent = operation.getProgress() * 100 / totalTicks;
+        int currPercent = (int) ((long) operation.getProgress() * 100 / totalTicks);
 
-        Set<Integer> milestones = firedMilestones.computeIfAbsent(pos, k -> new HashSet<>());
-        for (int milestone : new int[] {25, 50, 75}) {
-            if (prevPercent < milestone && currPercent >= milestone && !milestones.contains(milestone)) {
-                milestones.add(milestone);
-                Sound sound = type.getDefaultSound();
-                World world = block.getWorld();
-                Location loc = block.getLocation();
-                Bukkit.getScheduler().runTask(plugin, () -> {
-                    world.playSound(loc, sound, SoundCategory.BLOCKS, 1.0f, 1.0f);
-                });
+        Set<Integer> milestones = firedMilestones.computeIfAbsent(pos, k -> ConcurrentHashMap.newKeySet());
+        int highestNewMilestone = -1;
+        for (int milestone : MILESTONES) {
+            if (currPercent >= milestone && !milestones.contains(milestone)) {
+                highestNewMilestone = milestone;
             }
+        }
+
+        if (highestNewMilestone >= 0) {
+            for (int milestone : MILESTONES) {
+                if (milestone <= highestNewMilestone) {
+                    milestones.add(milestone);
+                }
+            }
+
+            Sound sound = type.getDefaultSound();
+            World world = block.getWorld();
+            Location loc = block.getLocation();
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                world.playSound(loc, sound, SoundCategory.BLOCKS, 1.0f, 1.0f);
+            });
         }
     }
 
@@ -101,7 +120,7 @@ public class MachineFeedbackService {
             return;
         }
 
-        BlockPosition pos = new BlockPosition(block);
+        BlockPosition pos = getPosition(block);
 
         if (activeBlockStates.remove(pos)) {
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -115,6 +134,7 @@ public class MachineFeedbackService {
 
         firedMilestones.remove(pos);
         particleTickCounters.remove(pos);
+        positionCache.remove(pos);
     }
 
     private void spawnParticles(@Nonnull Block block, @Nonnull MachineFeedbackType type) {
@@ -125,13 +145,10 @@ public class MachineFeedbackService {
         double bz = block.getZ();
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
 
-        double[] skullOffsets = null;
-        double cx = 0, cy = 0, cz = 0, sx = 0, sy = 0, sz = 0, speed = 0;
+        double cx, cy, cz, sx, sy, sz, speed;
+        double[] skullOffsets = new double[16];
 
         for (int i = 0; i < 4; i++) {
-            if (skullOffsets == null) {
-                skullOffsets = new double[16];
-            }
             int base = i * 4;
             skullOffsets[base] = bx + 0.5 + rnd.nextDouble(-0.25, 0.25);
             skullOffsets[base + 1] = by + 0.85 + rnd.nextDouble(0, 0.3);
@@ -193,5 +210,6 @@ public class MachineFeedbackService {
         activeBlockStates.clear();
         firedMilestones.clear();
         particleTickCounters.clear();
+        positionCache.clear();
     }
 }

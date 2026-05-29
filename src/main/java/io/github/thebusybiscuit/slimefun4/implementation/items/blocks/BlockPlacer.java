@@ -14,6 +14,7 @@ import io.github.thebusybiscuit.slimefun4.core.handlers.BlockDispenseHandler;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockPlaceHandler;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.handlers.VanillaInventoryDropHandler;
+import io.github.thebusybiscuit.slimefun4.utils.MachineStatePersistence;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
 import io.papermc.lib.PaperLib;
 import io.papermc.lib.features.blockstatesnapshot.BlockStateSnapshotResult;
@@ -212,6 +213,8 @@ public class BlockPlacer extends SlimefunItem {
                                 .getBlockDataController()
                                 .createBlock(block.getLocation(), sfItem.getId());
 
+                        restoreMachineState(item, block, sfItem);
+
                         handler.onBlockPlacerPlace(e);
                     });
                 }
@@ -223,8 +226,16 @@ public class BlockPlacer extends SlimefunItem {
                     Slimefun.getDatabaseManager()
                             .getBlockDataController()
                             .createBlock(block.getLocation(), sfItem.getId());
+
+                    restoreMachineState(item, block, sfItem);
                 });
             }
+        }
+    }
+
+    private void restoreMachineState(ItemStack item, Block block, SlimefunItem sfItem) {
+        if (MachineStatePersistence.hasState(item)) {
+            MachineStatePersistence.loadState(item, block.getLocation(), sfItem);
         }
     }
 

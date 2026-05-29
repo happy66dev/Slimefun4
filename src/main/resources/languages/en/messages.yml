@@ -364,6 +364,11 @@ machines:
     no-permission: '&4You do not seem to have permission to operate an Industrial Miner here!'
     finished: '&eYour Industrial Miner has finished! It obtained a total of %ores% ore(s)!'
 
+  MACHINE_STATE_CLEARER:
+    no-item: '&cYou are not holding any item!'
+    no-state: '&cThis item has no machine state data!'
+    success: '&aMachine state has been cleared! The item can now be stacked.'
+
 anvil:
   not-working: '&4You cannot use Slimefun items in an anvil!'
   mcmmo-salvaging: '&4You cannot salvage Slimefun items!'

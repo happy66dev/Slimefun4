@@ -21,6 +21,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.handlers.SimpleBlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.implementation.operations.CraftingOperation;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
+import io.github.thebusybiscuit.slimefun4.utils.MachineStatePersistence;
 import io.github.thebusybiscuit.slimefun4.utils.itemstack.ItemStackWrapper;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -100,6 +101,7 @@ public abstract class AContainer extends SlimefunItem
                 }
 
                 processor.endOperation(b);
+                Slimefun.getMachineFeedbackService().onMachineStop(b, feedbackType);
             }
         };
     }
@@ -380,6 +382,11 @@ public abstract class AContainer extends SlimefunItem
         var data = StorageCacheUtils.getDataContainer(b.getLocation());
         if (data != null && Slimefun.getMachineDamageService().isMachineDamaged(data)) {
             return;
+        }
+
+        // 尝试从数据库恢复操作（仅当无活跃操作时）
+        if (data != null && data.isDataLoaded() && processor.getOperation(b) == null) {
+            MachineStatePersistence.loadOperationFromDatabaseOnce(b.getLocation(), this, processor);
         }
 
         BlockMenu inv = StorageCacheUtils.getMenu(b.getLocation());

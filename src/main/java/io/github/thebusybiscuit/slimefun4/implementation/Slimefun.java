@@ -115,6 +115,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.tasks.armor.RainbowArmo
 import io.github.thebusybiscuit.slimefun4.implementation.tasks.armor.SlimefunArmorTask;
 import io.github.thebusybiscuit.slimefun4.implementation.tasks.armor.SolarHelmetTask;
 import io.github.thebusybiscuit.slimefun4.integrations.IntegrationsManager;
+import io.github.thebusybiscuit.slimefun4.utils.MachineStatePersistence;
 import io.github.thebusybiscuit.slimefun4.utils.NumberUtils;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
 import io.papermc.lib.PaperLib;
@@ -532,17 +533,9 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         // Finishes all started movements/removals of block data
         ticker.setPaused(true);
         ticker.halt();
-        /**try {
-         * ticker.halt();
-         * ticker.run();
-         * } catch (Exception x) {
-         * getLogger()
-         * .log(
-         * Level.SEVERE,
-         * x,
-         * () -> "Something went wrong while disabling the ticker task for Slimefun v"
-         * + getDescription().getVersion());
-         * }*/
+
+        // 保存所有活跃的机器操作到数据库（在 ticker 暂停后执行，确保数据一致性）
+        MachineStatePersistence.saveAllOperationsToDatabase();
 
         // Kill our Profiler Threads
         profiler.kill();
