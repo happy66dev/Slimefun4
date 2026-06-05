@@ -102,9 +102,9 @@ public class Multimeter extends SimpleSlimefunItem<ItemUseHandler> {
         sb.append("&7位置: &f").append(EnergyNet.formatLocation(loc)).append("\n");
 
         long charge = component.getChargeLong(loc);
-        long capacity = component.getCapacityLong();
+        long capacity = component.getChargeCapacityLong(loc);
 
-        if (capacity > 0) {
+        if (component.isChargeable()) {
             double pct = (double) charge / capacity * 100;
             sb.append("&7电量: &f")
                     .append(charge)
