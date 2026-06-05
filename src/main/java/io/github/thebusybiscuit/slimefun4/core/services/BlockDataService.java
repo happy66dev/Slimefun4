@@ -2,7 +2,6 @@ package io.github.thebusybiscuit.slimefun4.core.services;
 
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
-import io.papermc.lib.PaperLib;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.logging.Level;
@@ -91,10 +90,6 @@ public class BlockDataService implements Keyed {
         Validate.notNull(b, "The block cannot be null!");
         Validate.notNull(value, "The value cannot be null!");
 
-        /**
-         * Don't use PaperLib here, it seems to be quite buggy in block-placing scenarios
-         * and it would be too tedious to check for individual build versions to circumvent this.
-         */
         BlockState state = b.getState();
 
         if (state instanceof TileState tileState) {
@@ -105,7 +100,7 @@ public class BlockDataService implements Keyed {
             } catch (Exception x) {
                 Slimefun.logger().log(Level.SEVERE, "Please check if your Server Software is up to date!");
 
-                String serverSoftware = PaperLib.isSpigot() && !PaperLib.isPaper() ? "Spigot" : Bukkit.getName();
+                String serverSoftware = Bukkit.getName();
                 Slimefun.logger()
                         .log(
                                 Level.SEVERE,

@@ -118,7 +118,6 @@ import io.github.thebusybiscuit.slimefun4.integrations.IntegrationsManager;
 import io.github.thebusybiscuit.slimefun4.utils.MachineStatePersistence;
 import io.github.thebusybiscuit.slimefun4.utils.NumberUtils;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
-import io.papermc.lib.PaperLib;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -276,16 +275,6 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         } else if (!SlimefunExtended.checkEnvironment(this)) {
             // We want to ensure that the Server uses a compatible server software and have no
             // incompatible plugins
-            getServer().getPluginManager().disablePlugin(this);
-        } else if (!PaperLib.isPaper()) {
-            getLogger().log(Level.WARNING, "#######################################################");
-            getLogger().log(Level.WARNING, "");
-            getLogger().log(Level.WARNING, "自 24/12/22 起 Slimefun 汉化版");
-            getLogger().log(Level.WARNING, "转为 Paper 插件, 你必须要使用 Paper");
-            getLogger().log(Level.WARNING, "或其分支才可使用 Slimefun.");
-            getLogger().log(Level.WARNING, "立即下载 Paper: https://papermc.io/downloads/paper");
-            getLogger().log(Level.WARNING, "");
-            getLogger().log(Level.WARNING, "#######################################################");
             getServer().getPluginManager().disablePlugin(this);
         } else {
             // The Environment has been validated.
@@ -625,12 +614,6 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
      */
     private boolean isVersionUnsupported() {
         try {
-            // First check if they still use the unsupported CraftBukkit software.
-            if (!PaperLib.isSpigot() && Bukkit.getName().equals("CraftBukkit")) {
-                StartupWarnings.invalidServerSoftware(getLogger());
-                return true;
-            }
-
             // Now check the actual Version of Minecraft
             // the Minecraft version id (e.g. "1.20.4", "1.20.2-pre2", "23w31a")
             ServerVersion serverVerDetail = SlimefunExtended.getServerVerDetail(getServer());
