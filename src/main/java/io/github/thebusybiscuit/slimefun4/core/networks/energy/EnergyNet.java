@@ -632,6 +632,18 @@ public class EnergyNet extends Network implements HologramOwner {
             SlimefunItem item = (SlimefunItem) component;
             long oldCharge = component.getChargeLong(loc);
 
+            List<EnergyPath> allCapPaths = new ArrayList<>();
+            for (Map<Location, Set<EnergyPath>> pathsByGen : generatorToCapacitorPaths.values()) {
+                Set<EnergyPath> capSet = pathsByGen.get(loc);
+                if (capSet != null) {
+                    allCapPaths.addAll(capSet);
+                }
+            }
+            if (allCapPaths.isEmpty()) {
+                debugLog("storeRemainingEnergy电容: 跳过 " + formatLocation(loc) + " (无BFS路径，不传输)");
+                continue;
+            }
+
             if (remainingEnergy > 0) {
                 long capacity = component.getChargeCapacityLong(loc);
                 long canStore = capacity - oldCharge;
@@ -702,49 +714,25 @@ public class EnergyNet extends Network implements HologramOwner {
             }
 
             if (chargeDiff > 0) {
-                // 记录连接器负载：优先使用预计算的发电机→电容路径
-                List<EnergyPath> allCapPaths = new ArrayList<>();
-                for (Map<Location, Set<EnergyPath>> pathsByGen : generatorToCapacitorPaths.values()) {
-                    Set<EnergyPath> capSet = pathsByGen.get(loc);
-                    if (capSet != null) {
-                        allCapPaths.addAll(capSet);
-                    }
+                // 按(源, 长度)分组，均摊负载到多条路径
+                Map<String, List<EnergyPath>> pathGroups = new LinkedHashMap<>();
+                for (EnergyPath p : allCapPaths) {
+                    String key = p.source.getBlockX() + "," + p.source.getBlockY() + "," + p.source.getBlockZ() + ","
+                            + p.length;
+                    pathGroups.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
                 }
-                if (!allCapPaths.isEmpty()) {
-                    // 按(源, 长度)分组，均摊负载到多条路径
-                    Map<String, List<EnergyPath>> pathGroups = new LinkedHashMap<>();
-                    for (EnergyPath p : allCapPaths) {
-                        String key = p.source.getBlockX() + "," + p.source.getBlockY() + "," + p.source.getBlockZ()
-                                + "," + p.length;
-                        pathGroups.computeIfAbsent(key, k -> new ArrayList<>()).add(p);
-                    }
-                    long totalPaths = allCapPaths.size();
-                    long loadPerPath = chargeDiff / totalPaths;
-                    long loadRemainder = chargeDiff % totalPaths;
-                    int idx = 0;
-                    for (List<EnergyPath> group : pathGroups.values()) {
-                        for (EnergyPath path : group) {
-                            long pathLoad = loadPerPath + (idx < loadRemainder ? 1 : 0);
-                            if (pathLoad > 0) {
-                                recordConnectorLoad(path, pathLoad);
-                            }
-                            idx++;
+                long totalPaths = allCapPaths.size();
+                long loadPerPath = chargeDiff / totalPaths;
+                long loadRemainder = chargeDiff % totalPaths;
+                int idx = 0;
+                for (List<EnergyPath> group : pathGroups.values()) {
+                    for (EnergyPath path : group) {
+                        long pathLoad = loadPerPath + (idx < loadRemainder ? 1 : 0);
+                        if (pathLoad > 0) {
+                            recordConnectorLoad(path, pathLoad);
                         }
+                        idx++;
                     }
-                } else {
-                    // 降级方案：无预计算路径时直接遍历连接器，找出能覆盖此电容的连接器
-                    long totalLoadRecorded = 0;
-                    for (Map.Entry<Location, EnergyNetComponent> connEntry : connectors.entrySet()) {
-                        Location connLoc = connEntry.getKey();
-                        EnergyNetComponent connComp = connEntry.getValue();
-                        if (connComp != null && checkRangeValidation(connLoc, loc, EnergyNetComponentType.CAPACITOR)) {
-                            long currentLoad = connectorLoad.getOrDefault(connLoc, 0L);
-                            connectorLoad.put(connLoc, currentLoad + chargeDiff);
-                            totalLoadRecorded = chargeDiff;
-                            break;
-                        }
-                    }
-                    debugLog("storeRemainingEnergy电容负载(降级): " + formatLocation(loc) + " 记录=" + totalLoadRecorded + "J");
                 }
             }
         }
@@ -1001,6 +989,10 @@ public class EnergyNet extends Network implements HologramOwner {
         if (!bfsDbQueried.add(l)) {
             return null;
         }
+        return querySlimefunItemFromDbDirect(l);
+    }
+
+    @Nullable private SlimefunItem querySlimefunItemFromDbDirect(@Nonnull Location l) {
         SlimefunBlockData blockData =
                 Slimefun.getDatabaseManager().getBlockDataController().getBlockData(l);
         if (blockData == null) {
@@ -1585,13 +1577,13 @@ public class EnergyNet extends Network implements HologramOwner {
      * 获取指定位置的邻居位置（统一单向边界规则 A→B）
      *
      * 统一规则:
-     * - G→Connector: dist(G,C) ≤ C.range
+     * - G→Connector: dist(G,C) ≤ C.range 且不允许直达LongRangeConnector
      * - G→Capacitor: FORBIDDEN
      * - G→Consumer: FORBIDDEN
      * - Connector→Connector: dist(A,B) ≤ A.range (发送方的范围)
      * - Connector→Capacitor: dist ≤ 1 (仅相邻)
      * - Connector→Consumer: dist ≤ A.range
-     * - Capacitor→Connector: dist ≤ 1 (仅相邻)
+     * - Capacitor→Connector: dist ≤ 1 (仅相邻，且不包含LongRangeConnector)
      * - Capacitor→Capacitor: dist ≤ 1 (仅相邻)
      * - Capacitor→Consumer: FORBIDDEN
      * - Consumer→anything: FORBIDDEN (终端)
@@ -1609,6 +1601,10 @@ public class EnergyNet extends Network implements HologramOwner {
                     neighbors.add(regulator);
                 }
                 for (Location connectorLoc : connectors.keySet()) {
+                    EnergyNetComponent connectorComp = getComponent(connectorLoc);
+                    if (connectorComp instanceof LongRangeConnector) {
+                        continue;
+                    }
                     if (validateConnection(
                             location,
                             connectorLoc,
@@ -1632,6 +1628,10 @@ public class EnergyNet extends Network implements HologramOwner {
                     neighbors.add(regulator);
                 }
                 for (Location connectorLoc : connectors.keySet()) {
+                    EnergyNetComponent connectorComp = getComponent(connectorLoc);
+                    if (connectorComp instanceof LongRangeConnector) {
+                        continue;
+                    }
                     if (isAdjacent(location, connectorLoc)) {
                         neighbors.add(connectorLoc);
                     }
@@ -1900,9 +1900,7 @@ public class EnergyNet extends Network implements HologramOwner {
                             this.conflictPartner = otherNet;
                             otherNet.conflictPartner = this;
                         }
-                        // 在冲突调节器上显示冲突悬浮字
                         updateHologramOnMain(current, "&c电网冲突：多个能源调节器相连");
-                        // 在本电网调节器上也显示冲突悬浮字
                         updateHologramOnMain(regulator, "&c电网冲突：多个能源调节器相连");
                         addConflictHologramsToConnectors();
                         return false;
@@ -1923,8 +1921,8 @@ public class EnergyNet extends Network implements HologramOwner {
                     otherNet.conflictPartner = this;
                     otherNet.updateHologramOnMain(otherNet.regulator, "&c电网冲突：电网交叉");
                 }
-                updateHologramOnMain(current, "&c电网冲突：该机器已属于其他电网");
-                // 本电网调节器也显示冲突
+                // 已注释：不在冲突机器上显示全息（调节器保留）
+                // updateHologramOnMain(current, "&c电网冲突：该机器已属于其他电网");
                 updateHologramOnMain(regulator, "&c电网冲突：电网交叉");
                 addConflictHologramsToConnectors();
                 return false;
@@ -2047,11 +2045,12 @@ public class EnergyNet extends Network implements HologramOwner {
     }
 
     private void addConflictHologramsToConnectors() {
-        Set<Location> targets = new HashSet<>(connectorNodes);
-        targets.addAll(conflictHologramTargets);
-        for (Location connector : targets) {
-            updateHologramOnMain(connector, "&c电网冲突：电网交叉");
-        }
+        // 已注释：冲突时不在连接器上显示全息
+        // Set<Location> targets = new HashSet<>(connectorNodes);
+        // targets.addAll(conflictHologramTargets);
+        // for (Location connector : targets) {
+        //     updateHologramOnMain(connector, "&c电网冲突：电网交叉");
+        // }
     }
 
     private void enterConflict(
@@ -2061,7 +2060,8 @@ public class EnergyNet extends Network implements HologramOwner {
             @Nonnull String otherMessage) {
         this.conflictMode = true;
         conflictHologramTargets.add(conflictLoc);
-        updateHologramOnMain(conflictLoc, ownMessage);
+        // 已注释：不在冲突位置显示全息
+        // updateHologramOnMain(conflictLoc, ownMessage);
         if (otherNet != null && otherNet != this) {
             otherNet.conflictMode = true;
             this.conflictPartner = otherNet;
@@ -2336,7 +2336,8 @@ public class EnergyNet extends Network implements HologramOwner {
             }
 
             if (isLocationInOtherGrid(targetLoc)) {
-                updateHologramOnMain(targetLoc, "&c电网冲突：该机器已属于其他电网");
+                // 已注释：不在冲突机器上显示全息
+                // updateHologramOnMain(targetLoc, "&c电网冲突：该机器已属于其他电网");
                 return false;
             }
 

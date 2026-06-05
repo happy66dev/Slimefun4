@@ -180,9 +180,9 @@ for each axis:
 
 | 类型 | 邻居来源 |
 |------|---------|
-| GENERATOR | 调节器 + 所有连接器（`validateConnection`） |
+| GENERATOR | 调节器 + 短路连接器（**不允许直达LongRangeConnector**，需先经短路连接器） |
 | CONSUMER | **无出边**（不能作为发送方） |
-| CAPACITOR | 相邻电容(曼哈顿=1) + 调节器(26邻居) + 连接器(26邻居+`validateConnection`) |
+| CAPACITOR | 相邻电容(曼哈顿=1) + 调节器(26邻居) + 短路连接器(26邻居，**排除LongRangeConnector**) |
 | CONNECTOR(普通) | 其他连接器 + 发电机 + 调节器 + 用电器 + 电容（**全部使用轴向范围检查** `isWithinRangeAxial`） |
 | CONNECTOR(长途) | **仅6个轴向上最近的连接器**（扫描每个轴向，遇到第一个连接器即停，遇任意非空方块也停） |
 
