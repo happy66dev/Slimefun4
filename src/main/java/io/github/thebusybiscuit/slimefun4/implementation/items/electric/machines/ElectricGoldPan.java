@@ -40,7 +40,7 @@ public class ElectricGoldPan extends AContainer implements RecipeDisplayItem {
     @ParametersAreNonnullByDefault
     public ElectricGoldPan(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.FLUID;
+        this.feedbackType = MachineFeedbackType.FLUID_BUBBLING;
         addItemSetting(overrideOutputLimit);
     }
 

@@ -17,7 +17,7 @@ public class CombustionGenerator extends AGenerator implements NotDiagonallyRota
     @ParametersAreNonnullByDefault
     public CombustionGenerator(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.SMELTING;
+        this.feedbackType = MachineFeedbackType.SMELTING_BLAZING;
     }
 
     @Override

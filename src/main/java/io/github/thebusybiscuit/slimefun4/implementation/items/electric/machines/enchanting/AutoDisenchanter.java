@@ -45,7 +45,7 @@ public class AutoDisenchanter extends AbstractEnchantmentMachine {
     @ParametersAreNonnullByDefault
     public AutoDisenchanter(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.ENCHANTING;
+        this.feedbackType = MachineFeedbackType.ENCHANTING_DARK;
     }
 
     @Override

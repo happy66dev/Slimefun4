@@ -25,7 +25,7 @@ public class ChargingBench extends AContainer {
 
     public ChargingBench(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.MECHANICAL;
+        this.feedbackType = MachineFeedbackType.ELECTRIC_ARC;
     }
 
     @Override

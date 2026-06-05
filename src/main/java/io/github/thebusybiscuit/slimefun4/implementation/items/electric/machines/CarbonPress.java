@@ -17,7 +17,7 @@ public class CarbonPress extends AContainer implements RecipeDisplayItem {
     @ParametersAreNonnullByDefault
     public CarbonPress(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.MECHANICAL;
+        this.feedbackType = MachineFeedbackType.MECHANICAL_HEAVY;
     }
 
     @Override

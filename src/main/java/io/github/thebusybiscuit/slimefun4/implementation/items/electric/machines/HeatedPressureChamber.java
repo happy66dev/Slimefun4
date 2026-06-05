@@ -29,7 +29,7 @@ public class HeatedPressureChamber extends AContainer {
     public HeatedPressureChamber(
             ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.SMELTING;
+        this.feedbackType = MachineFeedbackType.MECHANICAL_STEAM;
 
         new BlockMenuPreset(getId(), getItemName()) {
 

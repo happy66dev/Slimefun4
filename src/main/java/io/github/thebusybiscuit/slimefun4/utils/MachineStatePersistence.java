@@ -1,27 +1,23 @@
 package io.github.thebusybiscuit.slimefun4.utils;
 
 import com.xzavier0722.mc.plugin.slimefun4.storage.controller.ASlimefunDataContainer;
-import com.xzavier0722.mc.plugin.slimefun4.storage.util.DataUtils;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
+import io.github.thebusybiscuit.slimefun4.core.attributes.MachineProcessHolder;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineOperation;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineProcessor;
+import io.github.thebusybiscuit.slimefun4.core.machines.OperationSerializers;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
-import io.github.thebusybiscuit.slimefun4.implementation.operations.CraftingOperation;
-import io.github.thebusybiscuit.slimefun4.implementation.operations.FuelOperation;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
-import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer;
-import me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator;
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
+import org.bukkit.block.Block;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -32,7 +28,8 @@ public final class MachineStatePersistence {
     private static final String PREFIX = "machine_state_";
     private static final String DB_KEY_SAVED_OPERATION = "saved_operation";
     private static final int PROGRESS_BAR_LENGTH = 10;
-    private static final Set<String> DATABASE_RESTORE_CHECKS = ConcurrentHashMap.newKeySet();
+    private static final String MACHINE_DAMAGE_WORK_TICKS_KEY = "machine_damage_work_ticks";
+    private static final String MACHINE_DAMAGE_CHANCE_KEY = "machine_damage_chance";
 
     private static volatile NamespacedKey keyHasState;
     private static volatile NamespacedKey keyCharge;
@@ -40,6 +37,8 @@ public final class MachineStatePersistence {
     private static volatile NamespacedKey keyOperationType;
     private static volatile NamespacedKey keyOperationData;
     private static volatile NamespacedKey keyStateLoreLines;
+    private static volatile NamespacedKey keyWorkTicks;
+    private static volatile NamespacedKey keyDamageChance;
 
     private static NamespacedKey getKeyHasState() {
         if (keyHasState == null) {
@@ -107,13 +106,51 @@ public final class MachineStatePersistence {
         return keyStateLoreLines;
     }
 
+    private static NamespacedKey getKeyWorkTicks() {
+        if (keyWorkTicks == null) {
+            synchronized (MachineStatePersistence.class) {
+                if (keyWorkTicks == null) {
+                    keyWorkTicks = new NamespacedKey(Slimefun.instance(), PREFIX + "work_ticks");
+                }
+            }
+        }
+        return keyWorkTicks;
+    }
+
+    private static NamespacedKey getKeyDamageChance() {
+        if (keyDamageChance == null) {
+            synchronized (MachineStatePersistence.class) {
+                if (keyDamageChance == null) {
+                    keyDamageChance = new NamespacedKey(Slimefun.instance(), PREFIX + "damage_chance");
+                }
+            }
+        }
+        return keyDamageChance;
+    }
+
     private MachineStatePersistence() {}
+
+    @SuppressWarnings("unchecked")
+    private static <T extends MachineOperation> void startOperationUnchecked(
+            MachineProcessor<?> processor, Block block, MachineOperation op, SlimefunItem sfItem) {
+        if (sfItem instanceof MachineProcessHolder<?> holder
+                && holder.getMachineOperationClass().isInstance(op)) {
+            ((MachineProcessor<T>) processor).startOperation(block, (T) op);
+        }
+    }
 
     public static boolean shouldSaveState(@Nonnull SlimefunItem sfItem, @Nonnull Location loc) {
         if (getStoredCharge(sfItem, loc) > 0) {
             return true;
         }
-        return getActiveOperation(sfItem, loc) != null;
+        if (isPersistableOperation(getActiveOperation(sfItem, loc))) {
+            return true;
+        }
+        return getStoredWorkTicks(loc) > 0;
+    }
+
+    private static boolean isPersistableOperation(@Nullable MachineOperation operation) {
+        return operation != null && operation.getOperationTypeId() != null && operation.serialize() != null;
     }
 
     private static long getStoredCharge(@Nonnull SlimefunItem sfItem, @Nonnull Location loc) {
@@ -130,13 +167,42 @@ public final class MachineStatePersistence {
     }
 
     @Nullable private static MachineOperation getActiveOperation(@Nonnull SlimefunItem sfItem, @Nonnull Location loc) {
-        if (sfItem instanceof AContainer container) {
-            return container.getMachineProcessor().getOperation(loc.getBlock());
-        }
-        if (sfItem instanceof AGenerator generator) {
-            return generator.getMachineProcessor().getOperation(loc.getBlock());
+        if (sfItem instanceof MachineProcessHolder<?> holder) {
+            return holder.getMachineProcessor().getOperation(loc.getBlock());
         }
         return null;
+    }
+
+    private static long getStoredWorkTicks(@Nonnull Location loc) {
+        ASlimefunDataContainer data = StorageCacheUtils.getDataContainer(loc);
+        if (data == null) {
+            return 0;
+        }
+        String value = data.getData(MACHINE_DAMAGE_WORK_TICKS_KEY);
+        if (value != null) {
+            try {
+                return Long.parseLong(value);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return 0;
+    }
+
+    private static double getStoredDamageChance(@Nonnull Location loc) {
+        ASlimefunDataContainer data = StorageCacheUtils.getDataContainer(loc);
+        if (data == null) {
+            return 0;
+        }
+        String value = data.getData(MACHINE_DAMAGE_CHANCE_KEY);
+        if (value != null) {
+            try {
+                return Double.parseDouble(value);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        }
+        return 0;
     }
 
     public static boolean hasState(@Nullable ItemStack item) {
@@ -174,8 +240,7 @@ public final class MachineStatePersistence {
     }
 
     @Nonnull
-    private static List<String> buildStateLore(
-            long charge, long capacity, @Nullable MachineOperation op, @Nonnull SlimefunItem sfItem) {
+    private static List<String> buildStateLore(long charge, long capacity, @Nullable MachineOperation op) {
         List<String> lore = new ArrayList<>();
 
         if (capacity > 0) {
@@ -184,7 +249,10 @@ public final class MachineStatePersistence {
         }
 
         if (op != null) {
-            String typeName = getOperationTypeName(op, sfItem);
+            String typeName = op.getDisplayName();
+            if (typeName == null) {
+                typeName = "???";
+            }
             int progress = op.getProgress();
             int totalTicks = op.getTotalTicks();
 
@@ -198,32 +266,6 @@ public final class MachineStatePersistence {
         return lore;
     }
 
-    @Nonnull
-    private static String getOperationTypeName(@Nonnull MachineOperation op, @Nonnull SlimefunItem sfItem) {
-        if (op instanceof CraftingOperation craftingOp) {
-            ItemStack[] ingredients = craftingOp.getIngredients();
-            if (ingredients != null && ingredients.length > 0 && ingredients[0] != null) {
-                return getItemDisplayName(ingredients[0]);
-            }
-        } else if (op instanceof FuelOperation fuelOp) {
-            ItemStack ingredient = fuelOp.getIngredient();
-            if (ingredient != null) {
-                return getItemDisplayName(ingredient);
-            }
-        }
-        return "???";
-    }
-
-    @Nonnull
-    private static String getItemDisplayName(@Nonnull ItemStack item) {
-        ItemMeta meta = item.hasItemMeta() ? item.getItemMeta() : null;
-        if (meta != null && meta.hasDisplayName()) {
-            return meta.getDisplayName();
-        }
-        String materialName = item.getType().name().replace("_", " ").toLowerCase();
-        return materialName.substring(0, 1).toUpperCase() + materialName.substring(1);
-    }
-
     @Nullable public static ItemStack saveState(@Nonnull Location loc, @Nonnull SlimefunItem sfItem) {
         ItemStack item = sfItem.getItem().clone();
         ItemMeta meta = item.getItemMeta();
@@ -235,8 +277,13 @@ public final class MachineStatePersistence {
         long charge = getStoredCharge(sfItem, loc);
         long capacity = 0;
         MachineOperation operation = getActiveOperation(sfItem, loc);
+        String operationTypeId = operation == null ? null : operation.getOperationTypeId();
+        String operationData = operation == null ? null : operation.serialize();
+        boolean persistOperation = operationTypeId != null && operationData != null;
+        long workTicks = getStoredWorkTicks(loc);
+        double damageChance = getStoredDamageChance(loc);
 
-        if (charge <= 0 && operation == null) {
+        if (charge <= 0 && !persistOperation && workTicks <= 0) {
             return null;
         }
 
@@ -248,17 +295,21 @@ public final class MachineStatePersistence {
             }
         }
 
-        if (operation instanceof CraftingOperation craftingOp) {
-            pdc.set(getKeyOperationType(), PersistentDataType.STRING, "crafting");
-            pdc.set(getKeyOperationData(), PersistentDataType.STRING, serializeCraftingOperation(craftingOp));
-        } else if (operation instanceof FuelOperation fuelOp) {
-            pdc.set(getKeyOperationType(), PersistentDataType.STRING, "fuel");
-            pdc.set(getKeyOperationData(), PersistentDataType.STRING, serializeFuelOperation(fuelOp));
+        if (persistOperation) {
+            pdc.set(getKeyOperationType(), PersistentDataType.STRING, operationTypeId);
+            pdc.set(getKeyOperationData(), PersistentDataType.STRING, operationData);
+        }
+
+        if (workTicks > 0) {
+            pdc.set(getKeyWorkTicks(), PersistentDataType.LONG, workTicks);
+        }
+        if (damageChance > 0) {
+            pdc.set(getKeyDamageChance(), PersistentDataType.DOUBLE, damageChance);
         }
 
         pdc.set(getKeyHasState(), PersistentDataType.BYTE, (byte) 1);
 
-        List<String> stateLore = buildStateLore(charge, capacity, operation, sfItem);
+        List<String> stateLore = buildStateLore(charge, capacity, persistOperation ? operation : null);
         pdc.set(getKeyStateLoreLines(), PersistentDataType.INTEGER, stateLore.size());
 
         List<String> newLore = new ArrayList<>(stateLore);
@@ -297,16 +348,27 @@ public final class MachineStatePersistence {
         String opData = pdc.get(getKeyOperationData(), PersistentDataType.STRING);
 
         if (opType != null && opData != null) {
-            if ("crafting".equals(opType) && sfItem instanceof AContainer container) {
-                CraftingOperation op = deserializeCraftingOperation(opData);
+            if (sfItem instanceof MachineProcessHolder<?> holder) {
+                MachineOperation op = OperationSerializers.deserialize(opType, opData);
                 if (op != null) {
-                    container.getMachineProcessor().startOperation(loc.getBlock(), op);
+                    startOperationUnchecked(holder.getMachineProcessor(), loc.getBlock(), op, sfItem);
                 }
-            } else if ("fuel".equals(opType) && sfItem instanceof AGenerator generator) {
-                FuelOperation op = deserializeFuelOperation(opData);
-                if (op != null) {
-                    generator.getMachineProcessor().startOperation(loc.getBlock(), op);
-                }
+            }
+        }
+
+        Long workTicks = pdc.get(getKeyWorkTicks(), PersistentDataType.LONG);
+        if (workTicks != null && workTicks > 0) {
+            var blockData = StorageCacheUtils.getDataContainer(loc);
+            if (blockData != null) {
+                blockData.setData(MACHINE_DAMAGE_WORK_TICKS_KEY, String.valueOf(workTicks));
+            }
+        }
+
+        Double damageChance = pdc.get(getKeyDamageChance(), PersistentDataType.DOUBLE);
+        if (damageChance != null && damageChance > 0) {
+            var blockData = StorageCacheUtils.getDataContainer(loc);
+            if (blockData != null) {
+                blockData.setData(MACHINE_DAMAGE_CHANCE_KEY, String.valueOf(damageChance));
             }
         }
     }
@@ -329,6 +391,8 @@ public final class MachineStatePersistence {
         pdc.remove(getKeyOperationType());
         pdc.remove(getKeyOperationData());
         pdc.remove(getKeyStateLoreLines());
+        pdc.remove(getKeyWorkTicks());
+        pdc.remove(getKeyDamageChance());
 
         if (meta.hasLore()) {
             List<String> lore = meta.getLore();
@@ -343,148 +407,36 @@ public final class MachineStatePersistence {
         return result;
     }
 
-    @Nonnull
-    private static String serializeCraftingOperation(@Nonnull CraftingOperation op) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("crafting|");
-        sb.append(op.getTotalTicks()).append("|");
-        sb.append(op.getProgress()).append("|");
-
-        ItemStack[] ingredients = op.getIngredients();
-        sb.append(ingredients.length).append("|");
-        for (ItemStack ingredient : ingredients) {
-            sb.append(DataUtils.serializeItemStack(ingredient)).append(";");
-        }
-        sb.append("|");
-
-        ItemStack[] results = op.getResults();
-        sb.append(results.length).append("|");
-        for (ItemStack result : results) {
-            sb.append(DataUtils.serializeItemStack(result)).append(";");
-        }
-
-        return sb.toString();
-    }
-
-    @Nonnull
-    private static String serializeFuelOperation(@Nonnull FuelOperation op) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("fuel|");
-        sb.append(op.getTotalTicks()).append("|");
-        sb.append(op.getProgress()).append("|");
-        sb.append(DataUtils.serializeItemStack(op.getIngredient())).append("|");
-
-        ItemStack result = op.getResult();
-        sb.append(result != null ? DataUtils.serializeItemStack(result) : "");
-
-        return sb.toString();
-    }
-
-    @Nullable public static CraftingOperation deserializeCraftingOperation(@Nonnull String data) {
-        try {
-            String[] parts = data.split("\\|", 7);
-            if (parts.length < 6 || !"crafting".equals(parts[0])) {
-                return null;
-            }
-
-            int totalTicks = Integer.parseInt(parts[1]);
-            int currentTicks = Integer.parseInt(parts[2]);
-
-            int ingredientCount = Integer.parseInt(parts[3]);
-            if (ingredientCount < 0 || ingredientCount > 64) {
-                return null;
-            }
-            String[] ingredientData = parts[4].split(";", -1);
-            ItemStack[] ingredients = new ItemStack[ingredientCount];
-            for (int i = 0; i < ingredientCount && i < ingredientData.length; i++) {
-                ingredients[i] = DataUtils.deserializeItemStack(ingredientData[i]);
-            }
-
-            int resultCount = Integer.parseInt(parts[5]);
-            if (resultCount < 0 || resultCount > 64) {
-                return null;
-            }
-            String[] resultData = parts.length > 6 ? parts[6].split(";", -1) : new String[0];
-            ItemStack[] results = new ItemStack[resultCount];
-            for (int i = 0; i < resultCount && i < resultData.length; i++) {
-                results[i] = DataUtils.deserializeItemStack(resultData[i]);
-            }
-
-            CraftingOperation op = new CraftingOperation(ingredients, results, totalTicks);
-            if (currentTicks > 0) {
-                op.addProgress(currentTicks);
-            }
-            return op;
-        } catch (Exception e) {
-            Slimefun.logger().log(Level.WARNING, "Failed to deserialize CraftingOperation", e);
-            return null;
-        }
-    }
-
-    @Nullable public static FuelOperation deserializeFuelOperation(@Nonnull String data) {
-        try {
-            String[] parts = data.split("\\|", 5);
-            if (parts.length < 4 || !"fuel".equals(parts[0])) {
-                return null;
-            }
-
-            int totalTicks = Integer.parseInt(parts[1]);
-            int currentTicks = Integer.parseInt(parts[2]);
-
-            ItemStack ingredient = DataUtils.deserializeItemStack(parts[3]);
-            if (ingredient == null) {
-                return null;
-            }
-
-            ItemStack result = parts.length > 4 ? DataUtils.deserializeItemStack(parts[4]) : null;
-
-            FuelOperation op = new FuelOperation(ingredient, result, totalTicks);
-            if (currentTicks > 0) {
-                op.addProgress(currentTicks);
-            }
-            return op;
-        } catch (Exception e) {
-            Slimefun.logger().log(Level.WARNING, "Failed to deserialize FuelOperation", e);
-            return null;
-        }
-    }
-
     public static void saveAllOperationsToDatabase() {
         Slimefun.logger().info("[MachineStatePersistence] Saving all active operations to database...");
 
         int count = 0;
 
         for (SlimefunItem item : Slimefun.getRegistry().getEnabledSlimefunItems()) {
-            if (item instanceof AContainer container) {
-                count += saveProcessorOperations(container.getMachineProcessor(), "crafting");
-            } else if (item instanceof AGenerator generator) {
-                count += saveProcessorOperations(generator.getMachineProcessor(), "fuel");
+            if (item instanceof MachineProcessHolder<?> holder) {
+                count += saveProcessorOperations(holder.getMachineProcessor());
             }
         }
 
         Slimefun.logger().info("[MachineStatePersistence] Saved " + count + " operations to database.");
     }
 
-    private static <T extends MachineOperation> int saveProcessorOperations(
-            @Nonnull MachineProcessor<T> processor, @Nonnull String type) {
+    private static <T extends MachineOperation> int saveProcessorOperations(@Nonnull MachineProcessor<T> processor) {
         int count = 0;
 
         for (var entry : processor.getActiveOperations().entrySet()) {
             Location loc = entry.getKey().toLocation();
             T op = entry.getValue();
             if (op != null) {
+                String typeId = op.getOperationTypeId();
+                String serialized = op.serialize();
+                if (typeId == null || serialized == null) {
+                    continue;
+                }
+
                 var blockData = StorageCacheUtils.getDataContainer(loc);
                 if (blockData != null) {
-                    String serialized;
-                    if (op instanceof CraftingOperation craftingOp) {
-                        serialized = serializeCraftingOperation(craftingOp);
-                    } else if (op instanceof FuelOperation fuelOp) {
-                        serialized = serializeFuelOperation(fuelOp);
-                    } else {
-                        continue;
-                    }
-
-                    blockData.setData(DB_KEY_SAVED_OPERATION, type + "|" + serialized);
+                    blockData.setData(DB_KEY_SAVED_OPERATION, typeId + "|" + serialized);
                     count++;
                 }
             }
@@ -521,18 +473,10 @@ public final class MachineStatePersistence {
             String opData = savedOp.substring(separatorIndex + 1);
 
             boolean restored = false;
-            if ("crafting".equals(type) && sfItem instanceof AContainer container) {
-                CraftingOperation op = deserializeCraftingOperation(opData);
-                if (op != null) {
-                    container.getMachineProcessor().startOperation(loc.getBlock(), op);
-                    restored = true;
-                }
-            } else if ("fuel".equals(type) && sfItem instanceof AGenerator generator) {
-                FuelOperation op = deserializeFuelOperation(opData);
-                if (op != null) {
-                    generator.getMachineProcessor().startOperation(loc.getBlock(), op);
-                    restored = true;
-                }
+            MachineOperation op = OperationSerializers.deserialize(type, opData);
+            if (op != null) {
+                startOperationUnchecked(processor, loc.getBlock(), op, sfItem);
+                restored = true;
             }
 
             clearSavedOperation(loc);
@@ -544,30 +488,6 @@ public final class MachineStatePersistence {
             Slimefun.logger().log(Level.WARNING, "Failed to load operation from database at " + loc, e);
             clearSavedOperation(loc);
         }
-    }
-
-    public static void loadOperationFromDatabaseOnce(
-            @Nonnull Location loc, @Nonnull SlimefunItem sfItem, @Nonnull MachineProcessor<?> processor) {
-        String key = getLocationKey(loc);
-        if (!DATABASE_RESTORE_CHECKS.add(key)) {
-            return;
-        }
-
-        try {
-            loadOperationFromDatabase(loc, sfItem, processor);
-        } finally {
-            DATABASE_RESTORE_CHECKS.remove(key);
-        }
-    }
-
-    @Nonnull
-    private static String getLocationKey(@Nonnull Location loc) {
-        String world = loc.getWorld() == null ? "null" : loc.getWorld().getUID().toString();
-        return world + ':' + loc.getBlockX() + ':' + loc.getBlockY() + ':' + loc.getBlockZ();
-    }
-
-    public static void clearRestoreChecks() {
-        DATABASE_RESTORE_CHECKS.clear();
     }
 
     public static void clearSavedOperation(@Nonnull Location loc) {

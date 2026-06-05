@@ -1,11 +1,11 @@
 package io.github.thebusybiscuit.slimefun4.implementation.listeners;
 
-import city.norain.slimefun4.utils.LocalizationUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.core.services.MachineDamageService;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import javax.annotation.ParametersAreNonnullByDefault;
-import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
@@ -106,7 +106,13 @@ public class MachineDamageListener implements Listener {
     public void onPlayerInteract(PlayerInteractEvent e) {
         if (e.getAction() == Action.RIGHT_CLICK_BLOCK && e.getHand() == EquipmentSlot.HAND) {
             Player player = e.getPlayer();
+            if (e.getClickedBlock() == null) {
+                return;
+            }
             Location location = e.getClickedBlock().getLocation();
+            if (location.getWorld() == null) {
+                return;
+            }
             String locationKey = location.getWorld().getName() + "_" + location.getBlockX() + "_" + location.getBlockY()
                     + "_" + location.getBlockZ();
 
@@ -114,6 +120,11 @@ public class MachineDamageListener implements Listener {
                     com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils.getSlimefunItem(location);
 
             if (slimefunItem != null) {
+                if (slimefunItem instanceof EnergyNetComponent
+                        && ((EnergyNetComponent) slimefunItem).getEnergyComponentType()
+                                == EnergyNetComponentType.CONNECTOR) {
+                    return;
+                }
                 MachineDamageService damageService = Slimefun.getMachineDamageService();
                 var data =
                         com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils.getDataContainer(location);
@@ -149,9 +160,9 @@ public class MachineDamageListener implements Listener {
                                 if (damageService.canRepair(data)) {
                                     damageService.repairMachine(location);
                                     BlockListener.clearDamagedMachineBreakAttempts(location);
-                                    player.sendMessage(ChatColor.GREEN + "机器已成功修复！");
+                                    // player.sendMessage(ChatColor.GREEN + "机器已成功修复！");
                                 } else {
-                                    player.sendMessage(ChatColor.YELLOW + "已提交修复物品，继续提交其他需要的物品...");
+                                    // player.sendMessage(ChatColor.YELLOW + "已提交修复物品，继续提交其他需要的物品...");
                                     displayRepairItems(player, damageService, data);
                                 }
                             } else {
@@ -175,7 +186,8 @@ public class MachineDamageListener implements Listener {
             return;
         }
 
-        player.sendMessage(ChatColor.RED + "此机器需要以下修复物品:");
+        // player.sendMessage(ChatColor.RED + "此机器需要以下修复物品:");
+        /*
         for (java.util.Map<String, Object> itemInfo : repairItems) {
             ItemStack item = (ItemStack) itemInfo.get("item");
             Integer submitted = (Integer) itemInfo.get("submitted");
@@ -185,10 +197,11 @@ public class MachineDamageListener implements Listener {
 
             if (item != null) {
                 String itemName;
-                if (item.getItemMeta() != null
-                        && item.getItemMeta().getDisplayName() != null
-                        && !item.getItemMeta().getDisplayName().isEmpty()) {
-                    itemName = item.getItemMeta().getDisplayName();
+                org.bukkit.inventory.meta.ItemMeta meta = item.getItemMeta();
+                if (meta != null
+                        && meta.getDisplayName() != null
+                        && !meta.getDisplayName().isEmpty()) {
+                    itemName = meta.getDisplayName();
                 } else {
                     itemName = LocalizationUtils.getItemName(item.getType());
                 }
@@ -218,5 +231,6 @@ public class MachineDamageListener implements Listener {
                 }
             }
         }
+        */
     }
 }

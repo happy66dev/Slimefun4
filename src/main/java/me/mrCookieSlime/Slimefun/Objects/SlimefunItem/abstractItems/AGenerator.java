@@ -11,7 +11,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineProcessHolder;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
-import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
+import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedback;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineProcessor;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
@@ -51,7 +51,7 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
     private int energyProducedPerTick = -1;
     private int energyCapacity = -1;
 
-    protected @Nullable MachineFeedbackType feedbackType = null;
+    protected @Nullable MachineFeedback feedbackType = null;
 
     @ParametersAreNonnullByDefault
     protected AGenerator(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
@@ -90,6 +90,13 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
     @Override
     public MachineProcessor<FuelOperation> getMachineProcessor() {
         return processor;
+    }
+
+    @Override
+    @Nonnull
+    public Class<? extends io.github.thebusybiscuit.slimefun4.core.machines.MachineOperation>
+            getMachineOperationClass() {
+        return FuelOperation.class;
     }
 
     @Nonnull
@@ -158,7 +165,7 @@ public abstract class AGenerator extends AbstractEnergyProvider implements Machi
     public int getGeneratedOutput(@Nonnull Location l, @Nonnull ASlimefunDataContainer data) {
         // 尝试从数据库恢复操作（仅当无活跃操作时）
         if (processor.getOperation(l) == null) {
-            MachineStatePersistence.loadOperationFromDatabaseOnce(l, this, processor);
+            MachineStatePersistence.loadOperationFromDatabase(l, this, processor);
         }
 
         BlockMenu inv = StorageCacheUtils.getMenu(l);

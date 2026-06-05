@@ -141,6 +141,7 @@ public class MachineDamageNotificationListener implements Listener {
             SlimefunItem item,
             Location location,
             java.util.List<java.util.Map<String, Object>> repairItems) {
+        /*
         player.sendMessage("§c你的机器损坏了！");
         player.sendMessage("§c机器名称: §f" + item.getItemName());
         player.sendMessage("§c位置: §f" + formatLocation(location));
@@ -168,9 +169,11 @@ public class MachineDamageNotificationListener implements Listener {
                 }
             }
         }
+        */
     }
 
     private void sendConnectorDamageNotification(Player player, SlimefunItem item, Location location) {
+        /*
         player.sendMessage("§c你的连接器损坏了！");
         player.sendMessage("§c连接器名称: §f" + item.getItemName());
         player.sendMessage("§c位置: §f" + formatLocation(location));
@@ -179,6 +182,7 @@ public class MachineDamageNotificationListener implements Listener {
         if (!repairItemsDisplay.isEmpty()) {
             player.sendMessage("§c需要以下修复物品: §f" + repairItemsDisplay);
         }
+        */
     }
 
     private String formatLocation(Location location) {

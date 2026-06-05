@@ -8,8 +8,10 @@ import com.xzavier0722.mc.plugin.slimefun4.storage.controller.attributes.Univers
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.thebusybiscuit.slimefun4.api.events.PlayerRightClickEvent;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockUseHandler;
 import io.github.thebusybiscuit.slimefun4.core.handlers.ItemUseHandler;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
@@ -121,7 +123,11 @@ public class SlimefunItemInteractListener implements Listener {
             if (event.getClickedBlock().isPresent()) {
                 var location = event.getClickedBlock().get().getLocation();
                 var blockData = StorageCacheUtils.getDataContainer(location);
-                if (blockData != null && Slimefun.getMachineDamageService().isMachineDamaged(blockData)) {
+                if (blockData != null
+                        && Slimefun.getMachineDamageService().isMachineDamaged(blockData)
+                        && !(sfItem instanceof EnergyNetComponent
+                                && ((EnergyNetComponent) sfItem).getEnergyComponentType()
+                                        == EnergyNetComponentType.CONNECTOR)) {
                     event.getPlayer().sendMessage("§c机器损坏！无法交互");
                     event.getInteractEvent().setCancelled(true);
                     return false;

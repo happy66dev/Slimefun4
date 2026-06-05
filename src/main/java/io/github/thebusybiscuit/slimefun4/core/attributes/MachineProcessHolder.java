@@ -24,4 +24,7 @@ public interface MachineProcessHolder<T extends MachineOperation> extends ItemAt
      */
     @Nonnull
     MachineProcessor<T> getMachineProcessor();
+
+    @Nonnull
+    Class<? extends MachineOperation> getMachineOperationClass();
 }

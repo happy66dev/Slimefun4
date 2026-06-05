@@ -22,6 +22,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.handlers.SimpleBlockBreakHandler;
 import io.github.thebusybiscuit.slimefun4.implementation.operations.GEOMiningOperation;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
+import io.github.thebusybiscuit.slimefun4.utils.MachineStatePersistence;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.OptionalInt;
@@ -83,6 +84,13 @@ public class GEOMiner extends SlimefunItem
     @Override
     public @Nonnull MachineProcessor<GEOMiningOperation> getMachineProcessor() {
         return processor;
+    }
+
+    @Override
+    @Nonnull
+    public Class<? extends io.github.thebusybiscuit.slimefun4.core.machines.MachineOperation>
+            getMachineOperationClass() {
+        return GEOMiningOperation.class;
     }
 
     /**
@@ -308,6 +316,10 @@ public class GEOMiner extends SlimefunItem
 
     protected void tick(@Nonnull Block b) {
         BlockMenu inv = StorageCacheUtils.getMenu(b.getLocation());
+        if (processor.getOperation(b) == null) {
+            MachineStatePersistence.loadOperationFromDatabase(b.getLocation(), this, processor);
+        }
+
         GEOMiningOperation operation = processor.getOperation(b);
 
         if (operation != null) {

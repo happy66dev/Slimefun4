@@ -44,7 +44,7 @@ public class AutoEnchanter extends AbstractEnchantmentMachine {
     @ParametersAreNonnullByDefault
     public AutoEnchanter(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.ENCHANTING;
+        this.feedbackType = MachineFeedbackType.ENCHANTING_ARCANE;
 
         addItemSetting(overrideExistingEnchantsLvl);
     }

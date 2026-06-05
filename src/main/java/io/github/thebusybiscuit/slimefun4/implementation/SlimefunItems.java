@@ -2892,6 +2892,17 @@ public final class SlimefunItems {
     public static final SlimefunItemStack CRAFTER_SMART_PORT = new SlimefunItemStack(
             "CRAFTER_SMART_PORT", Material.LIME_STAINED_GLASS, "&a合成机智能交互接口", "", "&5可以根据合成表材料数量分配输入数量", "&5并拥有指定输出槽");
 
+    public static final SlimefunItemStack TEST_GENERATOR = new SlimefunItemStack(
+            "TEST_GENERATOR",
+            Material.DAYLIGHT_DETECTOR,
+            "&6&l[DEBUG] 测试发电机",
+            "",
+            "&7右键设置每 tick 产出电量 (J/t)",
+            "&7自带储电: &e32000 J");
+
+    public static final SlimefunItemStack TEST_CONSUMER = new SlimefunItemStack(
+            "TEST_CONSUMER", Material.FURNACE, "&6&l[DEBUG] 测试用电器", "", "&7右键设置每 tick 消耗电量 (J/t)", "&7自带储电: &e32000 J");
+
     static {
         INFUSED_ELYTRA.addUnsafeEnchantment(Enchantment.MENDING, 1);
     }

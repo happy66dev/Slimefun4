@@ -4,7 +4,6 @@ import city.norain.slimefun4.utils.LocalizationUtils;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
-import io.github.bakedlibs.dough.common.ChatColors;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.player.PlayerProfile;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
@@ -56,7 +55,7 @@ public final class ConnectorAgingManager {
 
     private static final Gson GSON = new Gson();
     private static final Map<Location, Integer> OVERLOAD_DAMAGE_COOLDOWN = new ConcurrentHashMap<>();
-    private static final int OVERLOAD_DAMAGE_INTERVAL = Math.max(1, (int) Math.ceil(20.0 / TICK_DELAY));
+    private static final int OVERLOAD_DAMAGE_INTERVAL = 1;
 
     // ─── 连接器配置 ──────────────────────────────────────────────
     public static final class ConnectorConfig {
@@ -93,7 +92,7 @@ public final class ConnectorAgingManager {
         return (long) (sweetPower * expectedTicks);
     }
 
-    private static final Map<String, ConnectorConfig> CONFIGS = new HashMap<>();
+    private static final Map<String, ConnectorConfig> CONFIGS = new ConcurrentHashMap<>();
 
     public static void registerConfig(
             @Nonnull String itemId,
@@ -165,6 +164,9 @@ public final class ConnectorAgingManager {
         if (durability <= 0f) {
             data.setData(DAMAGED_KEY, "true");
             if (oldDura > 0f) {
+                if (loc.getWorld() != null) {
+                    loc.getWorld().playSound(loc, Sound.BLOCK_ANVIL_DESTROY, 1.0f, 1.0f);
+                }
                 generateRepairItems(loc);
             }
         } else {
@@ -211,10 +213,14 @@ public final class ConnectorAgingManager {
             return x / (0.9 + 0.1 * x);
         }
         if (load <= cfg.maxPower) {
-            double x = ((double) (load - cfg.sweetPower) / (cfg.maxPower - cfg.sweetPower)) * 3.0 + 1.0;
+            long range = cfg.maxPower - cfg.sweetPower;
+            if (range <= 0) return 1.0;
+            double x = ((double) (load - cfg.sweetPower) / range) * 3.0 + 1.0;
             return x / (1.2 - 0.2 * x);
         }
-        double x = ((double) (load - cfg.maxPower) / (cfg.peakPower - cfg.maxPower)) * 4.0 + 4.0;
+        long range = cfg.peakPower - cfg.maxPower;
+        if (range <= 0) return 1.0;
+        double x = ((double) (load - cfg.maxPower) / range) * 4.0 + 4.0;
         return x / (0.79 - 0.0975 * x);
     }
 
@@ -259,7 +265,7 @@ public final class ConnectorAgingManager {
 
     private static void handleOverload(Location loc, ConnectorConfig cfg, long load, float durability, EnergyNet net) {
         float baseLoss = (float) (0.5 / 100.0);
-        float loss = baseLoss * (float) load / cfg.peakPower;
+        float loss = cfg.peakPower > 0 ? baseLoss * (float) load / cfg.peakPower : baseLoss;
         float newDura = Math.max(0, durability - loss);
         if (newDura <= 0f) {
             net.markDirty(loc);
@@ -296,7 +302,7 @@ public final class ConnectorAgingManager {
         int range = component.getRange();
         if (range <= 0) return;
 
-        double baseDamage = roundToHalf((double) load / cfg.peakPower);
+        double baseDamage = roundToHalf((((double) load / cfg.peakPower) - 1) * 10);
         if (baseDamage <= 0.0) return;
 
         Collection<Entity> nearbyEntities =
@@ -410,7 +416,7 @@ public final class ConnectorAgingManager {
             generateRepairItems(loc);
             itemsJson = data.getData(REPAIR_ITEMS_KEY);
             if (itemsJson == null || itemsJson.isEmpty()) {
-                p.sendMessage(ChatColors.color("&c无法生成修复材料列表（无合成配方）"));
+                // p.sendMessage(ChatColors.color("&c无法生成修复材料列表（无合成配方）"));
                 return false;
             }
         }
@@ -448,7 +454,7 @@ public final class ConnectorAgingManager {
             data.removeData(OVERLOAD_TICKS_KEY);
             removeDamageHologram(loc);
             triggerGridRecheck(loc);
-            p.sendMessage(ChatColors.color("&a连接器已修复至 100%"));
+            // p.sendMessage(ChatColors.color("&a连接器已修复至 100%"));
             p.playSound(loc, Sound.BLOCK_ANVIL_USE, 0.6f, 1.2f);
             return true;
         }
@@ -457,14 +463,14 @@ public final class ConnectorAgingManager {
         if (targetItem == null) return false;
 
         ItemStack held = p.getInventory().getItemInMainHand();
-        if (held == null || held.getType() == Material.AIR) {
-            p.sendMessage(ChatColors.color("&c手持修复材料右键点击连接器来提交"));
-            p.sendMessage(ChatColors.color("&7需要: " + getRepairItemDisplay(targetItem)));
+        if (held.getType() == Material.AIR) {
+            // p.sendMessage(ChatColors.color("&c手持修复材料右键点击连接器来提交"));
+            // p.sendMessage(ChatColors.color("&7需要: " + getRepairItemDisplay(targetItem)));
             return false;
         }
 
         if (!matchesRepairItem(held, targetItem)) {
-            p.sendMessage(ChatColors.color("&c材料不匹配，需要: " + getRepairItemDisplay(targetItem)));
+            // p.sendMessage(ChatColors.color("&c材料不匹配，需要: " + getRepairItemDisplay(targetItem)));
             return false;
         }
 
@@ -483,11 +489,11 @@ public final class ConnectorAgingManager {
             data.removeData(OVERLOAD_TICKS_KEY);
             removeDamageHologram(loc);
             triggerGridRecheck(loc);
-            p.sendMessage(ChatColors.color("&a连接器已修复至 100%"));
+            // p.sendMessage(ChatColors.color("&a连接器已修复至 100%"));
             p.playSound(loc, Sound.BLOCK_ANVIL_USE, 0.6f, 1.2f);
         } else {
-            p.sendMessage(ChatColors.color("&a提交成功! (&e" + submitted + "/" + repairItems.size() + "&a)"));
-            p.sendMessage(ChatColors.color("&7下一个需要: " + getRepairItemDisplay(repairItems.get(submitted))));
+            // p.sendMessage(ChatColors.color("&a提交成功! (&e" + submitted + "/" + repairItems.size() + "&a)"));
+            // p.sendMessage(ChatColors.color("&7下一个需要: " + getRepairItemDisplay(repairItems.get(submitted))));
         }
 
         return true;

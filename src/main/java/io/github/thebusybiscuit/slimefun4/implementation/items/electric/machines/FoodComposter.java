@@ -15,7 +15,7 @@ public class FoodComposter extends AContainer implements RecipeDisplayItem {
 
     public FoodComposter(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.COOKING;
+        this.feedbackType = MachineFeedbackType.MECHANICAL;
     }
 
     @Override

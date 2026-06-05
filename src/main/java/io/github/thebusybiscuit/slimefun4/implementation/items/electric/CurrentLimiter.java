@@ -101,6 +101,8 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
                 EnergyNet net = EnergyNet.getNetworkFromLocation(connLoc);
                 if (net != null) {
                     net.removeConnectorLimit(connLoc);
+                } else {
+                    EnergyNet.onMachinePlaced(connLoc);
                 }
                 displayCache.remove(new BlockPosition(b.getLocation()));
                 clearPendingInputs(b.getLocation());
@@ -149,6 +151,8 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
                     EnergyNet net = EnergyNet.getNetworkFromLocation(connLoc);
                     if (net != null) {
                         net.removeConnectorLimit(connLoc);
+                    } else {
+                        EnergyNet.onMachinePlaced(connLoc);
                     }
                     data.removeData(LIMIT_KEY);
                     displayCache.remove(new BlockPosition(loc));
@@ -301,6 +305,8 @@ public class CurrentLimiter extends SlimefunItem implements HologramOwner {
                 data.setData(LIMIT_KEY, String.valueOf(value));
                 if (net != null) {
                     net.setConnectorLimit(connLoc, value);
+                } else {
+                    EnergyNet.onMachinePlaced(connLoc);
                 }
                 p.sendMessage(ChatColors.color("&b\u26A1 &a限制已设为: &f\u2264 " + value + " J/t"));
             }

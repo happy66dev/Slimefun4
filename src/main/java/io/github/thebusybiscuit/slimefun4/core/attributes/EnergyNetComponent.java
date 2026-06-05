@@ -178,8 +178,12 @@ public interface EnergyNetComponent extends ItemAttribute {
         String charge = data.getData("energy-charge");
 
         if (charge != null) {
-            // parseLong compatible with old int values
-            return Long.parseLong(charge);
+            try {
+                return Long.parseLong(charge);
+            } catch (NumberFormatException e) {
+                data.removeData("energy-charge");
+                return 0L;
+            }
         } else {
             return 0;
         }
@@ -205,14 +209,14 @@ public interface EnergyNetComponent extends ItemAttribute {
         Validate.isTrue(charge >= 0, "You can only set a charge of zero or more!");
 
         try {
-            long capacity = getCapacity();
+            long capacity = getCapacityLong();
 
             // This method only makes sense if we can actually store energy
             if (capacity > 0) {
                 charge = NumberUtils.clamp(0, charge, capacity);
 
                 // Do we even need to update the value?
-                if (charge != getCharge(l)) {
+                if (charge != getChargeLong(l)) {
                     var blockData = StorageCacheUtils.getDataContainer(l);
 
                     if (blockData == null || blockData.isPendingRemove()) {

@@ -8,6 +8,9 @@ import com.xzavier0722.mc.plugin.slimefun4.storage.util.StorageCacheUtils;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.config.SlimefunMachineDamageManager;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet;
+import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -17,6 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
 import org.bukkit.Location;
+import org.bukkit.Sound;
 import org.bukkit.inventory.ItemStack;
 
 public class MachineDamageService {
@@ -28,6 +32,8 @@ public class MachineDamageService {
     private static final String REPAIR_ITEMS_KEY = "machine_damage_repair_items";
     private static final String SUBMITTED_ITEMS_KEY = "machine_damage_submitted_items";
     private static final String REPAIR_ITEM_COUNT_KEY = "machine_damage_repair_item_count";
+
+    private static final Set<String> AGING_BLACKLIST = Set.of("CARGO_MANAGER");
 
     private final Map<UUID, Set<Location>> damagedBlockIndex = new ConcurrentHashMap<>();
 
@@ -57,12 +63,19 @@ public class MachineDamageService {
             return;
         }
 
+        if (AGING_BLACKLIST.contains(item.getId())) {
+            return;
+        }
+
         var data = StorageCacheUtils.getDataContainer(location);
         if (data == null || data.isPendingRemove() || !data.isDataLoaded()) {
             return;
         }
 
         // 检查机器损坏机制是否启用
+        if (damageManager == null) {
+            return;
+        }
         var config = damageManager.getMachineConfig(item.getId());
         if (!config.isEnabled()) {
             return;
@@ -82,7 +95,9 @@ public class MachineDamageService {
         data.setData(DAMAGE_CHANCE_KEY, String.valueOf(damageChance));
 
         // 检测是否损坏
-        if (ThreadLocalRandom.current().nextDouble() < damageChance) {
+        if (!Double.isNaN(damageChance)
+                && damageChance > 0.0
+                && ThreadLocalRandom.current().nextDouble() < damageChance) {
             if (data instanceof SlimefunBlockData blockData) {
                 damageMachine(blockData, location, item);
             }
@@ -91,6 +106,15 @@ public class MachineDamageService {
 
     private void damageMachine(
             @Nonnull SlimefunBlockData data, @Nonnull Location location, @Nonnull SlimefunItem item) {
+        if (item instanceof EnergyNetComponent
+                && ((EnergyNetComponent) item).getEnergyComponentType() == EnergyNetComponentType.CONNECTOR) {
+            ConnectorAgingManager.setDurability(location, 0f);
+            EnergyNet net = EnergyNet.getNetworkFromLocation(location);
+            if (net != null) {
+                net.markDirty(location);
+            }
+            return;
+        }
         // 获取合成表并选择修复物品
         ItemStack[] recipe = item.getRecipe();
         if (recipe != null) {
@@ -105,6 +129,9 @@ public class MachineDamageService {
             if (!validItems.isEmpty()) {
                 // 标记机器为损坏
                 data.setData(DAMAGED_KEY, "true");
+                if (location.getWorld() != null) {
+                    location.getWorld().playSound(location, Sound.BLOCK_ANVIL_DESTROY, 1.0f, 1.0f);
+                }
 
                 // 计算需要的修复物品数量：非空区域的格子数量的30%，存在小数时进一位
                 int nonEmptySlots = validItems.size();
@@ -139,17 +166,6 @@ public class MachineDamageService {
                 // 初始化已提交物品（空JSON对象）
                 data.setData(SUBMITTED_ITEMS_KEY, "{}");
 
-                // 输出修复物品的详细信息
-                Slimefun.logger().info("Selected repair items count: " + repairItemsList.size());
-                for (java.util.Map<String, String> itemData : repairItemsList) {
-                    Slimefun.logger().info("Repair item: id=" + itemData.get("id") + ", type=" + itemData.get("type"));
-                }
-
-                // 输出信息
-                Slimefun.logger()
-                        .info("Machine damaged: " + item.getId() + " at " + location + ", need "
-                                + repairItemsList.size() + " items to repair");
-
                 // 在机器上面显示悬浮字
                 Location hologramLocation = getDamageHologramLocation(location);
                 Slimefun.getHologramsService().setHologramLabel(hologramLocation, "§c机器损坏");
@@ -160,6 +176,7 @@ public class MachineDamageService {
                     try {
                         java.util.UUID ownerUUID = java.util.UUID.fromString(ownerUUIDStr);
                         markDamaged(location, ownerUUID);
+                        /*
                         org.bukkit.OfflinePlayer offlinePlayer = org.bukkit.Bukkit.getOfflinePlayer(ownerUUID);
                         if (offlinePlayer != null && offlinePlayer.isOnline()) {
                             org.bukkit.entity.Player player = offlinePlayer.getPlayer();
@@ -173,6 +190,7 @@ public class MachineDamageService {
                                 player.sendMessage("§c需要 " + repairItemsList.size() + " 种修复物品（随机抽取）");
                             }
                         }
+                        */
                     } catch (Exception e) {
                         Slimefun.logger().info("Error notifying machine owner: " + e.getMessage());
                     }
@@ -263,13 +281,11 @@ public class MachineDamageService {
 
             if (repairItem != null) {
                 try {
-                    String itemName = repairItem.getItemMeta() != null
-                                    && repairItem.getItemMeta().getDisplayName() != null
-                                    && !repairItem
-                                            .getItemMeta()
-                                            .getDisplayName()
-                                            .isEmpty()
-                            ? repairItem.getItemMeta().getDisplayName()
+                    org.bukkit.inventory.meta.ItemMeta meta = repairItem.getItemMeta();
+                    String itemName = meta != null
+                                    && meta.getDisplayName() != null
+                                    && !meta.getDisplayName().isEmpty()
+                            ? meta.getDisplayName()
                             : city.norain.slimefun4.utils.LocalizationUtils.getItemName(repairItem.getType());
                     Slimefun.logger().info("Retrieved repair item: " + itemName);
                 } catch (Exception e) {
@@ -278,8 +294,7 @@ public class MachineDamageService {
             }
             return repairItem;
         } catch (Exception e) {
-            Slimefun.logger().info("Error getting repair item: " + e.getMessage());
-            e.printStackTrace();
+            Slimefun.logger().log(java.util.logging.Level.WARNING, "Error getting repair item", e);
             return null;
         }
     }
@@ -317,8 +332,7 @@ public class MachineDamageService {
                 result.add(itemInfo);
             }
         } catch (Exception e) {
-            Slimefun.logger().info("Error getting repair items: " + e.getMessage());
-            e.printStackTrace();
+            Slimefun.logger().log(java.util.logging.Level.WARNING, "Error getting repair items", e);
         }
 
         return result;
@@ -403,8 +417,7 @@ public class MachineDamageService {
                 return true;
             }
         } catch (Exception e) {
-            Slimefun.logger().info("Error submitting repair item: " + e.getMessage());
-            e.printStackTrace();
+            Slimefun.logger().log(java.util.logging.Level.WARNING, "Error submitting repair item", e);
         }
 
         return false;
@@ -444,13 +457,24 @@ public class MachineDamageService {
 
             return true;
         } catch (Exception e) {
-            Slimefun.logger().info("Error checking if can repair: " + e.getMessage());
-            e.printStackTrace();
+            Slimefun.logger().log(java.util.logging.Level.WARNING, "Error checking if can repair", e);
             return false;
         }
     }
 
     public void repairMachine(@Nonnull Location location) {
+        SlimefunItem sfItem = StorageCacheUtils.getSlimefunItem(location);
+        if (sfItem instanceof EnergyNetComponent
+                && ((EnergyNetComponent) sfItem).getEnergyComponentType() == EnergyNetComponentType.CONNECTOR) {
+            ConnectorAgingManager.setDurability(location, 1f);
+            ConnectorAgingManager.clearRepairData(location);
+            ConnectorAgingManager.removeDamageHologram(location);
+            EnergyNet net = EnergyNet.getNetworkFromLocation(location);
+            if (net != null) {
+                net.markDirty(location);
+            }
+            return;
+        }
         var data = StorageCacheUtils.getDataContainer(location);
         if (data instanceof SlimefunBlockData blockData) {
             repairMachine(blockData);
@@ -612,6 +636,34 @@ public class MachineDamageService {
     }
 
     public String getMachineInfo(@Nonnull Location location, @Nonnull SlimefunItem item) {
+        if (item instanceof EnergyNetComponent
+                && ((EnergyNetComponent) item).getEnergyComponentType() == EnergyNetComponentType.CONNECTOR) {
+            boolean isDamaged = ConnectorAgingManager.isConnectorDamaged(location);
+            float durability = ConnectorAgingManager.getDurability(location);
+            String statusColor = ConnectorAgingManager.getStatusColor(durability);
+            String statusText = ConnectorAgingManager.getStatusText(durability);
+
+            StringBuilder info = new StringBuilder();
+            info.append("§a机器名称: §f").append(item.getItemName()).append("\n");
+            info.append("§a类型: §f连接器（独立老化系统）\n");
+            info.append("§a耐久度: §f")
+                    .append(statusColor)
+                    .append(String.format("%.2f%%", durability * 100))
+                    .append("\n");
+            info.append("§a状态: §f").append(statusColor).append(statusText).append("\n");
+            info.append("§a剩余寿命: §f")
+                    .append(ConnectorAgingManager.formatJoules(ConnectorAgingManager.getRemainingJoules(location)))
+                    .append("J\n");
+
+            if (isDamaged) {
+                info.append("§c修复材料: §f")
+                        .append(ConnectorAgingManager.getRepairItemsDisplay(location))
+                        .append("\n");
+            }
+
+            return info.toString();
+        }
+
         var data = StorageCacheUtils.getDataContainer(location);
         if (data == null) {
             return "§c无法获取机器数据！";
@@ -644,13 +696,11 @@ public class MachineDamageService {
                     Integer required = (Integer) itemInfo.get("required");
 
                     if (repairItem != null) {
-                        String itemName = repairItem.getItemMeta() != null
-                                        && repairItem.getItemMeta().getDisplayName() != null
-                                        && !repairItem
-                                                .getItemMeta()
-                                                .getDisplayName()
-                                                .isEmpty()
-                                ? repairItem.getItemMeta().getDisplayName()
+                        org.bukkit.inventory.meta.ItemMeta meta = repairItem.getItemMeta();
+                        String itemName = meta != null
+                                        && meta.getDisplayName() != null
+                                        && !meta.getDisplayName().isEmpty()
+                                ? meta.getDisplayName()
                                 : LocalizationUtils.getItemName(repairItem.getType());
 
                         int requiredCount = required != null && required > 0 ? required : 1;

@@ -32,7 +32,7 @@ public class AutoDrier extends AContainer implements RecipeDisplayItem, NotHoppe
     @ParametersAreNonnullByDefault
     public AutoDrier(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.COOKING;
+        this.feedbackType = MachineFeedbackType.COOKING_STEAMING;
     }
 
     @Override

@@ -17,7 +17,7 @@ public class MagnesiumGenerator extends AGenerator implements NotDiagonallyRotat
     @ParametersAreNonnullByDefault
     public MagnesiumGenerator(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.SMELTING;
+        this.feedbackType = MachineFeedbackType.RADIANT;
     }
 
     @Override

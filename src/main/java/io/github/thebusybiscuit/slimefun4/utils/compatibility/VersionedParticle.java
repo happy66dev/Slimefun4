@@ -19,6 +19,11 @@ public class VersionedParticle {
     public static final Particle FIREWORK;
     public static final Particle ENCHANT;
     public static final Particle DRIP_WATER;
+    public static final Particle LAVA;
+    public static final Particle DRIP_LAVA;
+    public static final Particle BLOCK_CRACK;
+    public static final Particle LARGE_SMOKE;
+    public static final Particle WATER_BUBBLE;
 
     static {
         MinecraftVersion version = Slimefun.getMinecraftVersion();
@@ -54,13 +59,34 @@ public class VersionedParticle {
         // DRIP_WATER is renamed to DRIPPING_WATER in 1.20.5
         DRIP_WATER =
                 version.isAtLeast(MinecraftVersion.MINECRAFT_1_20_5) ? Particle.DRIPPING_WATER : getKey("DRIP_WATER");
+
+        // LAVA particle was added in 1.17 (previously DRIP_LAVA)
+        LAVA = version.isAtLeast(MinecraftVersion.MINECRAFT_1_17) ? Particle.LAVA : getKey("DRIP_LAVA");
+
+        // DRIP_LAVA is renamed to DRIPPING_LAVA in 1.20.5
+        DRIP_LAVA = version.isAtLeast(MinecraftVersion.MINECRAFT_1_20_5) ? Particle.DRIPPING_LAVA : getKey("DRIP_LAVA");
+
+        // BLOCK_CRACK is renamed to BLOCK in 1.20.5
+        BLOCK_CRACK = version.isAtLeast(MinecraftVersion.MINECRAFT_1_20_5) ? Particle.BLOCK : getKey("BLOCK_CRACK");
+
+        // SMOKE_LARGE is renamed to LARGE_SMOKE in 1.20.5
+        LARGE_SMOKE =
+                version.isAtLeast(MinecraftVersion.MINECRAFT_1_20_5) ? Particle.LARGE_SMOKE : getKey("SMOKE_LARGE");
+
+        // WATER_BUBBLE is renamed to BUBBLE in 1.20.5
+        WATER_BUBBLE = version.isAtLeast(MinecraftVersion.MINECRAFT_1_20_5) ? Particle.BUBBLE : getKey("WATER_BUBBLE");
     }
 
     @Nullable private static Particle getKey(@Nonnull String key) {
         try {
             Field field = Particle.class.getDeclaredField(key);
-            return (Particle) field.get(null);
+            Particle result = (Particle) field.get(null);
+            if (result == null) {
+                Slimefun.logger().warning("[VersionedParticle] Field '" + key + "' resolved to null");
+            }
+            return result;
         } catch (Exception e) {
+            Slimefun.logger().warning("[VersionedParticle] Failed to resolve particle field: " + key);
             return null;
         }
     }

@@ -28,7 +28,7 @@ public class AutoAnvil extends AContainer {
     public AutoAnvil(
             ItemGroup itemGroup, int repairFactor, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.MECHANICAL;
+        this.feedbackType = MachineFeedbackType.MECHANICAL_HEAVY;
 
         this.repairFactor = repairFactor;
     }

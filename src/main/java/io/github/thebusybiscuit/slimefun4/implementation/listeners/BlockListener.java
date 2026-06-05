@@ -11,6 +11,7 @@ import io.github.thebusybiscuit.slimefun4.api.events.ExplosiveToolBreakBlocksEve
 import io.github.thebusybiscuit.slimefun4.api.events.SlimefunBlockBreakEvent;
 import io.github.thebusybiscuit.slimefun4.api.events.SlimefunBlockPlaceEvent;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.core.attributes.MachineProcessHolder;
 import io.github.thebusybiscuit.slimefun4.core.attributes.NotPlaceable;
 import io.github.thebusybiscuit.slimefun4.core.attributes.rotations.NotCardinallyRotatable;
 import io.github.thebusybiscuit.slimefun4.core.attributes.rotations.NotDiagonallyRotatable;
@@ -140,12 +141,8 @@ public class BlockListener implements Listener {
                 clearDamagedMachineBreakAttempts(loc);
 
                 // 清理处理器操作数据
-                if (sfItem
-                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
-                    container.getMachineProcessor().endOperation(block);
-                } else if (sfItem
-                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
-                    generator.getMachineProcessor().endOperation(block);
+                if (sfItem instanceof MachineProcessHolder<?> holder) {
+                    holder.getMachineProcessor().endOperation(block);
                 }
 
                 // 不要取消放置事件，因为我们已经清理了旧机器数据
@@ -163,12 +160,8 @@ public class BlockListener implements Listener {
 
                 // 清理处理器操作数据
                 SlimefunItem sfItem = SlimefunItem.getById(blockData.getSfId());
-                if (sfItem
-                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
-                    container.getMachineProcessor().endOperation(block);
-                } else if (sfItem
-                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
-                    generator.getMachineProcessor().endOperation(block);
+                if (sfItem instanceof MachineProcessHolder<?> holder) {
+                    holder.getMachineProcessor().endOperation(block);
                 }
             }
         }
@@ -292,14 +285,8 @@ public class BlockListener implements Listener {
                     dropBlockMenuContents(location, sfItem, inv);
 
                     // 清理处理器操作数据
-                    if (sfItem
-                            instanceof
-                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
-                        container.getMachineProcessor().endOperation(block);
-                    } else if (sfItem
-                            instanceof
-                            me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
-                        generator.getMachineProcessor().endOperation(block);
+                    if (sfItem instanceof MachineProcessHolder<?> holder) {
+                        holder.getMachineProcessor().endOperation(block);
                     }
                     // 移除机器数据
                     Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
@@ -327,9 +314,8 @@ public class BlockListener implements Listener {
                 dropBlockMenuContents(location, sfItem, inv);
 
                 // 清理处理器操作数据
-                if (sfItem
-                        instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
-                    container.getMachineProcessor().endOperation(block);
+                if (sfItem instanceof MachineProcessHolder<?> holder) {
+                    holder.getMachineProcessor().endOperation(block);
                 }
                 // 移除机器数据
                 Slimefun.getDatabaseManager().getBlockDataController().removeBlock(location);
@@ -480,11 +466,8 @@ public class BlockListener implements Listener {
             dropBlockMenuContents(loc, sfItem, inv);
 
             // 清理处理器操作数据
-            if (sfItem instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AContainer container) {
-                container.getMachineProcessor().endOperation(e.getBlock());
-            } else if (sfItem
-                    instanceof me.mrCookieSlime.Slimefun.Objects.SlimefunItem.abstractItems.AGenerator generator) {
-                generator.getMachineProcessor().endOperation(e.getBlock());
+            if (sfItem instanceof MachineProcessHolder<?> holder) {
+                holder.getMachineProcessor().endOperation(e.getBlock());
             }
 
             // 尝试保存机器状态到掉落物

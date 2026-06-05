@@ -16,7 +16,7 @@ public class ElectrifiedCrucible extends AContainer {
 
     public ElectrifiedCrucible(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.GRINDING;
+        this.feedbackType = MachineFeedbackType.FLUID_LAVA;
     }
 
     @Override

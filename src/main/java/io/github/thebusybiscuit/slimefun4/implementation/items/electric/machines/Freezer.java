@@ -29,7 +29,7 @@ public class Freezer extends AContainer implements RecipeDisplayItem {
     @ParametersAreNonnullByDefault
     public Freezer(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.COOKING;
+        this.feedbackType = MachineFeedbackType.CRYOGENIC_FREEZING;
         addItemSetting(useVanillaRatios);
     }
 

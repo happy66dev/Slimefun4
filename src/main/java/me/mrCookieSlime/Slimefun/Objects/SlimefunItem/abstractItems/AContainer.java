@@ -14,7 +14,7 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.attributes.MachineProcessHolder;
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
-import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
+import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedback;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineProcessor;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -75,7 +75,7 @@ public abstract class AContainer extends SlimefunItem
     private int energyCapacity = -1;
     private int processingSpeed = -1;
 
-    protected @Nullable MachineFeedbackType feedbackType = null;
+    protected @Nullable MachineFeedback feedbackType = null;
 
     @ParametersAreNonnullByDefault
     protected AContainer(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
@@ -122,7 +122,14 @@ public abstract class AContainer extends SlimefunItem
         return processor;
     }
 
-    @Nullable public MachineFeedbackType getMachineFeedbackType() {
+    @Override
+    @Nonnull
+    public Class<? extends io.github.thebusybiscuit.slimefun4.core.machines.MachineOperation>
+            getMachineOperationClass() {
+        return CraftingOperation.class;
+    }
+
+    @Nullable public MachineFeedback getMachineFeedbackType() {
         return feedbackType;
     }
 
@@ -386,7 +393,7 @@ public abstract class AContainer extends SlimefunItem
 
         // 尝试从数据库恢复操作（仅当无活跃操作时）
         if (data != null && data.isDataLoaded() && processor.getOperation(b) == null) {
-            MachineStatePersistence.loadOperationFromDatabaseOnce(b.getLocation(), this, processor);
+            MachineStatePersistence.loadOperationFromDatabase(b.getLocation(), this, processor);
         }
 
         BlockMenu inv = StorageCacheUtils.getMenu(b.getLocation());

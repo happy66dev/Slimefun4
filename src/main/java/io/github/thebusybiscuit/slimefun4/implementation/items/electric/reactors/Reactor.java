@@ -20,6 +20,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.cargo.ReactorAcce
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.AbstractEnergyProvider;
 import io.github.thebusybiscuit.slimefun4.implementation.operations.FuelOperation;
 import io.github.thebusybiscuit.slimefun4.utils.ChestMenuUtils;
+import io.github.thebusybiscuit.slimefun4.utils.MachineStatePersistence;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import io.github.thebusybiscuit.slimefun4.utils.itemstack.ItemStackWrapper;
 import java.util.HashMap;
@@ -130,6 +131,13 @@ public abstract class Reactor extends AbstractEnergyProvider
     @Override
     public MachineProcessor<FuelOperation> getMachineProcessor() {
         return processor;
+    }
+
+    @Override
+    @Nonnull
+    public Class<? extends io.github.thebusybiscuit.slimefun4.core.machines.MachineOperation>
+            getMachineOperationClass() {
+        return FuelOperation.class;
     }
 
     @Nonnull
@@ -342,6 +350,10 @@ public abstract class Reactor extends AbstractEnergyProvider
 
     @Override
     public int getGeneratedOutput(@Nonnull Location l, @Nonnull ASlimefunDataContainer data) {
+        if (processor.getOperation(l) == null) {
+            MachineStatePersistence.loadOperationFromDatabase(l, this, processor);
+        }
+
         BlockMenu inv = StorageCacheUtils.getMenu(l);
         BlockMenu accessPort = getAccessPort(inv, l);
         FuelOperation operation = processor.getOperation(l);

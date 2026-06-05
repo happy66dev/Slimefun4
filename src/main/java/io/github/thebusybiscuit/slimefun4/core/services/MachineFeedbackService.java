@@ -1,6 +1,7 @@
 package io.github.thebusybiscuit.slimefun4.core.services;
 
 import io.github.bakedlibs.dough.blocks.BlockPosition;
+import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedback;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineFeedbackType;
 import io.github.thebusybiscuit.slimefun4.core.machines.MachineOperation;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
@@ -42,25 +43,23 @@ public class MachineFeedbackService {
     }
 
     public void onMachineStart(
-            @Nonnull Block block, @Nullable MachineFeedbackType type, @Nonnull MachineOperation operation) {
+            @Nonnull Block block, @Nullable MachineFeedback type, @Nonnull MachineOperation operation) {
         if (type == null) {
             return;
         }
 
         BlockPosition pos = getPosition(block);
         Bukkit.getScheduler().runTask(plugin, () -> {
+            type.onMachineStart(block);
             if (hasLitProperty(block.getType())) {
                 BlockData data = block.getBlockData();
                 if (data instanceof Lightable lightable) {
                     lightable.setLit(true);
                     block.setBlockData(data);
+                    activeBlockStates.add(pos);
                 }
             }
         });
-
-        if (hasLitProperty(block.getType())) {
-            activeBlockStates.add(pos);
-        }
 
         firedMilestones.put(pos, ConcurrentHashMap.newKeySet());
         particleTickCounters.put(pos, 0);
@@ -69,7 +68,7 @@ public class MachineFeedbackService {
     }
 
     public void onMachineTick(
-            @Nonnull Block block, @Nullable MachineFeedbackType type, @Nonnull MachineOperation operation) {
+            @Nonnull Block block, @Nullable MachineFeedback type, @Nonnull MachineOperation operation) {
         if (type == null) {
             return;
         }
@@ -83,6 +82,10 @@ public class MachineFeedbackService {
         if (counter % 2 == 0) {
             spawnParticles(block, type);
         }
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            type.onMachineTick(block, operation);
+        });
 
         int totalTicks = operation.getTotalTicks();
         if (totalTicks <= 0) {
@@ -115,39 +118,43 @@ public class MachineFeedbackService {
         }
     }
 
-    public void onMachineStop(@Nonnull Block block, @Nullable MachineFeedbackType type) {
+    public void onMachineStop(@Nonnull Block block, @Nullable MachineFeedback type) {
         if (type == null) {
             return;
         }
 
         BlockPosition pos = getPosition(block);
 
-        if (activeBlockStates.remove(pos)) {
-            Bukkit.getScheduler().runTask(plugin, () -> {
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            type.onMachineStop(block);
+            if (activeBlockStates.remove(pos)) {
                 BlockData data = block.getBlockData();
                 if (data instanceof Lightable lightable) {
                     lightable.setLit(false);
                     block.setBlockData(data);
                 }
-            });
-        }
+            }
+        });
 
         firedMilestones.remove(pos);
         particleTickCounters.remove(pos);
         positionCache.remove(pos);
     }
 
-    private void spawnParticles(@Nonnull Block block, @Nonnull MachineFeedbackType type) {
+    private void spawnParticles(@Nonnull Block block, @Nonnull MachineFeedback type) {
         Particle particle = type.getDefaultParticle();
+        if (particle == null) {
+            return;
+        }
+
+        MachineFeedbackType.ParticleOffset offset = type.getParticleOffset();
         World world = block.getWorld();
         double bx = block.getX();
         double by = block.getY();
         double bz = block.getZ();
         ThreadLocalRandom rnd = ThreadLocalRandom.current();
 
-        double cx, cy, cz, sx, sy, sz, speed;
         double[] skullOffsets = new double[16];
-
         for (int i = 0; i < 4; i++) {
             int base = i * 4;
             skullOffsets[base] = bx + 0.5 + rnd.nextDouble(-0.25, 0.25);
@@ -156,16 +163,14 @@ public class MachineFeedbackService {
             skullOffsets[base + 3] = rnd.nextDouble(0.02);
         }
 
-        cx = bx + 0.5;
-        cy = by + 1.05;
-        cz = bz + 0.5;
-        sx = bx + 0.5 + (rnd.nextBoolean() ? 0.6 : -0.6);
-        sz = bz + 0.5 + (rnd.nextBoolean() ? 0.6 : -0.6);
-        sy = by + 0.5;
-        speed = rnd.nextDouble(0.02);
+        double cx = bx + 0.5;
+        double cz = bz + 0.5;
+        double sideX = bx + 0.5 + (rnd.nextBoolean() ? 0.6 : -0.6);
+        double sideZ = bz + 0.5 + (rnd.nextBoolean() ? 0.6 : -0.6);
+        double speed = rnd.nextDouble(0.02);
 
         final double[] fSkullOffsets = skullOffsets;
-        final double fCx = cx, fCy = cy, fCz = cz, fSx = sx, fSy = sy, fSz = sz, fSpeed = speed;
+        final double fCx = cx, fCz = cz, fSideX = sideX, fSideZ = sideZ, fSpeed = speed;
 
         Bukkit.getScheduler().runTask(plugin, () -> {
             if (isSkull(block.getType())) {
@@ -182,9 +187,26 @@ public class MachineFeedbackService {
                             0,
                             fSkullOffsets[base + 3]);
                 }
-            } else {
-                world.spawnParticle(particle, fCx, fCy, fCz, 2, 0.15, 0.05, 0.15, fSpeed);
-                world.spawnParticle(particle, fSx, fSy, fSz, 1, 0, fSpeed, 0, fSpeed);
+                return;
+            }
+
+            switch (offset) {
+                case TOP -> {
+                    world.spawnParticle(particle, fCx, by + 1.05, fCz, 2, 0.15, 0.05, 0.15, fSpeed);
+                }
+                case SIDE -> {
+                    world.spawnParticle(particle, fSideX, by + 0.5, fSideZ, 1, 0, fSpeed, 0, fSpeed);
+                }
+                case BOTTOM -> {
+                    world.spawnParticle(particle, fCx, by - 0.05, fCz, 2, 0.15, 0.05, 0.15, fSpeed);
+                }
+                case HEAD_ONLY -> {
+                    world.spawnParticle(particle, fCx, by + 1.05, fCz, 1, 0.1, 0.1, 0.1, fSpeed);
+                }
+                default -> {
+                    world.spawnParticle(particle, fCx, by + 1.05, fCz, 2, 0.15, 0.05, 0.15, fSpeed);
+                    world.spawnParticle(particle, fSideX, by + 0.5, fSideZ, 1, 0, fSpeed, 0, fSpeed);
+                }
             }
         });
     }

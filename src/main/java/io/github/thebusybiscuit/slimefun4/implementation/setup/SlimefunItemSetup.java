@@ -8136,6 +8136,16 @@ public final class SlimefunItemSetup {
                         })
                 .register(plugin);
 
+        if (io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet.isDebugEnabled()) {
+            new io.github.thebusybiscuit.slimefun4.implementation.items.electric.generators.TestGenerator(
+                            itemGroups.electricity, SlimefunItems.TEST_GENERATOR, RecipeType.NULL, null)
+                    .register(plugin);
+
+            new io.github.thebusybiscuit.slimefun4.implementation.items.electric.machines.TestConsumer(
+                            itemGroups.electricity, SlimefunItems.TEST_CONSUMER, RecipeType.NULL, null)
+                    .register(plugin);
+        }
+
         // @formatter:on
     }
 

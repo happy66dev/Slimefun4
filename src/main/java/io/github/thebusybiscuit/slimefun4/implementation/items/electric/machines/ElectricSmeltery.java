@@ -44,7 +44,7 @@ public class ElectricSmeltery extends AContainer implements NotHopperable {
     @ParametersAreNonnullByDefault
     public ElectricSmeltery(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.SMELTING;
+        this.feedbackType = MachineFeedbackType.SMELTING_BLAZING;
 
         new BlockMenuPreset(getId(), getItemName()) {
 

@@ -30,7 +30,7 @@ public class ElectricIngotPulverizer extends AContainer implements RecipeDisplay
     public ElectricIngotPulverizer(
             ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
         super(itemGroup, item, recipeType, recipe);
-        this.feedbackType = MachineFeedbackType.GRINDING;
+        this.feedbackType = MachineFeedbackType.GRINDING_HEAVY;
     }
 
     @Override
