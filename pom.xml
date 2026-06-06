@@ -36,9 +36,18 @@
         <url>https://github.com/Slimefun/Slimefun4/issues</url>
     </issueManagement>
 
+    <developers>
+        <developer>
+            <name>happy</name>
+            <email>k666kkk666k@163.com</email>
+            <roles>
+                <role>developer</role>
+            </roles>
+        </developer>
+    </developers>
+
     <licenses>
         <license>
-            <!-- License -->
             <name>GNU General Public License v3.0</name>
             <url>https://github.com/Slimefun/Slimefun4/blob/master/LICENSE</url>
             <distribution>repo</distribution>
@@ -351,6 +360,7 @@
                     <include>profile-storage.yml</include>
                     <include>block-storage.yml</include>
                     <include>machine-damage.yml</include>
+                    <include>messages.yml</include>
 
                     <include>wiki.json</include>
                     <include>languages/translators.json</include>

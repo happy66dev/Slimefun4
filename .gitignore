@@ -3,7 +3,9 @@
 /sonar/
 /.settings/
 /target/
+/out/
 /.idea/
+/.trae/
 /.vscode/
 /data-storage/
 /javadocs/
@@ -14,6 +16,7 @@
 .project
 *.iml
 *.bak
+*.log
 .DS_Store
 
 dependency-reduced-pom.xml

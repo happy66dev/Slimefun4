@@ -1,4 +1,13 @@
-# Slimefun 中文版
+# Slimefun 中文版 (happy 魔改版)
+
+> **这是 Slimefun 中文版的个人魔改分支。** 基于 [SlimefunGuguProject/Slimefun4](https://github.com/SlimefunGuguProject/Slimefun4)（汉化版），
+> 原始上游为 [Slimefun/Slimefun4](https://github.com/Slimefun/Slimefun4)。
+>
+> 主要改动: 电网系统(EnergyNet)全面重写、连接器老化机制、机器损伤系统、万用表、长途连接器、限流器等。
+>
+> 魔改作者: **happy** <k666kkk666k@163.com>
+>
+> 许可证: [GNU GPL-3.0](LICENSE) — 本魔改版及其所有新增代码均以 GPL-3.0 授权。
 
 Looking for English (or Original) Version? [**Click here**](https://github.com/Slimefun/Slimefun4/)
 

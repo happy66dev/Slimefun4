@@ -1,5 +1,6 @@
 {
-    "accessibility.onboarding.accessibility.button": "辅助功能设置…",
+  "_license": "SPDX-License-Identifier: GPL-3.0-or-later | Copyright (C) 2025 happy <k666kkk666k@163.com>",
+  "accessibility.onboarding.accessibility.button": "辅助功能设置…",
     "accessibility.onboarding.screen.narrator": "按下Enter键启用复述功能",
     "accessibility.onboarding.screen.title": "欢迎进入Minecraft！\n\n需要启用复述功能或访问辅助功能设置吗？",
     "addServer.add": "完成",

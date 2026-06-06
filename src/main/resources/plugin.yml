@@ -3,9 +3,9 @@ name: Slimefun
 version: ${project.version}
 
 # Project metadata
-author: The Slimefun 4 Community
+authors: [happy, The Slimefun 4 Community]
 description: Slimefun basically turns your entire Server into a FTB modpack without installing a single mod
-website: https://github.com/TheBusyBiscuit/Slimefun4
+website: https://github.com/Slimefun/Slimefun4
 
 # Technical settings
 main: io.github.thebusybiscuit.slimefun4.implementation.Slimefun

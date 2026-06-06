@@ -16,9 +16,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.groups.LockedItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.player.PlayerProfile;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.api.researches.Research;
-import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
-import io.github.thebusybiscuit.slimefun4.core.config.SlimefunMachineDamageManager;
 import io.github.thebusybiscuit.slimefun4.core.guide.GuideHistory;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuide;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuideImplementation;
@@ -26,7 +24,6 @@ import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuideMode;
 import io.github.thebusybiscuit.slimefun4.core.guide.options.SlimefunGuideSettings;
 import io.github.thebusybiscuit.slimefun4.core.multiblocks.MultiBlock;
 import io.github.thebusybiscuit.slimefun4.core.multiblocks.MultiBlockMachine;
-import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.core.services.sounds.SoundEffect;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.tasks.AsyncRecipeChoiceTask;
@@ -56,7 +53,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Recipe;
 import org.bukkit.inventory.RecipeChoice;
 import org.bukkit.inventory.RecipeChoice.MaterialChoice;
-import org.bukkit.inventory.meta.ItemMeta;
 
 /**
  * The {@link SurvivalSlimefunGuide} is the standard version of our {@link SlimefunGuide}.
@@ -938,47 +934,6 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                     : "&f无权限";
 
             if (slimefunItem.canUse(p, false)) {
-                // 检查是否是电力用电器
-                if (slimefunItem instanceof EnergyNetComponent component
-                        && component.getEnergyComponentType() == EnergyNetComponentType.CONSUMER) {
-                    // 添加损坏率信息到 lore
-                    ItemStack clonedItem = item.clone();
-                    ItemMeta meta = clonedItem.getItemMeta();
-                    if (meta != null) {
-                        List<String> loreList = meta.hasLore() ? new ArrayList<>(meta.getLore()) : new ArrayList<>();
-
-                        // 移除已有的损坏机制相关 lore
-                        loreList.removeIf(line -> line.contains("损坏几率")
-                                || line.contains("损坏机制")
-                                || line.contains("缩放倍率")
-                                || line.contains("增长指数")
-                                || line.contains("增长公式")
-                                || line.contains("损坏上限")
-                                || line.contains("缓冲参数B")
-                                || line.contains("损坏公式"));
-
-                        // 添加损坏率信息
-                        SlimefunMachineDamageManager damageManager = Slimefun.getMachineDamageManager();
-                        var config = damageManager.getMachineConfig(slimefunItem.getId());
-                        boolean enabled = config.isEnabled();
-
-                        loreList.add("");
-                        loreList.add(
-                                ChatColor.GRAY + "损坏机制: " + (enabled ? ChatColor.GREEN + "启用" : ChatColor.RED + "禁用"));
-                        if (enabled) {
-                            double scale = config.getDamageChanceScale();
-                            double denominator = config.getDamageChanceExponent();
-                            loreList.add(ChatColor.GRAY + "损坏上限: " + ChatColor.RED + String.format("%.8f", scale));
-                            loreList.add(
-                                    ChatColor.GRAY + "缓冲参数B: " + ChatColor.RED + String.format("%.2f", denominator));
-                            loreList.add(ChatColor.GRAY + "损坏公式: A * t^2 / (B + t^2)");
-                        }
-
-                        meta.setLore(loreList);
-                        clonedItem.setItemMeta(meta);
-                    }
-                    return clonedItem;
-                }
                 return item;
             } else {
                 return new CustomItemStack(
