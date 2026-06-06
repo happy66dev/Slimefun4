@@ -282,3 +282,7 @@ Slimefun4 使用 [GitHub API](https://api.github.com/) 收集关于此开源项�
 
 另外，插件还使用了 [textures.minecraft.net](https://www.minecraft.net/en-us) 以获取协作者的 Minecraft 皮肤。  
 请注意：Slimefun 与 `Mojang Studios` 或 Minecraft 无关。
+
+## :star: Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=happy66dev/slimefun4&type=date)](https://star-history.com/#happy66dev/slimefun4)
