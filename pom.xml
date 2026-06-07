@@ -618,7 +618,7 @@
         <dependency>
             <groupId>cn.rmc</groupId>
             <artifactId>SlimefunWeaver</artifactId>
-            <version>1.0-SNAPSHOT</version>
+            <version>0.1Alpha</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
