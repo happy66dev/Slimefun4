@@ -897,15 +897,19 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
 
     private void addBackButton(ChestMenu menu, int slot, Player p, PlayerProfile profile) {
         GuideHistory history = profile.getGuideHistory();
+        boolean extView = cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isInExternalView(p);
+        String shiftLore = extView ? "&fShift + 左键: &7返回SCG分类" : "&fShift + 左键: &7返回主菜单";
 
         if (isSurvivalMode() && history.size() > 1) {
-            menu.addItem(
-                    slot,
-                    new CustomItemStack(ChestMenuUtils.getBackButton(p, "", "&f左键: &7返回上一页", "&fShift + 左键: &7返回主菜单")));
+            menu.addItem(slot, new CustomItemStack(ChestMenuUtils.getBackButton(p, "", "&f左键: &7返回上一页", shiftLore)));
 
             menu.addMenuClickHandler(slot, (pl, s, is, action) -> {
                 if (cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isInExternalView(pl)) {
-                    handleExternalBack(pl, profile);
+                    if (action.isShiftClicked()) {
+                        SlimefunGuide.openGuide(pl, pl.getInventory().getItemInMainHand());
+                    } else {
+                        handleExternalBack(pl, profile);
+                    }
                 } else if (action.isShiftClicked()) {
                     openMainMenu(profile, profile.getGuideHistory().getMainMenuPage());
                 } else {
@@ -918,10 +922,17 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
             menu.addItem(
                     slot,
                     new CustomItemStack(ChestMenuUtils.getBackButton(
-                            p, "", ChatColor.GRAY + Slimefun.getLocalization().getMessage(p, "guide.back.guide"))));
+                            p,
+                            "",
+                            ChatColor.GRAY + Slimefun.getLocalization().getMessage(p, "guide.back.guide"),
+                            shiftLore)));
             menu.addMenuClickHandler(slot, (pl, s, is, action) -> {
                 if (cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isInExternalView(pl)) {
-                    handleExternalBack(pl, profile);
+                    if (action.isShiftClicked()) {
+                        SlimefunGuide.openGuide(pl, pl.getInventory().getItemInMainHand());
+                    } else {
+                        handleExternalBack(pl, profile);
+                    }
                 } else {
                     openMainMenu(profile, profile.getGuideHistory().getMainMenuPage());
                 }
