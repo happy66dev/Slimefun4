@@ -769,6 +769,10 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
             return;
         }
 
+        if (addToHistory) {
+            cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.pushNestedDetail(p, item.getId());
+        }
+
         ChestMenu menu = create(p);
         Optional<String> wiki = item.getWikipage();
 
@@ -900,7 +904,9 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                     new CustomItemStack(ChestMenuUtils.getBackButton(p, "", "&f左键: &7返回上一页", "&fShift + 左键: &7返回主菜单")));
 
             menu.addMenuClickHandler(slot, (pl, s, is, action) -> {
-                if (action.isShiftClicked()) {
+                if (cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isInExternalView(pl)) {
+                    handleExternalBack(pl, profile);
+                } else if (action.isShiftClicked()) {
                     openMainMenu(profile, profile.getGuideHistory().getMainMenuPage());
                 } else {
                     history.goBack(this);
@@ -914,9 +920,30 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                     new CustomItemStack(ChestMenuUtils.getBackButton(
                             p, "", ChatColor.GRAY + Slimefun.getLocalization().getMessage(p, "guide.back.guide"))));
             menu.addMenuClickHandler(slot, (pl, s, is, action) -> {
-                openMainMenu(profile, profile.getGuideHistory().getMainMenuPage());
+                if (cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isInExternalView(pl)) {
+                    handleExternalBack(pl, profile);
+                } else {
+                    openMainMenu(profile, profile.getGuideHistory().getMainMenuPage());
+                }
                 return false;
             });
+        }
+    }
+
+    private void handleExternalBack(Player pl, PlayerProfile profile) {
+        String prevItemId = cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.navigateBackItem(pl);
+        if (prevItemId != null) {
+            SlimefunItem sfItem = SlimefunItem.getById(prevItemId);
+            cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.suppressPush(pl);
+            try {
+                if (sfItem != null) {
+                    displayItem(profile, sfItem, true);
+                }
+            } finally {
+                cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.clearSuppressPush(pl);
+            }
+        } else {
+            SlimefunGuide.openGuide(pl, pl.getInventory().getItemInMainHand());
         }
     }
 

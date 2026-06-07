@@ -11,9 +11,11 @@ import java.util.Optional;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.Plugin;
 
 /**
  * This is a static utility class that provides convenient access to the methods
@@ -39,6 +41,10 @@ public final class SlimefunGuide {
     }
 
     public static void openGuide(@Nonnull Player p, @Nullable ItemStack guide) {
+        if (tryCustomGuideOpen(p, guide)) {
+            return;
+        }
+
         if (getItem(SlimefunGuideMode.CHEAT_MODE).equals(guide)) {
             openGuide(p, SlimefunGuideMode.CHEAT_MODE);
         } else {
@@ -51,6 +57,10 @@ public final class SlimefunGuide {
     }
 
     public static void openGuide(@Nonnull Player p, @Nonnull SlimefunGuideMode mode) {
+        if (tryCustomGuideOpen(p, null)) {
+            return;
+        }
+
         if (!Slimefun.getWorldSettingsService().isWorldEnabled(p.getWorld())) {
             return;
         }
@@ -132,5 +142,25 @@ public final class SlimefunGuide {
     @Nonnull
     public static SlimefunGuideMode getDefaultMode() {
         return SlimefunGuideMode.SURVIVAL_MODE;
+    }
+
+    private static boolean tryCustomGuideOpen(Player p, ItemStack guide) {
+        Plugin scg = Bukkit.getPluginManager().getPlugin("SlimefunCustomGuide");
+        if (scg == null || !scg.isEnabled()) return false;
+
+        if (guide != null && !isGuideItem(guide)) return false;
+
+        ItemStack targetGuide = guide;
+        if (targetGuide == null) {
+            targetGuide = p.getInventory().getItemInMainHand();
+            if (targetGuide.getType() == Material.AIR) return false;
+        }
+
+        if (!cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isCustomGuideMode(targetGuide)) {
+            return false;
+        }
+
+        cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.openOrRestore(p, targetGuide);
+        return true;
     }
 }
