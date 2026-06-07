@@ -770,7 +770,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
         }
 
         if (addToHistory) {
-            cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.pushNestedDetail(p, item.getId());
+            cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.pushNestedDetail(p, item.getId());
         }
 
         ChestMenu menu = create(p);
@@ -897,14 +897,14 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
 
     private void addBackButton(ChestMenu menu, int slot, Player p, PlayerProfile profile) {
         GuideHistory history = profile.getGuideHistory();
-        boolean extView = cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isInExternalView(p);
+        boolean extView = cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.isInExternalView(p);
         String shiftLore = extView ? "&fShift + 左键: &7返回SCG分类" : "&fShift + 左键: &7返回主菜单";
 
         if (isSurvivalMode() && history.size() > 1) {
             menu.addItem(slot, new CustomItemStack(ChestMenuUtils.getBackButton(p, "", "&f左键: &7返回上一页", shiftLore)));
 
             menu.addMenuClickHandler(slot, (pl, s, is, action) -> {
-                if (cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isInExternalView(pl)) {
+                if (cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.isInExternalView(pl)) {
                     if (action.isShiftClicked()) {
                         SlimefunGuide.openGuide(pl, pl.getInventory().getItemInMainHand());
                     } else {
@@ -927,7 +927,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                             ChatColor.GRAY + Slimefun.getLocalization().getMessage(p, "guide.back.guide"),
                             shiftLore)));
             menu.addMenuClickHandler(slot, (pl, s, is, action) -> {
-                if (cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isInExternalView(pl)) {
+                if (cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.isInExternalView(pl)) {
                     if (action.isShiftClicked()) {
                         SlimefunGuide.openGuide(pl, pl.getInventory().getItemInMainHand());
                     } else {
@@ -942,16 +942,16 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
     }
 
     private void handleExternalBack(Player pl, PlayerProfile profile) {
-        String prevItemId = cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.navigateBackItem(pl);
+        String prevItemId = cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.navigateBackItem(pl);
         if (prevItemId != null) {
             SlimefunItem sfItem = SlimefunItem.getById(prevItemId);
-            cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.suppressPush(pl);
+            cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.suppressPush(pl);
             try {
                 if (sfItem != null) {
                     displayItem(profile, sfItem, true);
                 }
             } finally {
-                cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.clearSuppressPush(pl);
+                cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.clearSuppressPush(pl);
             }
         } else {
             SlimefunGuide.openGuide(pl, pl.getInventory().getItemInMainHand());

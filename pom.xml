@@ -614,10 +614,10 @@
             <scope>compile</scope>
         </dependency>
 
-        <!-- SlimefunCustomGuide API (soft dependency) -->
+        <!-- SlimefunWeaver API (soft dependency) -->
         <dependency>
             <groupId>cn.rmc</groupId>
-            <artifactId>SlimefunCustomGuide</artifactId>
+            <artifactId>SlimefunWeaver</artifactId>
             <version>1.0-SNAPSHOT</version>
             <scope>provided</scope>
         </dependency>

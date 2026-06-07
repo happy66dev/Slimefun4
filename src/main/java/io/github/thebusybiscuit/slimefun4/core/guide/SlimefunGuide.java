@@ -145,7 +145,7 @@ public final class SlimefunGuide {
     }
 
     private static boolean tryCustomGuideOpen(Player p, ItemStack guide) {
-        Plugin scg = Bukkit.getPluginManager().getPlugin("SlimefunCustomGuide");
+        Plugin scg = Bukkit.getPluginManager().getPlugin("SlimefunWeaver");
         if (scg == null || !scg.isEnabled()) return false;
 
         if (guide != null && !isGuideItem(guide)) return false;
@@ -156,11 +156,11 @@ public final class SlimefunGuide {
             if (targetGuide.getType() == Material.AIR) return false;
         }
 
-        if (!cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.isCustomGuideMode(targetGuide)) {
+        if (!cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.isCustomGuideMode(targetGuide)) {
             return false;
         }
 
-        cn.rmc.slimefuncustomguide.api.SlimefunCustomGuideAPI.openOrRestore(p, targetGuide);
+        cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.openOrRestore(p, targetGuide);
         return true;
     }
 }
