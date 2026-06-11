@@ -24,6 +24,7 @@ public final class ResearchSetup {
 
     public static void setupResearches() {
         if (org.bukkit.Bukkit.getPluginManager().getPlugin("SlimefunWeaver") != null) {
+            Slimefun.logger().info("Research registration skipped: handled by SlimefunWeaver");
             return;
         }
         
