@@ -27,7 +27,7 @@ public final class ResearchSetup {
             Slimefun.logger().info("Research registration skipped: handled by SlimefunWeaver");
             return;
         }
-        
+
         if (alreadyRan) {
             throw new UnsupportedOperationException("Researches can only be registered once!");
         }

@@ -33,6 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import org.bukkit.ChatColor;
 import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Material;
@@ -339,6 +340,7 @@ public final class ConnectorAgingManager {
                 player.getWorld()
                         .spawnParticle(
                                 Particle.ELECTRIC_SPARK, player.getLocation().add(0, 1, 0), 5, 0.4, 0.4, 0.4, 0.05);
+                player.sendMessage(ChatColor.RED + "⚡ 你受到了能源连接器过载伤害! 伤害: " + String.format("%.1f", damage));
             });
         }
     }
