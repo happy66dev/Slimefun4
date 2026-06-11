@@ -23,6 +23,10 @@ public final class ResearchSetup {
     private ResearchSetup() {}
 
     public static void setupResearches() {
+        if (org.bukkit.Bukkit.getPluginManager().getPlugin("SlimefunWeaver") != null) {
+            return;
+        }
+        
         if (alreadyRan) {
             throw new UnsupportedOperationException("Researches can only be registered once!");
         }
