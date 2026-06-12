@@ -14,6 +14,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.api.items.groups.FlexItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.items.groups.LockedItemGroup;
 import io.github.thebusybiscuit.slimefun4.api.player.PlayerProfile;
+import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeEntry;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.api.researches.Research;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
@@ -763,6 +764,11 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
     @Override
     @ParametersAreNonnullByDefault
     public void displayItem(PlayerProfile profile, SlimefunItem item, boolean addToHistory) {
+        displayItem(profile, item, addToHistory, 0);
+    }
+
+    @ParametersAreNonnullByDefault
+    public void displayItem(PlayerProfile profile, SlimefunItem item, boolean addToHistory, int recipePage) {
         Player p = profile.getPlayer();
 
         if (p == null) {
@@ -800,11 +806,50 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
             profile.getGuideHistory().add(item);
         }
 
-        ItemStack result = item.getRecipeOutput();
-        RecipeType recipeType = item.getRecipeType();
-        ItemStack[] recipe = item.getRecipe();
+        // Build full recipe list: primary + additional
+        List<RecipeEntry> allRecipes = new ArrayList<>();
+        allRecipes.add(new RecipeEntry(item.getRecipeType(), item.getRecipe(), item.getRecipeOutput()));
+        allRecipes.addAll(item.getAdditionalRecipes());
+
+        int totalPages = allRecipes.size();
+        int currentPage = Math.max(0, Math.min(recipePage, totalPages - 1));
+        RecipeEntry current = allRecipes.get(currentPage);
+
+        ItemStack result = current.getRecipeOutput();
+        RecipeType recipeType = current.getRecipeType();
+        ItemStack[] recipe = current.getRecipe();
 
         displayItem(menu, profile, p, item, result, recipeType, recipe, task);
+
+        // Add recipe pagination buttons if there are multiple recipes
+        if (totalPages > 1) {
+            int prevSlot = 1;
+            int nextSlot = 7;
+
+            // Page indicator at slot 2
+            menu.replaceExistingItem(
+                    2,
+                    new CustomItemStack(
+                            Material.PAPER, ChatColor.WHITE + "配方 " + (currentPage + 1) + " / " + totalPages));
+
+            // Previous button
+            if (currentPage > 0) {
+                menu.replaceExistingItem(prevSlot, ChestMenuUtils.getPreviousButton(p, currentPage + 1, totalPages));
+                menu.addMenuClickHandler(prevSlot, (pl, slot, itemstack, action) -> {
+                    displayItem(profile, item, false, currentPage - 1);
+                    return false;
+                });
+            }
+
+            // Next button
+            if (currentPage < totalPages - 1) {
+                menu.replaceExistingItem(nextSlot, ChestMenuUtils.getNextButton(p, currentPage + 1, totalPages));
+                menu.addMenuClickHandler(nextSlot, (pl, slot, itemstack, action) -> {
+                    displayItem(profile, item, false, currentPage + 1);
+                    return false;
+                });
+            }
+        }
 
         if (item instanceof RecipeDisplayItem recipeDisplayItem) {
             displayRecipes(p, profile, menu, recipeDisplayItem, 0);

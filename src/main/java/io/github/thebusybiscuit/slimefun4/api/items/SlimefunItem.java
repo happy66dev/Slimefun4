@@ -12,6 +12,7 @@ import io.github.thebusybiscuit.slimefun4.api.exceptions.MissingDependencyExcept
 import io.github.thebusybiscuit.slimefun4.api.exceptions.UnregisteredItemException;
 import io.github.thebusybiscuit.slimefun4.api.exceptions.WrongItemStackException;
 import io.github.thebusybiscuit.slimefun4.api.player.PlayerProfile;
+import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeEntry;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.api.researches.Research;
 import io.github.thebusybiscuit.slimefun4.core.SlimefunRegistry;
@@ -25,8 +26,10 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.VanillaItem;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.machines.enchanting.AutoDisenchanter;
 import io.github.thebusybiscuit.slimefun4.implementation.items.electric.machines.enchanting.AutoEnchanter;
 import java.text.MessageFormat;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -102,6 +105,8 @@ public class SlimefunItem implements Placeable {
     private ItemStack[] recipe;
     private RecipeType recipeType;
     protected ItemStack recipeOutput;
+
+    private final List<RecipeEntry> additionalRecipes = new ArrayList<>();
 
     protected boolean enchantable = true;
     protected boolean disenchantable = true;
@@ -756,6 +761,42 @@ public class SlimefunItem implements Placeable {
     }
 
     /**
+     * This method adds an additional recipe to this {@link SlimefunItem}.
+     * The item can then be crafted via multiple different recipes.
+     * All additional recipes will also be registered to their respective machines.
+     *
+     * @param recipeType
+     *            The {@link RecipeType} for this additional recipe
+     * @param recipe
+     *            An Array of length 9 representing the recipe
+     * @param output
+     *            The output {@link ItemStack} for this recipe
+     */
+    @ParametersAreNonnullByDefault
+    public void addRecipe(RecipeType recipeType, ItemStack[] recipe, ItemStack output) {
+        Validate.notNull(recipeType, "The RecipeType must not be null!");
+        Validate.notNull(recipe, "The recipe must not be null!");
+        Validate.notNull(output, "The output must not be null!");
+
+        if (recipe.length != 9) {
+            throw new IllegalArgumentException("Recipes must be of length 9, got " + recipe.length);
+        }
+
+        additionalRecipes.add(new RecipeEntry(recipeType, recipe.clone(), output.clone()));
+    }
+
+    /**
+     * Returns an unmodifiable list of additional recipes for this {@link SlimefunItem}.
+     * The primary recipe (set via constructor or {@link #setRecipe}) is not included.
+     *
+     * @return A {@link List} of {@link RecipeEntry} objects
+     */
+    @Nonnull
+    public List<RecipeEntry> getAdditionalRecipes() {
+        return Collections.unmodifiableList(additionalRecipes);
+    }
+
+    /**
      * This method returns whether or not this {@link SlimefunItem} is allowed to
      * be used in a Crafting Table.
      *
@@ -823,6 +864,10 @@ public class SlimefunItem implements Placeable {
         }
 
         recipeType.register(recipe, getRecipeOutput());
+
+        for (RecipeEntry entry : additionalRecipes) {
+            entry.getRecipeType().register(entry.getRecipe(), entry.getRecipeOutput());
+        }
     }
 
     /**
