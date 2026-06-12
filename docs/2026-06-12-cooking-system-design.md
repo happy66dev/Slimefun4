@@ -354,7 +354,7 @@ User prompt（动态）：
 - Material: `MUSHROOM_STEW`
 - 信息写入 ItemMeta + PersistentDataContainer
 - 不可堆叠（独立 NBT，amount=1）
-- 消耗时通过 `ItemConsumptionHandler` 从 PDC 读取 hunger/saturation 恢复
+- 消耗时由 `DishConsumptionListener`（监听 `PlayerItemConsumeEvent`）读取 PDC 的 `cooking:dish_hunger` / `cooking:dish_saturation` 直接修改玩家饥饿值和饱食度
 
 ---
 
