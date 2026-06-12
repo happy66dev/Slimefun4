@@ -37,9 +37,21 @@ ExoticGardenComplex/src/main/java/
         │   ├── IngredientSlot.java
         │   └── SeasoningEntry.java
         ├── config/
+        │   ├── YamlConfigLoader.java         # 新增：泛型抽象基类
         │   ├── FuelConfig.java
         │   ├── IngredientConfig.java
         │   └── SeasoningConfig.java
+        ├── calculator/
+        │   ├── DonenessCalculator.java       # 新增：成熟度策略接口
+        │   └── StandardDonenessCalculator.java
+        ├── interaction/
+        │   ├── StoveInteractionHandler.java  # 新增：交互责任链接口
+        │   ├── SpatulaInteractionHandler.java
+        │   ├── BowlInteractionHandler.java
+        │   ├── FuelInteractionHandler.java
+        │   ├── SeasoningInteractionHandler.java
+        │   ├── IngredientInteractionHandler.java
+        │   └── ClearFuelInteractionHandler.java
         ├── task/
         │   └── StoveTickTask.java
         ├── ai/
@@ -50,6 +62,8 @@ ExoticGardenComplex/src/main/java/
 
 `CookingModule.java` 在 `ExoticGarden.onEnable()` 中调用，负责：
 - 加载三个 YAML 配置
+- 注册成熟度计算器（可扩展不同食材类型）
+- 初始化交互责任链
 - 注册所有物品到独立 ItemGroup（`NamespacedKey: "cooking"`）
 - 启动 `StoveTickTask`（`scheduleSyncRepeatingTask` period=2）
 
@@ -99,6 +113,7 @@ ICE:
 BEEF:
   type: MAIN
   states: [WHOLE, SLICED, DICED]
+  calculator_type: standard       # 新增：成熟度计算器类型（可选，默认 standard）
   min_temp: 60
   max_temp: 240
   optimal_temp_min: 180
@@ -108,6 +123,7 @@ BEEF:
 TOMATO:
   type: SAUCE_BASE
   states: [WHOLE, SAUCE]
+  calculator_type: standard
   sauce_creation:
     tool: SPATULA
     clicks_required: 3
@@ -189,7 +205,7 @@ charSeconds >= 40 → SEVERE
 
 ## 四、StoveTickTask（全局，每 2 tick 执行）
 
-每次执行 = 0.1 秒，遍历 `StoveBlock.activeStoves`（`Map<Location, StoveState>`）喵。
+每次执行 = 0.1 秒，遍历 `StoveBlock.activeStoves`（`Map<Location, StoveState>`）。
 
 ```
 ① 更新燃料
@@ -211,13 +227,8 @@ charSeconds >= 40 → SEVERE
    if spatulaBoostTicksLeft > 0: spatulaBoostTicksLeft -= 2
 
 ④ 更新每个非空 IngredientSlot
-   查 IngredientConfig → 计算 increment（每 0.1s）：
-     currentTemp < min_temp                    → 0
-     min_temp ~ optimal_max                    → coefficient = 1.0
-     optimal_max < currentTemp < max_temp      → coefficient 线性 1.0→0.5
-     currentTemp >= max_temp                   → coefficient = 1.5，charSeconds += 0.1
-   increment = (1.0 / base_cook_time) × 0.1 × coefficient
-             × (spatulaBoostTicksLeft > 0 ? 2.0 : 1.0)
+   查 IngredientConfig → 通过 calculator_type 查找对应 DonenessCalculator 实现
+   调用 calculator.calculate(currentTemp, config, 0.1, hasSpatulaBoost) 得到 increment
 
    WHOLE 状态：
      currentFace == FRONT → frontDoneness += increment，backDoneness += increment × 0.3
@@ -233,39 +244,50 @@ charSeconds >= 40 → SEVERE
 
 ---
 
-## 五、右键交互分发（StoveBlock BlockUseHandler）
+## 五、右键交互分发（责任链模式）
+
+`StoveBlock.BlockUseHandler` 遍历 `List<StoveInteractionHandler>` 责任链，第一个返回 `true` 的 handler 消费本次事件。调整优先级只需改变 List 顺序；新增交互只需新增实现类喵。
 
 `pendingFuelClear` 在任何非「空手潜行右键」时自动重置为 false。
 
-```
-优先级顺序：
+### StoveInteractionHandler 接口
 
-1. 锅铲（NBT cooking:item_type = SPATULA）
-   → 翻面：所有 currentFace==FRONT 且 frontDoneness>=0.5 的槽位切换为 BACK
+```java
+public interface StoveInteractionHandler {
+    boolean handle(Player player, ItemStack handItem, StoveState state, Location location);
+}
+```
+
+### 默认责任链顺序（CookingModule 初始化）
+
+```
+1. SpatulaInteractionHandler
+   → 手持 cooking:item_type=SPATULA
+   → 翻面所有 currentFace==FRONT 且 frontDoneness>=0.5 的槽位（切换为 BACK）
    → 刷新 spatulaBoostTicksLeft = max(当前值, 200)
 
-2. 碗（Material.BOWL，无 SF NBT）
+2. BowlInteractionHandler
+   → 手持 Material.BOWL（无 SF NBT）
    → 触发取出成品流程
 
-3. 燃料（fuels.yml 中存在）
-   → fuels.size() >= 2 → 拒绝提示
-   → 否则消耗 1 个，添加 FuelEntry
+3. FuelInteractionHandler
+   → fuels.yml 中存在该物品
+   → fuels.size() >= 2 → 拒绝提示；否则消耗 1 个，添加 FuelEntry
 
-4. 辅料（seasonings.yml 中存在）
-   → seasonings.size() >= 10 → 拒绝提示
-   → 否则消耗 1 个，添加 SeasoningEntry
+4. SeasoningInteractionHandler
+   → seasonings.yml 中存在该物品
+   → seasonings.size() >= 10 → 拒绝提示；否则消耗 1 个，添加 SeasoningEntry
 
-5. 主菜原料（ingredients.yml 中存在，带 cooking:food_state NBT）
-   → 4 槽全满 → 拒绝提示
-   → 否则消耗 1 个，初始化 IngredientSlot 放入空槽
+5. IngredientInteractionHandler
+   → ingredients.yml 中存在，带 cooking:food_state NBT
+   → 4 槽全满 → 拒绝提示；否则初始化 IngredientSlot 放入空槽
 
-6. 刀（NBT cooking:item_type = KNIFE）→ 无操作
+6. ClearFuelInteractionHandler
+   → 空手 + 潜行
+   → pendingFuelClear=false → 设为 true，聊天栏提示确认
+   → pendingFuelClear=true  → 清除 fuels 列表，重置标志
 
-7. 空手 + 潜行
-   → pendingFuelClear=false → 设为 true，聊天栏提示「再次潜行右键确认清除燃料」
-   → pendingFuelClear=true  → 清除 fuels 列表（不返还物品），重置标志
-
-8. 其他 → 无操作
+7. 无匹配 → 无操作
 ```
 
 ---
@@ -431,3 +453,58 @@ spatula_clicks 存在砧板 PDC 上（防止多砧板互相干扰）
 - 灶台 GUI
 - 自动化输入/输出支持
 - 多语言 i18n（后续可扩展）
+
+---
+
+## 十二、扩展性设计
+
+### 成熟度计算策略（DonenessCalculator）
+
+```java
+public interface DonenessCalculator {
+    double calculate(double currentTemp, IngredientData config,
+                     double deltaTime, boolean hasSpatulaBoost);
+}
+```
+
+- `StandardDonenessCalculator`：当前设计的线性系数曲线
+- 新增类型（如 `SlowCookCalculator`、`StirFryCalculator`）只需实现接口
+- 在 `ingredients.yml` 的 `calculator_type` 字段指定，`CookingModule` 启动时注册到 `Map<String, DonenessCalculator>`
+- 默认值为 `standard`，向后兼容
+
+### 右键交互责任链（StoveInteractionHandler）
+
+```java
+public interface StoveInteractionHandler {
+    boolean handle(Player player, ItemStack handItem,
+                   StoveState state, Location location);
+}
+```
+
+- 新增交互类型只需实现接口，加入 `CookingModule` 的责任链 List
+- 调整优先级只需改变 List 中的顺序
+- 每个 Handler 单独可测试
+
+### 配置加载泛型基类（YamlConfigLoader）
+
+```java
+public abstract class YamlConfigLoader<T> {
+    public Map<String, T> loadAll(FileConfiguration config, String section);
+    protected abstract T parseEntry(String key, ConfigurationSection section);
+}
+```
+
+- `FuelConfig` / `IngredientConfig` / `SeasoningConfig` 均继承此类
+- 新增配置类型（如锅具、香料组合）只需继承并实现 `parseEntry`
+- 统一的错误处理和日志逻辑写在基类里
+
+### 扩展点一览
+
+| 扩展点 | 方式 | 无需改动的文件 |
+|---|---|---|
+| 新增食材成熟度曲线 | 实现 `DonenessCalculator` | StoveTickTask |
+| 新增灶台右键交互 | 实现 `StoveInteractionHandler` | StoveBlock |
+| 新增配置类型 | 继承 `YamlConfigLoader` | CookingModule 加一行注册 |
+| 修改全息格式 | 修改 `StoveHologram` 单一文件 | 其他所有文件 |
+| 替换 AI 后端 | 修改 `DishGenerator` 单一文件 | 其他所有文件 |
+| 新增食物状态 | 在 `FoodState` 枚举加值 | 仅需更新砧板/刀逻辑 |
