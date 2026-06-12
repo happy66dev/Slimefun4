@@ -671,6 +671,8 @@ import io.github.thebusybiscuit.exoticgarden.cooking.config.IngredientConfig;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.SeasoningConfig;
 import io.github.thebusybiscuit.exoticgarden.cooking.state.*;
 import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.Iterator;
@@ -699,8 +701,9 @@ public class StoveTickTask extends BukkitRunnable {
     public void run() {
         tickCounter += 2;
         for (Map.Entry<Location, StoveState> entry : StoveBlock.activeStoves.entrySet()) {
+            Location loc = entry.getKey();
             StoveState state = entry.getValue();
-            tickFuels(state);
+            tickFuels(state, loc);
             tickTemperature(state);
             if (state.spatulaBoostTicksLeft > 0) {
                 state.spatulaBoostTicksLeft -= 2;
@@ -709,12 +712,12 @@ public class StoveTickTask extends BukkitRunnable {
             tickSeasonings(state);
             if (tickCounter % 5 == 0) {
                 io.github.thebusybiscuit.exoticgarden.cooking.hologram.StoveHologram
-                    .update(entry.getKey(), state, fuels, ingredients, seasonings);
+                    .update(loc, state, fuels, ingredients, seasonings);
             }
         }
     }
 
-    private void tickFuels(StoveState state) {
+    private void tickFuels(StoveState state, Location loc) {
         Iterator<FuelEntry> it = state.fuels.iterator();
         while (it.hasNext()) {
             FuelEntry fuel = it.next();
@@ -722,20 +725,23 @@ public class StoveTickTask extends BukkitRunnable {
             if (fuel.ticksRemaining <= 0) {
                 FuelConfig.FuelData data = fuels.get(fuel.fuelId);
                 if (data != null && data.byproduct != null && !data.byproduct.isEmpty()) {
-                    dropByproduct(state, data.byproduct);
+                    dropByproduct(data.byproduct, loc);
                 }
                 it.remove();
             }
         }
     }
 
-    private void dropByproduct(StoveState state, String byproductId) {
+    private void dropByproduct(String byproductId, Location loc) {
+        Material mat = Material.getMaterial(byproductId);
+        if (mat == null) return;
+        loc.getWorld().dropItemNaturally(loc, new ItemStack(mat));
     }
 
     private void tickTemperature(StoveState state) {
         if (!state.fuels.isEmpty()) {
             double totalHeatRate = 0;
-            double maxTemp = 30;
+            double maxTemp = 0;
             for (FuelEntry fe : state.fuels) {
                 FuelConfig.FuelData data = fuels.get(fe.fuelId);
                 if (data != null) {
@@ -746,7 +752,7 @@ public class StoveTickTask extends BukkitRunnable {
             state.currentTemp = Math.min(state.currentTemp + totalHeatRate * 0.1, maxTemp);
         } else {
             double coolRate = Math.max((state.currentTemp + 20) * 0.01, 0.5) - 0.5;
-            state.currentTemp = Math.max(state.currentTemp - coolRate, 30.0);
+            state.currentTemp = Math.max(state.currentTemp - coolRate * 0.1, 30.0);
         }
     }
 
@@ -880,12 +886,12 @@ public class StoveHologram {
                                     Map<String, SeasoningConfig.SeasoningData> seasonings) {
         StringBuilder sb = new StringBuilder();
 
-        double maxTemp = 30;
+        double maxTemp = 0;
         double totalRate = 0;
         for (FuelEntry fe : state.fuels) {
             FuelConfig.FuelData fd = fuels.get(fe.fuelId);
             if (fd != null) {
-                if (fd.tempGain > maxTemp) maxTemp = fd.tempGain;
+                maxTemp += fd.tempGain;
                 totalRate += fd.heatRate;
             }
         }
@@ -1090,6 +1096,10 @@ public class DishGenerator {
                 body.addProperty("model", model);
                 body.add("messages", messages);
                 body.addProperty("temperature", 0.7);
+
+                JsonObject responseFormat = new JsonObject();
+                responseFormat.addProperty("type", "json_object");
+                body.add("response_format", responseFormat);
 
                 URL url = new URL(baseUrl.endsWith("/") ? baseUrl + "chat/completions"
                     : baseUrl + "/chat/completions");
@@ -2045,9 +2055,9 @@ public class CookingModule {
         saveResourceIfMissing(plugin, "ingredients.yml");
         saveResourceIfMissing(plugin, "seasonings.yml");
 
-        String apiKey = plugin.getConfig().getString("cooking.ai.api-key", "");
-        String baseUrl = plugin.getConfig().getString("cooking.ai.base-url", "https://api.openai.com/v1");
-        String model = plugin.getConfig().getString("cooking.ai.model", "gpt-4o-mini");
+        String apiKey = plugin.getConfig().getString("cooking.ai_api_key", "");
+        String baseUrl = plugin.getConfig().getString("cooking.ai_base_url", "https://api.openai.com/v1");
+        String model = plugin.getConfig().getString("cooking.ai_model", "gpt-4o-mini");
 
         Map<String, DonenessCalculator> calculators = new HashMap<>();
         calculators.put("standard", new StandardDonenessCalculator());
@@ -2188,10 +2198,11 @@ import io.github.thebusybiscuit.exoticgarden.cooking.CookingModule;
 
 ```yaml
 cooking:
-  ai:
-    api-key: "your-api-key-here"
-    base-url: "https://api.openai.com/v1"
-    model: "gpt-4o-mini"
+  ai_api_key: "your-api-key-here"
+  ai_base_url: "https://api.openai.com/v1"
+  ai_model: "gpt-4o-mini"
+  hologram_update_ticks: 5
+  cook_tick_interval: 2
 ```
 
 - [ ] **Step 4: 编译验证**
@@ -2237,7 +2248,12 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git
 | calculators Map 构建 + 传入 StoveTickTask | ✅ |
 | handlers List 构建 + 传入 StoveBlock | ✅ |
 | StoveBlock.buildUseHandler 使用责任链遍历 handlers | ✅ |
-| tickTemperature maxTemp 为累加值（非取最大值） | ✅ |
+| tickTemperature maxTemp 为累加值（非取最大值），初始值 0 | ✅ |
+| tickTemperature 降温公式含 `* 0.1` | ✅ |
+| dropByproduct 实现：Material.getMaterial → dropItemNaturally | ✅ |
+| DishGenerator 请求含 `response_format: json_object` | ✅ |
+| config.yml 扁平 key：`cooking.ai_api_key` | ✅ |
+| StoveHologram maxTemp 累加 | ✅ |
 | 所有 PowerShell commit 命令使用分号`;`不使用`&&` | ✅ |
 
 ---

@@ -489,10 +489,12 @@ public interface StoveInteractionHandler {
 
 ```java
 public abstract class YamlConfigLoader<T> {
-    public Map<String, T> loadAll(FileConfiguration config, String section);
+    public Map<String, T> loadAll(File file, String rootKey);
     protected abstract T parseEntry(String key, ConfigurationSection section);
 }
 ```
+
+- 当 `rootKey` 为空字符串时直接使用根 ConfigSection，适用于无外层 key 的 YAML 文件
 
 - `FuelConfig` / `IngredientConfig` / `SeasoningConfig` 均继承此类
 - 新增配置类型（如锅具、香料组合）只需继承并实现 `parseEntry`
