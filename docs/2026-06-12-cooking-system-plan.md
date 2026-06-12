@@ -21,9 +21,19 @@
 | `cooking/state/IngredientSlot.java` | POJO：食材槽位 |
 | `cooking/state/SeasoningEntry.java` | POJO：调料条目 |
 | `cooking/state/StoveState.java` | POJO：灶台完整状态 |
+| `cooking/config/YamlConfigLoader.java` | 泛型抽象基类，统一 YAML 解析 |
 | `cooking/config/FuelConfig.java` | 从 fuels.yml 加载燃料数据 |
 | `cooking/config/IngredientConfig.java` | 从 ingredients.yml 加载食材数据 |
 | `cooking/config/SeasoningConfig.java` | 从 seasonings.yml 加载调料数据 |
+| `cooking/calculator/DonenessCalculator.java` | 成熟度计算策略接口 |
+| `cooking/calculator/StandardDonenessCalculator.java` | 标准成熟度计算实现 |
+| `cooking/interaction/StoveInteractionHandler.java` | 灶台交互责任链接口 |
+| `cooking/interaction/SpatulaInteractionHandler.java` | 锅铲交互 handler |
+| `cooking/interaction/BowlInteractionHandler.java` | 碗取出成品 handler |
+| `cooking/interaction/FuelInteractionHandler.java` | 燃料添加 handler |
+| `cooking/interaction/SeasoningInteractionHandler.java` | 辅料添加 handler |
+| `cooking/interaction/IngredientInteractionHandler.java` | 主菜添加 handler |
+| `cooking/interaction/ClearFuelInteractionHandler.java` | 清除燃料 handler |
 | `cooking/task/StoveTickTask.java` | BukkitRunnable，每 2 tick 推进所有灶台 |
 | `cooking/hologram/StoveHologram.java` | 拼装全息文本字符串 |
 | `cooking/ai/DishGenerator.java` | OpenAI-compatible API 异步调用，返回 DishResult |
@@ -208,9 +218,10 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git
 
 ---
 
-## Task 3: 配置加载（FuelConfig / IngredientConfig / SeasoningConfig + YAML 文件）
+## Task 3: 配置加载（YamlConfigLoader + FuelConfig / IngredientConfig / SeasoningConfig + YAML 文件）
 
 **Files:**
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/config/YamlConfigLoader.java`
 - Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/config/FuelConfig.java`
 - Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/config/IngredientConfig.java`
 - Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/config/SeasoningConfig.java`
@@ -218,7 +229,7 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git
 - Create: `src/main/resources/ingredients.yml`
 - Create: `src/main/resources/seasonings.yml`
 
-- [ ] **Step 1: 创建 FuelConfig**
+- [ ] **Step 0: 创建 YamlConfigLoader 泛型抽象基类**
 
 ```java
 package io.github.thebusybiscuit.exoticgarden.cooking.config;
@@ -230,8 +241,54 @@ import java.io.File;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.logging.Logger;
 
-public class FuelConfig {
+public abstract class YamlConfigLoader<T> {
+
+    protected final Logger logger;
+
+    protected YamlConfigLoader(Logger logger) {
+        this.logger = logger;
+    }
+
+    public Map<String, T> loadAll(File file, String rootKey) {
+        if (!file.exists()) {
+            logger.warning("[Cooking] Config file not found: " + file.getName());
+            return Collections.emptyMap();
+        }
+        YamlConfiguration cfg = YamlConfiguration.loadConfiguration(file);
+        ConfigurationSection section = cfg.getConfigurationSection(rootKey);
+        if (section == null) {
+            logger.warning("[Cooking] Missing root key '" + rootKey + "' in " + file.getName());
+            return Collections.emptyMap();
+        }
+        Map<String, T> result = new HashMap<>();
+        for (String key : section.getKeys(false)) {
+            ConfigurationSection s = section.getConfigurationSection(key);
+            if (s == null) continue;
+            try {
+                result.put(key, parseEntry(key, s));
+            } catch (Exception e) {
+                logger.warning("[Cooking] Failed to parse entry '" + key + "' in " + file.getName() + ": " + e.getMessage());
+            }
+        }
+        return Collections.unmodifiableMap(result);
+    }
+
+    protected abstract T parseEntry(String key, ConfigurationSection section);
+}
+```
+
+- [ ] **Step 1: 创建 FuelConfig（继承 YamlConfigLoader）**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.config;
+
+import org.bukkit.configuration.ConfigurationSection;
+
+import java.util.logging.Logger;
+
+public class FuelConfig extends YamlConfigLoader<FuelConfig.FuelData> {
 
     public static class FuelData {
         public final double tempGain;
@@ -250,23 +307,19 @@ public class FuelConfig {
         }
     }
 
-    public static Map<String, FuelData> loadAll(File file) {
-        YamlConfiguration cfg = YamlConfiguration.loadConfiguration(file);
-        ConfigurationSection fuels = cfg.getConfigurationSection("fuels");
-        if (fuels == null) return Collections.emptyMap();
-        Map<String, FuelData> result = new HashMap<>();
-        for (String key : fuels.getKeys(false)) {
-            ConfigurationSection s = fuels.getConfigurationSection(key);
-            if (s == null) continue;
-            result.put(key, new FuelData(
-                s.getDouble("tempGain"),
-                s.getDouble("durationSeconds"),
-                s.getDouble("heatRate"),
-                s.getString("effect", ""),
-                s.getString("byproduct", "")
-            ));
-        }
-        return Collections.unmodifiableMap(result);
+    public FuelConfig(Logger logger) {
+        super(logger);
+    }
+
+    @Override
+    protected FuelData parseEntry(String key, ConfigurationSection s) {
+        return new FuelData(
+            s.getDouble("temp_gain"),
+            s.getDouble("duration_seconds"),
+            s.getDouble("heat_rate"),
+            s.getString("effect", ""),
+            s.getString("byproduct", null)
+        );
     }
 }
 ```
@@ -277,15 +330,11 @@ public class FuelConfig {
 package io.github.thebusybiscuit.exoticgarden.cooking.config;
 
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 
-import java.io.File;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.logging.Logger;
 
-public class IngredientConfig {
+public class IngredientConfig extends YamlConfigLoader<IngredientConfig.IngredientData> {
 
     public static class SauceCreation {
         public final int clicksRequired;
@@ -304,11 +353,12 @@ public class IngredientConfig {
         public final boolean flipRequired;
         public final List<String> states;
         public final SauceCreation sauceCreation;
+        public final String calculatorType;
 
         public IngredientData(double minTemp, double maxTemp, double optimalTempMin,
                               double optimalTempMax, double baseCookTimeSeconds,
                               boolean flipRequired, List<String> states,
-                              SauceCreation sauceCreation) {
+                              SauceCreation sauceCreation, String calculatorType) {
             this.minTemp = minTemp;
             this.maxTemp = maxTemp;
             this.optimalTempMin = optimalTempMin;
@@ -317,33 +367,31 @@ public class IngredientConfig {
             this.flipRequired = flipRequired;
             this.states = states;
             this.sauceCreation = sauceCreation;
+            this.calculatorType = calculatorType;
         }
     }
 
-    public static Map<String, IngredientData> loadAll(File file) {
-        YamlConfiguration cfg = YamlConfiguration.loadConfiguration(file);
-        ConfigurationSection ingredients = cfg.getConfigurationSection("ingredients");
-        if (ingredients == null) return Collections.emptyMap();
-        Map<String, IngredientData> result = new HashMap<>();
-        for (String key : ingredients.getKeys(false)) {
-            ConfigurationSection s = ingredients.getConfigurationSection(key);
-            if (s == null) continue;
-            SauceCreation sauce = null;
-            if (s.contains("sauceCreation")) {
-                sauce = new SauceCreation(s.getInt("sauceCreation.clicksRequired", 5));
-            }
-            result.put(key, new IngredientData(
-                s.getDouble("minTemp"),
-                s.getDouble("maxTemp"),
-                s.getDouble("optimalTempMin"),
-                s.getDouble("optimalTempMax"),
-                s.getDouble("baseCookTimeSeconds"),
-                s.getBoolean("flipRequired", false),
-                s.getStringList("states"),
-                sauce
-            ));
+    public IngredientConfig(Logger logger) {
+        super(logger);
+    }
+
+    @Override
+    protected IngredientData parseEntry(String key, ConfigurationSection s) {
+        SauceCreation sauce = null;
+        if (s.contains("sauce_creation")) {
+            sauce = new SauceCreation(s.getInt("sauce_creation.clicks_required", 3));
         }
-        return Collections.unmodifiableMap(result);
+        return new IngredientData(
+            s.getDouble("min_temp"),
+            s.getDouble("max_temp"),
+            s.getDouble("optimal_temp_min"),
+            s.getDouble("optimal_temp_max"),
+            s.getDouble("base_cook_time_seconds"),
+            s.getBoolean("flip_required", false),
+            s.getStringList("states"),
+            sauce,
+            s.getString("calculator_type", "standard")
+        );
     }
 }
 ```
@@ -354,14 +402,10 @@ public class IngredientConfig {
 package io.github.thebusybiscuit.exoticgarden.cooking.config;
 
 import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 
-import java.io.File;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.logging.Logger;
 
-public class SeasoningConfig {
+public class SeasoningConfig extends YamlConfigLoader<SeasoningConfig.SeasoningData> {
 
     public static class SeasoningData {
         public final String displayName;
@@ -380,23 +424,19 @@ public class SeasoningConfig {
         }
     }
 
-    public static Map<String, SeasoningData> loadAll(File file) {
-        YamlConfiguration cfg = YamlConfiguration.loadConfiguration(file);
-        ConfigurationSection seasonings = cfg.getConfigurationSection("seasonings");
-        if (seasonings == null) return Collections.emptyMap();
-        Map<String, SeasoningData> result = new HashMap<>();
-        for (String key : seasonings.getKeys(false)) {
-            ConfigurationSection s = seasonings.getConfigurationSection(key);
-            if (s == null) continue;
-            result.put(key, new SeasoningData(
-                s.getString("displayName", key),
-                s.getBoolean("hasDoneness", false),
-                s.getDouble("minTemp", 0),
-                s.getDouble("optimalTemp", 100),
-                s.getDouble("baseTimeSeconds", 30)
-            ));
-        }
-        return Collections.unmodifiableMap(result);
+    public SeasoningConfig(Logger logger) {
+        super(logger);
+    }
+
+    @Override
+    protected SeasoningData parseEntry(String key, ConfigurationSection s) {
+        return new SeasoningData(
+            s.getString("display_name", key),
+            s.getBoolean("has_doneness", false),
+            s.getDouble("min_temp", 0),
+            s.getDouble("optimal_temp", 100),
+            s.getDouble("base_time_seconds", 30)
+        );
     }
 }
 ```
@@ -404,83 +444,68 @@ public class SeasoningConfig {
 - [ ] **Step 4: 创建 fuels.yml**
 
 ```yaml
-fuels:
-  COAL:
-    tempGain: 200
-    durationSeconds: 60
-    heatRate: 5.0
-    effect: ""
-    byproduct: ""
-  OAK_LOG:
-    tempGain: 150
-    durationSeconds: 45
-    heatRate: 3.5
-    effect: "SMOKY"
-    byproduct: "CHARCOAL"
-  BLAZE_POWDER:
-    tempGain: 350
-    durationSeconds: 30
-    heatRate: 12.0
-    effect: "BLAZING"
-    byproduct: ""
+OAK_LOG:
+  temp_gain: 300
+  duration_seconds: 80
+  heat_rate: 6
+  effect: WOOD_SMOKE
+  byproduct: CHARCOAL
+CHARCOAL:
+  temp_gain: 400
+  duration_seconds: 180
+  heat_rate: 4
+  effect: SMOKY
+  byproduct: null
+ICE:
+  temp_gain: 0
+  duration_seconds: 6
+  heat_rate: -40
+  effect: FREEZING
+  byproduct: null
 ```
 
 - [ ] **Step 5: 创建 ingredients.yml**
 
 ```yaml
-ingredients:
-  BEEF:
-    minTemp: 80
-    maxTemp: 300
-    optimalTempMin: 150
-    optimalTempMax: 220
-    baseCookTimeSeconds: 40
-    flipRequired: true
-    states: [WHOLE, SLICED]
-    sauceCreation: ~
-  PORK:
-    minTemp: 80
-    maxTemp: 280
-    optimalTempMin: 140
-    optimalTempMax: 200
-    baseCookTimeSeconds: 35
-    flipRequired: true
-    states: [WHOLE, SLICED, DICED]
-    sauceCreation: ~
-  TOMATO:
-    minTemp: 60
-    maxTemp: 250
-    optimalTempMin: 100
-    optimalTempMax: 180
-    baseCookTimeSeconds: 20
-    flipRequired: false
-    states: [WHOLE, SLICED, DICED]
-    sauceCreation:
-      clicksRequired: 8
+BEEF:
+  type: MAIN
+  states: [WHOLE, SLICED, DICED]
+  calculator_type: standard
+  min_temp: 60
+  max_temp: 240
+  optimal_temp_min: 180
+  optimal_temp_max: 210
+  base_cook_time_seconds: 45
+  flip_required: true
+TOMATO:
+  type: SAUCE_BASE
+  states: [WHOLE, SAUCE]
+  calculator_type: standard
+  sauce_creation:
+    clicks_required: 3
+  min_temp: 40
+  max_temp: 100
+  optimal_temp_min: 70
+  optimal_temp_max: 90
+  base_cook_time_seconds: 30
+  flip_required: false
 ```
 
 - [ ] **Step 6: 创建 seasonings.yml**
 
 ```yaml
-seasonings:
-  SALT:
-    displayName: "食盐"
-    hasDoneness: false
-    minTemp: 0
-    optimalTemp: 0
-    baseTimeSeconds: 0
-  RICE_WINE:
-    displayName: "料酒"
-    hasDoneness: true
-    minTemp: 80
-    optimalTemp: 150
-    baseTimeSeconds: 15
-  PEPPER:
-    displayName: "黑胡椒"
-    hasDoneness: false
-    minTemp: 0
-    optimalTemp: 0
-    baseTimeSeconds: 0
+SALT:
+  display_name: "盐"
+  has_doneness: false
+SUGAR:
+  display_name: "白糖"
+  has_doneness: false
+RICE_WINE:
+  display_name: "料酒"
+  has_doneness: true
+  min_temp: 50
+  optimal_temp: 80
+  base_time_seconds: 20
 ```
 
 - [ ] **Step 7: 编译验证**
@@ -494,7 +519,135 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; mvn
 - [ ] **Step 8: Commit**
 
 ```powershell
-cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git add src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/config/ src/main/resources/fuels.yml src/main/resources/ingredients.yml src/main/resources/seasonings.yml; git commit -m "feat(cooking): add FuelConfig, IngredientConfig, SeasoningConfig and YAML examples"
+cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git add src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/config/ src/main/resources/fuels.yml src/main/resources/ingredients.yml src/main/resources/seasonings.yml; git commit -m "feat(cooking): add YamlConfigLoader base class and config loaders with YAML examples"
+```
+
+---
+
+## Task 3.5: DonenessCalculator 策略接口 + StandardDonenessCalculator
+
+**Files:**
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/calculator/DonenessCalculator.java`
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/calculator/StandardDonenessCalculator.java`
+
+- [ ] **Step 1: 创建 DonenessCalculator 接口**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.calculator;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.config.IngredientConfig;
+
+public interface DonenessCalculator {
+    double calculate(double currentTemp, IngredientConfig.IngredientData config,
+                     double deltaTime, boolean hasSpatulaBoost);
+}
+```
+
+- [ ] **Step 2: 创建 StandardDonenessCalculator 实现**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.calculator;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.config.IngredientConfig;
+
+public class StandardDonenessCalculator implements DonenessCalculator {
+
+    @Override
+    public double calculate(double currentTemp, IngredientConfig.IngredientData config,
+                           double deltaTime, boolean hasSpatulaBoost) {
+        if (currentTemp < config.minTemp) return 0;
+        
+        double coefficient;
+        if (currentTemp <= config.optimalTempMax) {
+            coefficient = 1.0;
+        } else if (currentTemp < config.maxTemp) {
+            double range = config.maxTemp - config.optimalTempMax;
+            double over = currentTemp - config.optimalTempMax;
+            coefficient = 1.0 - 0.5 * (over / range);
+        } else {
+            coefficient = 1.5;
+        }
+        
+        double boost = hasSpatulaBoost ? 2.0 : 1.0;
+        return (1.0 / config.baseCookTimeSeconds) * deltaTime * coefficient * boost;
+    }
+}
+```
+
+- [ ] **Step 3: 编译验证**
+
+```powershell
+cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; mvn compile -q
+```
+
+预期：BUILD SUCCESS
+
+- [ ] **Step 4: Commit**
+
+```powershell
+cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git add src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/calculator/; git commit -m "feat(cooking): add DonenessCalculator strategy interface and StandardDonenessCalculator"
+```
+
+---
+
+## Task 3.7: StoveInteractionHandler 责任链接口（骨架）
+
+**Files:**
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/StoveInteractionHandler.java`
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/SpatulaInteractionHandler.java`
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/BowlInteractionHandler.java`
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/FuelInteractionHandler.java`
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/SeasoningInteractionHandler.java`
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/IngredientInteractionHandler.java`
+- Create: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/ClearFuelInteractionHandler.java`
+
+- [ ] **Step 1: 创建 StoveInteractionHandler 接口**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.interaction;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.state.StoveState;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+
+public interface StoveInteractionHandler {
+    boolean handle(Player player, ItemStack handItem, StoveState state, Location location);
+}
+```
+
+- [ ] **Step 2: 创建所有 Handler 骨架（空实现，返回 false）**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.interaction;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.state.StoveState;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+
+public class SpatulaInteractionHandler implements StoveInteractionHandler {
+    @Override
+    public boolean handle(Player player, ItemStack handItem, StoveState state, Location location) {
+        return false;
+    }
+}
+```
+
+（同样结构创建 BowlInteractionHandler, FuelInteractionHandler, SeasoningInteractionHandler, IngredientInteractionHandler, ClearFuelInteractionHandler，均为空实现）
+
+- [ ] **Step 3: 编译验证**
+
+```powershell
+cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; mvn compile -q
+```
+
+预期：BUILD SUCCESS
+
+- [ ] **Step 4: Commit**
+
+```powershell
+cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git add src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/; git commit -m "feat(cooking): add StoveInteractionHandler chain of responsibility skeleton"
 ```
 
 ---
@@ -510,6 +663,8 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git
 package io.github.thebusybiscuit.exoticgarden.cooking.task;
 
 import io.github.thebusybiscuit.exoticgarden.cooking.block.StoveBlock;
+import io.github.thebusybiscuit.exoticgarden.cooking.calculator.DonenessCalculator;
+import io.github.thebusybiscuit.exoticgarden.cooking.calculator.StandardDonenessCalculator;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.FuelConfig;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.IngredientConfig;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.SeasoningConfig;
@@ -517,9 +672,7 @@ import io.github.thebusybiscuit.exoticgarden.cooking.state.*;
 import org.bukkit.Location;
 import org.bukkit.scheduler.BukkitRunnable;
 
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 public class StoveTickTask extends BukkitRunnable {
@@ -527,14 +680,18 @@ public class StoveTickTask extends BukkitRunnable {
     private final Map<String, FuelConfig.FuelData> fuels;
     private final Map<String, IngredientConfig.IngredientData> ingredients;
     private final Map<String, SeasoningConfig.SeasoningData> seasonings;
+    private final Map<String, DonenessCalculator> calculators;
+    private final DonenessCalculator defaultCalculator = new StandardDonenessCalculator();
     private int tickCounter = 0;
 
     public StoveTickTask(Map<String, FuelConfig.FuelData> fuels,
                          Map<String, IngredientConfig.IngredientData> ingredients,
-                         Map<String, SeasoningConfig.SeasoningData> seasonings) {
+                         Map<String, SeasoningConfig.SeasoningData> seasonings,
+                         Map<String, DonenessCalculator> calculators) {
         this.fuels = fuels;
         this.ingredients = ingredients;
         this.seasonings = seasonings;
+        this.calculators = calculators;
     }
 
     @Override
@@ -598,24 +755,12 @@ public class StoveTickTask extends BukkitRunnable {
             IngredientConfig.IngredientData data = ingredients.get(slot.ingredientId);
             if (data == null) continue;
 
-            double T = state.currentTemp;
-            double coefficient;
+            DonenessCalculator calculator = calculators.getOrDefault(data.calculatorType, defaultCalculator);
+            double increment = calculator.calculate(state.currentTemp, data, 0.1, state.spatulaBoostTicksLeft > 0);
 
-            if (T < data.minTemp) {
-                continue;
-            } else if (T <= data.optimalTempMax) {
-                coefficient = 1.0;
-            } else if (T < data.maxTemp) {
-                double range = data.maxTemp - data.optimalTempMax;
-                double over = T - data.optimalTempMax;
-                coefficient = 1.0 - (over / range) * 0.5;
-            } else {
-                coefficient = 1.5;
+            if (state.currentTemp >= data.maxTemp) {
                 slot.charSeconds += 0.1;
             }
-
-            double boost = state.spatulaBoostTicksLeft > 0 ? 2.0 : 1.0;
-            double increment = (1.0 / data.baseCookTimeSeconds) * 0.1 * coefficient * boost;
 
             if (slot.state == FoodState.WHOLE) {
                 if (slot.currentFace == ActiveFace.FRONT) {
