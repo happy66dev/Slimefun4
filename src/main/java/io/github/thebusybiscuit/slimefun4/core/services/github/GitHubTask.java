@@ -41,7 +41,9 @@ class GitHubTask implements Runnable {
     public void run() {
 
         if (Bukkit.isPrimaryThread()) {
-            Slimefun.logger().log(Level.SEVERE, "The contributors task may never run on the main Thread!");
+            if (Slimefun.instance() != null) {
+                Slimefun.logger().log(Level.SEVERE, "The contributors task may never run on the main Thread!");
+            }
             return;
         }
 
@@ -110,9 +112,15 @@ class GitHubTask implements Runnable {
                 // There cannot be a texture found because it is not a valid MC username
                 contributor.setTexture(null);
             } catch (InterruptedException x) {
-                Slimefun.logger().log(Level.WARNING, "The contributors thread was interrupted!");
+                if (Slimefun.instance() != null) {
+                    Slimefun.logger().log(Level.WARNING, "The contributors thread was interrupted!");
+                }
                 Thread.currentThread().interrupt();
             } catch (Exception x) {
+                if (Slimefun.instance() == null || !Slimefun.instance().isEnabled()) {
+                    return -1;
+                }
+
                 // Too many requests
                 Slimefun.logger()
                         .log(
