@@ -45,6 +45,20 @@ import org.bukkit.inventory.ItemStack;
 
 public final class ConnectorAgingManager {
 
+    private static class OverloadDamageEntry {
+        final Location connectorLoc;
+        final ConnectorConfig cfg;
+        final long load;
+        final EnergyNet net;
+
+        OverloadDamageEntry(Location loc, ConnectorConfig cfg, long load, EnergyNet net) {
+            this.connectorLoc = loc;
+            this.cfg = cfg;
+            this.load = load;
+            this.net = net;
+        }
+    }
+
     // ─── 全局配置 ────────────────────────────────────────────────
     private static final double LOSS_PERCENT = 0.01;
     private static final int TICK_DELAY;
@@ -128,6 +142,8 @@ public final class ConnectorAgingManager {
         Map<Location, Long> loads = net.getConnectorLoad();
         if (loads.isEmpty()) return;
 
+        List<OverloadDamageEntry> pendingDamages = new ArrayList<>();
+
         for (Map.Entry<Location, Long> entry : loads.entrySet()) {
             Location loc = entry.getKey();
             long load = entry.getValue();
@@ -149,10 +165,14 @@ public final class ConnectorAgingManager {
             }
 
             if (load > config.peakPower) {
-                handleOverload(loc, config, load, durability, net);
+                handleOverload(loc, config, load, durability, net, pendingDamages);
             } else {
                 handleNormalAging(loc, config, load, durability, net);
             }
+        }
+
+        if (!pendingDamages.isEmpty()) {
+            Slimefun.runSync(() -> applyAllOverloadDamages(pendingDamages));
         }
     }
 
@@ -279,7 +299,13 @@ public final class ConnectorAgingManager {
 
     // ─── 过载惩罚 ───────────────────────────────────────────────
 
-    private static void handleOverload(Location loc, ConnectorConfig cfg, long load, float durability, EnergyNet net) {
+    private static void handleOverload(
+            Location loc,
+            ConnectorConfig cfg,
+            long load,
+            float durability,
+            EnergyNet net,
+            List<OverloadDamageEntry> pendingDamages) {
         float baseLoss = (float) (0.5 / 100.0);
         float loss = cfg.peakPower > 0 ? baseLoss * (float) load / cfg.peakPower : baseLoss;
         float newDura = Math.max(0, durability - loss);
@@ -292,7 +318,7 @@ public final class ConnectorAgingManager {
         }
 
         spawnOverloadParticles(loc);
-        tickOverloadDamage(loc, cfg, load, net);
+        collectOverloadDamage(loc, cfg, load, net, pendingDamages);
 
         int consecutiveTicks = getOverloadTicks(loc) + 1;
         setOverloadTicks(loc, consecutiveTicks);
@@ -304,44 +330,60 @@ public final class ConnectorAgingManager {
         }
     }
 
-    private static void tickOverloadDamage(Location loc, ConnectorConfig cfg, long load, EnergyNet net) {
+    private static void collectOverloadDamage(
+            Location loc, ConnectorConfig cfg, long load, EnergyNet net, List<OverloadDamageEntry> pendingDamages) {
         int ticks = OVERLOAD_DAMAGE_COOLDOWN.merge(loc, 1, Integer::sum);
         if (ticks < OVERLOAD_DAMAGE_INTERVAL) return;
         OVERLOAD_DAMAGE_COOLDOWN.put(loc, 0);
-        Slimefun.runSync(() -> applyOverloadDamage(loc, cfg, load, net));
+        pendingDamages.add(new OverloadDamageEntry(loc, cfg, load, net));
     }
 
-    private static void applyOverloadDamage(Location loc, ConnectorConfig cfg, long load, EnergyNet net) {
-        EnergyNetComponent component = net.getConnectors().get(loc);
-        if (component == null || loc.getWorld() == null) return;
+    private static void applyAllOverloadDamages(List<OverloadDamageEntry> entries) {
+        Map<Player, Double> playerDamageMap = new HashMap<>();
 
-        int range = component.getRange();
-        if (range <= 0) return;
+        for (OverloadDamageEntry entry : entries) {
+            Location loc = entry.connectorLoc;
+            ConnectorConfig cfg = entry.cfg;
+            long load = entry.load;
+            EnergyNet net = entry.net;
 
-        double baseDamage = roundToHalf((((double) load / cfg.peakPower) - 1) * 10);
-        if (baseDamage <= 0.0) return;
+            EnergyNetComponent component = net.getConnectors().get(loc);
+            if (component == null || loc.getWorld() == null) continue;
 
-        Collection<Entity> nearbyEntities =
-                loc.getWorld().getNearbyEntities(loc, range, range, range, entity -> entity instanceof Player);
-        for (Entity entity : nearbyEntities) {
-            Player player = (Player) entity;
+            int range = component.getRange();
+            if (range <= 0) continue;
+
+            double baseDamage = roundToHalf((((double) load / cfg.peakPower) - 1) * 10);
+            if (baseDamage <= 0.0) continue;
+
+            Collection<Entity> nearbyEntities =
+                    loc.getWorld().getNearbyEntities(loc, range, range, range, entity -> entity instanceof Player);
+            for (Entity entity : nearbyEntities) {
+                Player player = (Player) entity;
+                if (!player.isValid() || player.isDead()) continue;
+                if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) continue;
+
+                double distance = player.getLocation().distance(loc);
+                if (distance >= range) continue;
+
+                double damage = baseDamage * (range - distance) / range * 3.0 / 4.0;
+                if (damage <= 0.0) continue;
+
+                PlayerProfile.find(player).ifPresent(profile -> {
+                    if (profile.hasFullProtectionAgainst(ProtectionType.ENERGY_OVERLOAD)) return;
+                    playerDamageMap.merge(player, damage, Double::sum);
+                });
+            }
+        }
+
+        for (Map.Entry<Player, Double> entry : playerDamageMap.entrySet()) {
+            Player player = entry.getKey();
             if (!player.isValid() || player.isDead()) continue;
-            if (player.getGameMode() == GameMode.CREATIVE || player.getGameMode() == GameMode.SPECTATOR) continue;
-
-            double distance = player.getLocation().distance(loc);
-            if (distance >= range) continue;
-
-            double damage = baseDamage * (range - distance) / range * 3.0 / 4.0;
-            if (damage <= 0.0) continue;
-
-            PlayerProfile.find(player).ifPresent(profile -> {
-                if (profile.hasFullProtectionAgainst(ProtectionType.ENERGY_OVERLOAD)) return;
-                player.setHealth(Math.max(0.0, player.getHealth() - damage));
-                player.getWorld()
-                        .spawnParticle(
-                                Particle.ELECTRIC_SPARK, player.getLocation().add(0, 1, 0), 5, 0.4, 0.4, 0.4, 0.05);
-                player.sendMessage(ChatColor.RED + "⚡ 你受到了能源连接器过载伤害! 伤害: " + String.format("%.1f", damage));
-            });
+            double totalDamage = entry.getValue();
+            player.setHealth(Math.max(0.0, player.getHealth() - totalDamage));
+            player.getWorld()
+                    .spawnParticle(Particle.ELECTRIC_SPARK, player.getLocation().add(0, 1, 0), 5, 0.4, 0.4, 0.4, 0.05);
+            player.sendMessage(ChatColor.RED + "⚡ 你受到了能源连接器过载伤害! 伤害: " + String.format("%.1f", totalDamage));
         }
     }
 
