@@ -257,9 +257,10 @@ public abstract class YamlConfigLoader<T> {
             return Collections.emptyMap();
         }
         YamlConfiguration cfg = YamlConfiguration.loadConfiguration(file);
-        ConfigurationSection section = cfg.getConfigurationSection(rootKey);
+        ConfigurationSection section = rootKey.isEmpty() ? cfg
+            : cfg.getConfigurationSection(rootKey);
         if (section == null) {
-            logger.warning("[Cooking] Missing root key '" + rootKey + "' in " + file.getName());
+            logger.warning("[Cooking] Missing root section in " + file.getName());
             return Collections.emptyMap();
         }
         Map<String, T> result = new HashMap<>();
@@ -739,7 +740,7 @@ public class StoveTickTask extends BukkitRunnable {
                 FuelConfig.FuelData data = fuels.get(fe.fuelId);
                 if (data != null) {
                     totalHeatRate += data.heatRate;
-                    if (data.tempGain > maxTemp) maxTemp = data.tempGain;
+                    maxTemp += data.tempGain;
                 }
             }
             state.currentTemp = Math.min(state.currentTemp + totalHeatRate * 0.1, maxTemp);
@@ -1161,28 +1162,71 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git
 
 ---
 
-## Task 7: StoveBlock（灶台方块，右键分发 + 取出成品）
+## Task 7: StoveBlock 责任链实现 + 各 Handler 填充（灶台交互）
 
 **Files:**
 - Modify: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/block/StoveBlock.java`
+- Modify: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/SpatulaInteractionHandler.java`
+- Modify: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/BowlInteractionHandler.java`
+- Modify: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/FuelInteractionHandler.java`
+- Modify: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/SeasoningInteractionHandler.java`
+- Modify: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/IngredientInteractionHandler.java`
+- Modify: `src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/ClearFuelInteractionHandler.java`
 
-- [ ] **Step 1: 完整实现 StoveBlock**
+- [ ] **Step 1: 填充 SpatulaInteractionHandler**
 
 ```java
-package io.github.thebusybiscuit.exoticgarden.cooking.block;
+package io.github.thebusybiscuit.exoticgarden.cooking.interaction;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.state.ActiveFace;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.FoodState;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.IngredientSlot;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.StoveState;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
+
+public class SpatulaInteractionHandler implements StoveInteractionHandler {
+
+    private static final NamespacedKey KEY_ITEM_TYPE = new NamespacedKey("cooking", "item_type");
+
+    @Override
+    public boolean handle(Player player, ItemStack handItem, StoveState state, Location location) {
+        if (handItem.getType() == Material.AIR || handItem.getItemMeta() == null) return false;
+        PersistentDataContainer pdc = handItem.getItemMeta().getPersistentDataContainer();
+        if (!"SPATULA".equals(pdc.get(KEY_ITEM_TYPE, PersistentDataType.STRING))) return false;
+
+        state.pendingFuelClear = false;
+        boolean flipped = false;
+        for (IngredientSlot slot : state.slots) {
+            if (slot == null) continue;
+            if (slot.state == FoodState.WHOLE && slot.frontDoneness >= 0.5
+                    && slot.currentFace == ActiveFace.FRONT) {
+                slot.currentFace = ActiveFace.BACK;
+                flipped = true;
+            }
+        }
+        state.spatulaBoostTicksLeft = Math.max(state.spatulaBoostTicksLeft, 200);
+        if (flipped) player.sendMessage("§a已翻面！烹饪加速中...");
+        return true;
+    }
+}
+```
+
+- [ ] **Step 2: 填充 BowlInteractionHandler（取出成品）**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.interaction;
 
 import io.github.thebusybiscuit.exoticgarden.cooking.ai.DishGenerator;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.FuelConfig;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.IngredientConfig;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.SeasoningConfig;
 import io.github.thebusybiscuit.exoticgarden.cooking.state.*;
-import io.github.thebusybiscuit.slimefun4.api.events.PlayerRightClickEvent;
-import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
-import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
-import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
-import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
-import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
-import io.github.thebusybiscuit.slimefun4.core.handlers.BlockUseHandler;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -1193,38 +1237,32 @@ import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import javax.annotation.Nonnull;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 
-public class StoveBlock extends SlimefunItem {
+public class BowlInteractionHandler implements StoveInteractionHandler {
 
-    public static final Map<Location, StoveState> activeStoves = new ConcurrentHashMap<>();
-
-    private final Map<String, FuelConfig.FuelData> fuels;
-    private final Map<String, IngredientConfig.IngredientData> ingredients;
-    private final Map<String, SeasoningConfig.SeasoningData> seasonings;
-    private final JavaPlugin plugin;
-    private final String apiKey;
-    private final String baseUrl;
-    private final String model;
-
-    private static final NamespacedKey KEY_ITEM_TYPE = new NamespacedKey("cooking", "item_type");
-    private static final NamespacedKey KEY_INGREDIENT_ID = new NamespacedKey("cooking", "ingredient_id");
-    private static final NamespacedKey KEY_FOOD_STATE = new NamespacedKey("cooking", "food_state");
     private static final NamespacedKey KEY_DISH_NAME = new NamespacedKey("cooking", "dish_name");
     private static final NamespacedKey KEY_DISH_HUNGER = new NamespacedKey("cooking", "dish_hunger");
     private static final NamespacedKey KEY_DISH_SATURATION = new NamespacedKey("cooking", "dish_saturation");
     private static final NamespacedKey KEY_DISH_QUALITY = new NamespacedKey("cooking", "dish_quality");
     private static final NamespacedKey KEY_DISH_DESCRIPTION = new NamespacedKey("cooking", "dish_description");
 
-    public StoveBlock(ItemGroup group, SlimefunItemStack item, RecipeType recipeType,
-                      ItemStack[] recipe, JavaPlugin plugin,
-                      Map<String, FuelConfig.FuelData> fuels,
-                      Map<String, IngredientConfig.IngredientData> ingredients,
-                      Map<String, SeasoningConfig.SeasoningData> seasonings,
-                      String apiKey, String baseUrl, String model) {
-        super(group, item, recipeType, recipe);
+    private final JavaPlugin plugin;
+    private final String apiKey;
+    private final String baseUrl;
+    private final String model;
+    private final Map<String, FuelConfig.FuelData> fuels;
+    private final Map<String, IngredientConfig.IngredientData> ingredients;
+    private final Map<String, SeasoningConfig.SeasoningData> seasonings;
+
+    public BowlInteractionHandler(JavaPlugin plugin,
+                                  Map<String, FuelConfig.FuelData> fuels,
+                                  Map<String, IngredientConfig.IngredientData> ingredients,
+                                  Map<String, SeasoningConfig.SeasoningData> seasonings,
+                                  String apiKey, String baseUrl, String model) {
         this.plugin = plugin;
         this.fuels = fuels;
         this.ingredients = ingredients;
@@ -1232,128 +1270,19 @@ public class StoveBlock extends SlimefunItem {
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
         this.model = model;
-
-        addItemHandler(buildUseHandler(), buildBreakHandler());
     }
 
-    private BlockUseHandler buildUseHandler() {
-        return (PlayerRightClickEvent e) -> {
-            e.cancel();
-            Player player = e.getPlayer();
-            Location loc = e.getClickedBlock().get().getLocation();
-            StoveState state = activeStoves.computeIfAbsent(loc, k -> new StoveState());
-
-            ItemStack hand = player.getInventory().getItemInMainHand();
-
-            if (hand.getType() != Material.AIR && hand.getItemMeta() != null) {
-                PersistentDataContainer pdc = hand.getItemMeta().getPersistentDataContainer();
-                String itemType = pdc.get(KEY_ITEM_TYPE, PersistentDataType.STRING);
-
-                if ("SPATULA".equals(itemType)) {
-                    state.pendingFuelClear = false;
-                    handleSpatula(player, state);
-                    return;
-                }
-            }
-
-            if (hand.getType() == Material.BOWL
-                    && (hand.getItemMeta() == null || !hand.getItemMeta().getPersistentDataContainer().has(
-                    new NamespacedKey("slimefun", "slimefun_item"), PersistentDataType.STRING))) {
-                state.pendingFuelClear = false;
-                handleHarvest(player, loc, state);
-                return;
-            }
-
-            if (hand.getType() != Material.AIR) {
-                String fuelId = resolveFuelId(hand);
-                if (fuelId != null) {
-                    state.pendingFuelClear = false;
-                    if (state.fuels.size() >= 2) {
-                        player.sendMessage("§c燃料槽已满（最多2格）");
-                        return;
-                    }
-                    FuelConfig.FuelData fd = fuels.get(fuelId);
-                    state.fuels.add(new FuelEntry(fuelId, fd.durationSeconds * 20));
-                    hand.setAmount(hand.getAmount() - 1);
-                    return;
-                }
-
-                String seasoningId = resolveSeasoningId(hand);
-                if (seasoningId != null) {
-                    state.pendingFuelClear = false;
-                    if (state.seasonings.size() >= 10) {
-                        player.sendMessage("§c调料槽已满（最多10种）");
-                        return;
-                    }
-                    state.seasonings.add(new SeasoningEntry(seasoningId, 0));
-                    hand.setAmount(hand.getAmount() - 1);
-                    return;
-                }
-
-                if (hand.getItemMeta() != null) {
-                    PersistentDataContainer pdc = hand.getItemMeta().getPersistentDataContainer();
-                    String ingId = pdc.get(KEY_INGREDIENT_ID, PersistentDataType.STRING);
-                    if (ingId != null && ingredients.containsKey(ingId)) {
-                        state.pendingFuelClear = false;
-                        int emptySlot = -1;
-                        for (int i = 0; i < state.slots.length; i++) {
-                            if (state.slots[i] == null) { emptySlot = i; break; }
-                        }
-                        if (emptySlot == -1) {
-                            player.sendMessage("§c食材槽已满（最多4格）");
-                            return;
-                        }
-                        String rawState = pdc.get(KEY_FOOD_STATE, PersistentDataType.STRING);
-                        FoodState foodState = FoodState.WHOLE;
-                        if (rawState != null) {
-                            try { foodState = FoodState.valueOf(rawState); } catch (IllegalArgumentException ignored) {}
-                        }
-                        state.slots[emptySlot] = new IngredientSlot(ingId, foodState, 0, 0, ActiveFace.FRONT, 0);
-                        hand.setAmount(hand.getAmount() - 1);
-                        return;
-                    }
-
-                    String itemType2 = pdc.get(KEY_ITEM_TYPE, PersistentDataType.STRING);
-                    if ("KNIFE".equals(itemType2)) {
-                        state.pendingFuelClear = false;
-                        return;
-                    }
-                }
-            }
-
-            if (hand.getType() == Material.AIR && player.isSneaking()) {
-                if (state.pendingFuelClear) {
-                    state.fuels.clear();
-                    state.pendingFuelClear = false;
-                    player.sendMessage("§a已清除所有燃料");
-                } else {
-                    state.pendingFuelClear = true;
-                    player.sendMessage("§e再次潜行右键确认清除燃料");
-                }
-                return;
-            }
-
-            state.pendingFuelClear = false;
-        };
-    }
-
-    private void handleSpatula(Player player, StoveState state) {
-        boolean flipped = false;
-        for (IngredientSlot slot : state.slots) {
-            if (slot == null) continue;
-            if (slot.state == FoodState.WHOLE && slot.frontDoneness >= 0.5
-                    && slot.currentFace == ActiveFace.FRONT) {
-                slot.currentFace = ActiveFace.BACK;
-                flipped = true;
-            }
+    @Override
+    public boolean handle(Player player, ItemStack handItem, StoveState state, Location location) {
+        if (handItem.getType() != Material.BOWL) return false;
+        if (handItem.getItemMeta() != null) {
+            PersistentDataContainer pdc = handItem.getItemMeta().getPersistentDataContainer();
+            if (pdc.has(new NamespacedKey("slimefun", "slimefun_item"), PersistentDataType.STRING))
+                return false;
         }
-        int newBoost = Math.max(state.spatulaBoostTicksLeft, 200);
-        state.spatulaBoostTicksLeft = newBoost;
-        if (flipped) player.sendMessage("§a已翻面！烹饪加速中...");
-        else player.sendMessage("§e暂无需要翻面的食材");
-    }
 
-    private void handleHarvest(Player player, Location loc, StoveState state) {
+        state.pendingFuelClear = false;
+
         List<DishGenerator.IngredientInfo> ingInfos = new ArrayList<>();
         List<DishGenerator.SeasoningInfo> seaInfos = new ArrayList<>();
         List<String> fxList = new ArrayList<>();
@@ -1361,19 +1290,15 @@ public class StoveBlock extends SlimefunItem {
         for (IngredientSlot slot : state.slots) {
             if (slot == null) continue;
             ingInfos.add(new DishGenerator.IngredientInfo(
-                slot.ingredientId,
-                slot.state.name(),
-                slot.frontDoneness,
-                slot.backDoneness,
-                CharLevel.fromSeconds(slot.charSeconds).name()
-            ));
+                slot.ingredientId, slot.state.name(),
+                slot.frontDoneness, slot.backDoneness,
+                CharLevel.fromSeconds(slot.charSeconds).name()));
         }
         for (SeasoningEntry se : state.seasonings) {
+            SeasoningConfig.SeasoningData sd = seasonings.get(se.seasoningId);
             seaInfos.add(new DishGenerator.SeasoningInfo(
                 se.seasoningId,
-                seasonings.get(se.seasoningId) != null && seasonings.get(se.seasoningId).hasDoneness
-                    ? se.progress : null
-            ));
+                sd != null && sd.hasDoneness ? se.progress : null));
         }
         for (FuelEntry fe : state.fuels) {
             FuelConfig.FuelData fd = fuels.get(fe.fuelId);
@@ -1396,6 +1321,7 @@ public class StoveBlock extends SlimefunItem {
                     player.sendMessage("§c烹饪失败，请稍后再试"));
                 return null;
             });
+        return true;
     }
 
     private ItemStack buildDishItem(DishGenerator.DishResult result) {
@@ -1416,33 +1342,265 @@ public class StoveBlock extends SlimefunItem {
         item.setItemMeta(meta);
         return item;
     }
+}
+```
 
-    private String resolveFuelId(ItemStack item) {
+- [ ] **Step 3: 填充 FuelInteractionHandler**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.interaction;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.config.FuelConfig;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.FuelEntry;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.StoveState;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
+
+import java.util.Map;
+
+public class FuelInteractionHandler implements StoveInteractionHandler {
+
+    private static final NamespacedKey KEY_FUEL_ID = new NamespacedKey("cooking", "fuel_id");
+    private final Map<String, FuelConfig.FuelData> fuels;
+
+    public FuelInteractionHandler(Map<String, FuelConfig.FuelData> fuels) {
+        this.fuels = fuels;
+    }
+
+    @Override
+    public boolean handle(Player player, ItemStack handItem, StoveState state, Location location) {
+        if (handItem.getType() == Material.AIR) return false;
+        String fuelId = resolve(handItem);
+        if (fuelId == null) return false;
+
+        state.pendingFuelClear = false;
+        if (state.fuels.size() >= 2) {
+            player.sendMessage("§c燃料槽已满（最多2格）");
+            return true;
+        }
+        FuelConfig.FuelData fd = fuels.get(fuelId);
+        state.fuels.add(new FuelEntry(fuelId, fd.durationSeconds * 20));
+        handItem.setAmount(handItem.getAmount() - 1);
+        return true;
+    }
+
+    private String resolve(ItemStack item) {
         if (item.getItemMeta() != null) {
             PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
-            NamespacedKey key = new NamespacedKey("cooking", "fuel_id");
-            if (pdc.has(key, PersistentDataType.STRING)) {
-                String id = pdc.get(key, PersistentDataType.STRING);
-                if (fuels.containsKey(id)) return id;
-            }
+            String id = pdc.get(KEY_FUEL_ID, PersistentDataType.STRING);
+            if (id != null && fuels.containsKey(id)) return id;
         }
         String matName = item.getType().name();
         if (fuels.containsKey(matName)) return matName;
         return null;
     }
+}
+```
 
-    private String resolveSeasoningId(ItemStack item) {
+- [ ] **Step 4: 填充 SeasoningInteractionHandler**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.interaction;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.config.SeasoningConfig;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.SeasoningEntry;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.StoveState;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
+
+import java.util.Map;
+
+public class SeasoningInteractionHandler implements StoveInteractionHandler {
+
+    private static final NamespacedKey KEY_SEASONING_ID = new NamespacedKey("cooking", "seasoning_id");
+    private final Map<String, SeasoningConfig.SeasoningData> seasonings;
+
+    public SeasoningInteractionHandler(Map<String, SeasoningConfig.SeasoningData> seasonings) {
+        this.seasonings = seasonings;
+    }
+
+    @Override
+    public boolean handle(Player player, ItemStack handItem, StoveState state, Location location) {
+        if (handItem.getType() == Material.AIR) return false;
+        String seasoningId = resolve(handItem);
+        if (seasoningId == null) return false;
+
+        state.pendingFuelClear = false;
+        if (state.seasonings.size() >= 10) {
+            player.sendMessage("§c调料槽已满（最多10种）");
+            return true;
+        }
+        state.seasonings.add(new SeasoningEntry(seasoningId, 0));
+        handItem.setAmount(handItem.getAmount() - 1);
+        return true;
+    }
+
+    private String resolve(ItemStack item) {
         if (item.getItemMeta() != null) {
             PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
-            NamespacedKey key = new NamespacedKey("cooking", "seasoning_id");
-            if (pdc.has(key, PersistentDataType.STRING)) {
-                String id = pdc.get(key, PersistentDataType.STRING);
-                if (seasonings.containsKey(id)) return id;
-            }
+            String id = pdc.get(KEY_SEASONING_ID, PersistentDataType.STRING);
+            if (id != null && seasonings.containsKey(id)) return id;
         }
         String matName = item.getType().name();
         if (seasonings.containsKey(matName)) return matName;
         return null;
+    }
+}
+```
+
+- [ ] **Step 5: 填充 IngredientInteractionHandler**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.interaction;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.config.IngredientConfig;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.ActiveFace;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.FoodState;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.IngredientSlot;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.StoveState;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
+
+import java.util.Map;
+
+public class IngredientInteractionHandler implements StoveInteractionHandler {
+
+    private static final NamespacedKey KEY_INGREDIENT_ID = new NamespacedKey("cooking", "ingredient_id");
+    private static final NamespacedKey KEY_FOOD_STATE = new NamespacedKey("cooking", "food_state");
+    private final Map<String, IngredientConfig.IngredientData> ingredients;
+
+    public IngredientInteractionHandler(Map<String, IngredientConfig.IngredientData> ingredients) {
+        this.ingredients = ingredients;
+    }
+
+    @Override
+    public boolean handle(Player player, ItemStack handItem, StoveState state, Location location) {
+        if (handItem.getType() == Material.AIR || handItem.getItemMeta() == null) return false;
+        PersistentDataContainer pdc = handItem.getItemMeta().getPersistentDataContainer();
+        String ingId = pdc.get(KEY_INGREDIENT_ID, PersistentDataType.STRING);
+        if (ingId == null || !ingredients.containsKey(ingId)) return false;
+
+        state.pendingFuelClear = false;
+        int emptySlot = -1;
+        for (int i = 0; i < state.slots.length; i++) {
+            if (state.slots[i] == null) { emptySlot = i; break; }
+        }
+        if (emptySlot == -1) {
+            player.sendMessage("§c食材槽已满（最多4格）");
+            return true;
+        }
+        String rawState = pdc.get(KEY_FOOD_STATE, PersistentDataType.STRING);
+        FoodState foodState = FoodState.WHOLE;
+        if (rawState != null) {
+            try { foodState = FoodState.valueOf(rawState); } catch (IllegalArgumentException ignored) {}
+        }
+        state.slots[emptySlot] = new IngredientSlot(ingId, foodState, 0, 0, ActiveFace.FRONT, 0);
+        handItem.setAmount(handItem.getAmount() - 1);
+        return true;
+    }
+}
+```
+
+- [ ] **Step 6: 填充 ClearFuelInteractionHandler**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.interaction;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.state.StoveState;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+
+public class ClearFuelInteractionHandler implements StoveInteractionHandler {
+
+    @Override
+    public boolean handle(Player player, ItemStack handItem, StoveState state, Location location) {
+        if (handItem.getType() != Material.AIR || !player.isSneaking()) return false;
+
+        if (state.pendingFuelClear) {
+            state.fuels.clear();
+            state.pendingFuelClear = false;
+            player.sendMessage("§a已清除所有燃料");
+        } else {
+            state.pendingFuelClear = true;
+            player.sendMessage("§e再次潜行右键确认清除燃料");
+        }
+        return true;
+    }
+}
+```
+
+- [ ] **Step 7: 重写 StoveBlock 使用责任链**
+
+```java
+package io.github.thebusybiscuit.exoticgarden.cooking.block;
+
+import io.github.thebusybiscuit.exoticgarden.cooking.interaction.StoveInteractionHandler;
+import io.github.thebusybiscuit.exoticgarden.cooking.state.StoveState;
+import io.github.thebusybiscuit.slimefun4.api.events.PlayerRightClickEvent;
+import io.github.thebusybiscuit.slimefun4.api.items.ItemGroup;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
+import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
+import io.github.thebusybiscuit.slimefun4.core.handlers.BlockBreakHandler;
+import io.github.thebusybiscuit.slimefun4.core.handlers.BlockUseHandler;
+import org.bukkit.Location;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
+
+import javax.annotation.Nonnull;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
+public class StoveBlock extends SlimefunItem {
+
+    public static final Map<Location, StoveState> activeStoves = new ConcurrentHashMap<>();
+
+    private final List<StoveInteractionHandler> handlers;
+
+    public StoveBlock(ItemGroup group, SlimefunItemStack item, RecipeType recipeType,
+                      ItemStack[] recipe, List<StoveInteractionHandler> handlers) {
+        super(group, item, recipeType, recipe);
+        this.handlers = handlers;
+        addItemHandler(buildUseHandler(), buildBreakHandler());
+    }
+
+    private BlockUseHandler buildUseHandler() {
+        return (PlayerRightClickEvent e) -> {
+            e.cancel();
+            Player player = e.getPlayer();
+            Location loc = e.getClickedBlock().get().getLocation();
+            StoveState state = activeStoves.computeIfAbsent(loc, k -> new StoveState());
+            ItemStack hand = player.getInventory().getItemInMainHand();
+
+            boolean handled = false;
+            for (StoveInteractionHandler handler : handlers) {
+                if (handler.handle(player, hand, state, loc)) {
+                    handled = true;
+                    break;
+                }
+            }
+            if (!handled) {
+                state.pendingFuelClear = false;
+            }
+        };
     }
 
     private BlockBreakHandler buildBreakHandler() {
@@ -1451,15 +1609,14 @@ public class StoveBlock extends SlimefunItem {
             public void onPlayerBreak(@Nonnull org.bukkit.event.block.BlockBreakEvent e,
                                       @Nonnull Player player,
                                       @Nonnull List<ItemStack> drops) {
-                Location loc = e.getBlock().getLocation();
-                activeStoves.remove(loc);
+                activeStoves.remove(e.getBlock().getLocation());
             }
         };
     }
 }
 ```
 
-- [ ] **Step 2: 编译验证**
+- [ ] **Step 8: 编译验证**
 
 ```powershell
 cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; mvn compile -q
@@ -1467,10 +1624,12 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; mvn
 
 预期：BUILD SUCCESS
 
-- [ ] **Step 3: Commit**
+注意：`BowlInteractionHandler` 依赖 `DishGenerator`（Task 6）、`StoveBlock` 不再持有 `fuels / ingredients / seasonings / plugin / apiKey` 等字段。
+
+- [ ] **Step 9: Commit**
 
 ```powershell
-cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git add src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/block/StoveBlock.java; git commit -m "feat(cooking): implement StoveBlock with right-click dispatch and harvest flow"
+cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git add src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/block/StoveBlock.java src/main/java/io/github/thebusybiscuit/exoticgarden/cooking/interaction/; git commit -m "feat(cooking): refactor StoveBlock to chain-of-responsibility, fill all interaction handlers"
 ```
 
 ---
@@ -1839,9 +1998,12 @@ package io.github.thebusybiscuit.exoticgarden.cooking;
 import io.github.thebusybiscuit.exoticgarden.ExoticGarden;
 import io.github.thebusybiscuit.exoticgarden.cooking.block.CuttingBoardBlock;
 import io.github.thebusybiscuit.exoticgarden.cooking.block.StoveBlock;
+import io.github.thebusybiscuit.exoticgarden.cooking.calculator.DonenessCalculator;
+import io.github.thebusybiscuit.exoticgarden.cooking.calculator.StandardDonenessCalculator;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.FuelConfig;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.IngredientConfig;
 import io.github.thebusybiscuit.exoticgarden.cooking.config.SeasoningConfig;
+import io.github.thebusybiscuit.exoticgarden.cooking.interaction.*;
 import io.github.thebusybiscuit.exoticgarden.cooking.item.KnifeItem;
 import io.github.thebusybiscuit.exoticgarden.cooking.item.SpatulaItem;
 import io.github.thebusybiscuit.exoticgarden.cooking.task.StoveTickTask;
@@ -1852,22 +2014,52 @@ import io.github.thebusybiscuit.slimefun4.libraries.dough.items.CustomItemStack;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.io.File;
 import java.io.InputStream;
 import java.nio.file.Files;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.logging.Logger;
 
 public class CookingModule {
 
     public static void initialize(ExoticGarden plugin) {
-        Map<String, FuelConfig.FuelData> fuels = loadFuels(plugin);
-        Map<String, IngredientConfig.IngredientData> ingredients = loadIngredients(plugin);
-        Map<String, SeasoningConfig.SeasoningData> seasonings = loadSeasonings(plugin);
+        Logger logger = plugin.getLogger();
+
+        FuelConfig fuelConfig = new FuelConfig(logger);
+        IngredientConfig ingredientConfig = new IngredientConfig(logger);
+        SeasoningConfig seasoningConfig = new SeasoningConfig(logger);
+
+        Map<String, FuelConfig.FuelData> fuels = fuelConfig.loadAll(
+            new File(plugin.getDataFolder(), "fuels.yml"), "");
+        Map<String, IngredientConfig.IngredientData> ingredients = ingredientConfig.loadAll(
+            new File(plugin.getDataFolder(), "ingredients.yml"), "");
+        Map<String, SeasoningConfig.SeasoningData> seasonings = seasoningConfig.loadAll(
+            new File(plugin.getDataFolder(), "seasonings.yml"), "");
+
+        saveResourceIfMissing(plugin, "fuels.yml");
+        saveResourceIfMissing(plugin, "ingredients.yml");
+        saveResourceIfMissing(plugin, "seasonings.yml");
 
         String apiKey = plugin.getConfig().getString("cooking.ai.api-key", "");
         String baseUrl = plugin.getConfig().getString("cooking.ai.base-url", "https://api.openai.com/v1");
         String model = plugin.getConfig().getString("cooking.ai.model", "gpt-4o-mini");
+
+        Map<String, DonenessCalculator> calculators = new HashMap<>();
+        calculators.put("standard", new StandardDonenessCalculator());
+
+        List<StoveInteractionHandler> stoveHandlers = List.of(
+            new SpatulaInteractionHandler(),
+            new BowlInteractionHandler(plugin, fuels, ingredients, seasonings, apiKey, baseUrl, model),
+            new FuelInteractionHandler(fuels),
+            new SeasoningInteractionHandler(seasonings),
+            new IngredientInteractionHandler(ingredients),
+            new ClearFuelInteractionHandler()
+        );
 
         ItemGroup cookingGroup = new ItemGroup(
             new NamespacedKey(plugin, "cooking"),
@@ -1888,7 +2080,7 @@ public class CookingModule {
                 new ItemStack(Material.IRON_INGOT), new ItemStack(Material.CAMPFIRE), new ItemStack(Material.IRON_INGOT),
                 new ItemStack(Material.COBBLESTONE), new ItemStack(Material.IRON_INGOT), new ItemStack(Material.COBBLESTONE)
             },
-            plugin, fuels, ingredients, seasonings, apiKey, baseUrl, model
+            stoveHandlers
         );
         stove.register(plugin);
 
@@ -1916,9 +2108,13 @@ public class CookingModule {
             "&7右键砧板上的食材进行切割",
             "&7潜行右键取回食材"
         );
-        knifeStack.getItemMeta().getPersistentDataContainer()
-            .set(new NamespacedKey("cooking", "item_type"),
-                 org.bukkit.persistence.PersistentDataType.STRING, "KNIFE");
+        ItemMeta knifeMeta = knifeStack.getItemMeta();
+        if (knifeMeta != null) {
+            knifeMeta.getPersistentDataContainer()
+                .set(new NamespacedKey("cooking", "item_type"),
+                     PersistentDataType.STRING, "KNIFE");
+            knifeStack.setItemMeta(knifeMeta);
+        }
         KnifeItem knife = new KnifeItem(
             cookingGroup, knifeStack, RecipeType.ENHANCED_CRAFTING_TABLE,
             new ItemStack[] {
@@ -1937,9 +2133,13 @@ public class CookingModule {
             "&7右键灶台翻面，加速烹饪",
             "&7右键砧板搅拌制酱"
         );
-        spatulaStack.getItemMeta().getPersistentDataContainer()
-            .set(new NamespacedKey("cooking", "item_type"),
-                 org.bukkit.persistence.PersistentDataType.STRING, "SPATULA");
+        ItemMeta spatulaMeta = spatulaStack.getItemMeta();
+        if (spatulaMeta != null) {
+            spatulaMeta.getPersistentDataContainer()
+                .set(new NamespacedKey("cooking", "item_type"),
+                     PersistentDataType.STRING, "SPATULA");
+            spatulaStack.setItemMeta(spatulaMeta);
+        }
         SpatulaItem spatula = new SpatulaItem(
             cookingGroup, spatulaStack, RecipeType.ENHANCED_CRAFTING_TABLE,
             new ItemStack[] {
@@ -1951,31 +2151,15 @@ public class CookingModule {
         );
         spatula.register(plugin);
 
-        new StoveTickTask(fuels, ingredients, seasonings)
+        new StoveTickTask(fuels, ingredients, seasonings, calculators)
             .runTaskTimer(plugin, 2L, 2L);
     }
 
-    private static Map<String, FuelConfig.FuelData> loadFuels(ExoticGarden plugin) {
-        File file = new File(plugin.getDataFolder(), "fuels.yml");
-        if (!file.exists()) saveResource(plugin, "fuels.yml", file);
-        return FuelConfig.loadAll(file);
-    }
-
-    private static Map<String, IngredientConfig.IngredientData> loadIngredients(ExoticGarden plugin) {
-        File file = new File(plugin.getDataFolder(), "ingredients.yml");
-        if (!file.exists()) saveResource(plugin, "ingredients.yml", file);
-        return IngredientConfig.loadAll(file);
-    }
-
-    private static Map<String, SeasoningConfig.SeasoningData> loadSeasonings(ExoticGarden plugin) {
-        File file = new File(plugin.getDataFolder(), "seasonings.yml");
-        if (!file.exists()) saveResource(plugin, "seasonings.yml", file);
-        return SeasoningConfig.loadAll(file);
-    }
-
-    private static void saveResource(ExoticGarden plugin, String name, File dest) {
+    private static void saveResourceIfMissing(ExoticGarden plugin, String name) {
+        File file = new File(plugin.getDataFolder(), name);
+        if (file.exists()) return;
         try (InputStream in = plugin.getResource(name)) {
-            if (in != null) Files.copy(in, dest.toPath());
+            if (in != null) Files.copy(in, file.toPath());
         } catch (Exception e) {
             plugin.getLogger().warning("Failed to save resource: " + name);
         }
@@ -2038,7 +2222,7 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git
 | WHOLE+FRONT → frontDoneness+increment, backDoneness+increment×0.3 | ✅ |
 | WHOLE+BACK → backDoneness+increment | ✅ |
 | 非WHOLE → frontDoneness+increment | ✅ |
-| 右键分发优先级（SPATULA→BOWL→fuel→seasoning→ingredient→KNIFE→空手潜行→其他） | ✅ |
+| 右键分发优先级（责任链: Spatula→Bowl→Fuel→Seasoning→Ingredient→ClearFuel） | ✅ |
 | pendingFuelClear 二次确认逻辑，任何非空手潜行操作重置 | ✅ |
 | 取出成品：清空slots+seasonings（燃料不变），异步AI，切回主线程给物品 | ✅ |
 | CuttingBoardBlock ArmorStand 放置在上方 0.5+0.5=1.0 格（加0.5到中心+1.0高度） | ✅ |
@@ -2049,6 +2233,11 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git
 | 菜肴 ItemStack Material.MUSHROOM_STEW，amount=1 | ✅ |
 | 全息格式覆盖：SEVERE/HEAVY烧焦、WHOLE双面%、非WHOLE单%、无食材 | ✅ |
 | CookingModule 注册顺序：ItemGroup→StoveBlock→CuttingBoardBlock→KnifeItem→SpatulaItem→Task | ✅ |
+| Config 实例化调用：new FuelConfig(logger).loadAll(file, "") | ✅ |
+| calculators Map 构建 + 传入 StoveTickTask | ✅ |
+| handlers List 构建 + 传入 StoveBlock | ✅ |
+| StoveBlock.buildUseHandler 使用责任链遍历 handlers | ✅ |
+| tickTemperature maxTemp 为累加值（非取最大值） | ✅ |
 | 所有 PowerShell commit 命令使用分号`;`不使用`&&` | ✅ |
 
 ---
@@ -2057,14 +2246,7 @@ cd "d:\Users\Administrator\Desktop\Java项目\slimefun\ExoticGardenComplex"; git
 
 1. **Gson 可用性**：Spigot API 1.19.2 通过传递依赖包含了 `com.google.gson:gson`，在 provided scope 下可直接 import，无需在 pom.xml 中添加。
 
-2. **SlimefunItemStack PDC 写入时机**：`SlimefunItemStack` 的 `getItemMeta()` 在构造后立即可用，但注意 `register()` 调用前修改 meta 时须保证 meta 非 null。在 `CookingModule` 中对 knifeStack/spatulaStack 写入 PDC 时，如 `getItemMeta()` 返回 null，需先检查并创建 meta。建议改用：
-   ```java
-   ItemMeta m = knifeStack.getItemMeta();
-   if (m != null) {
-       m.getPersistentDataContainer().set(...);
-       knifeStack.setItemMeta(m);
-   }
-   ```
+2. **SlimefunItemStack PDC 写入**：已使用 null-safe 模式（`ItemMeta m = stack.getItemMeta(); if (m != null) { m.getPDC().set(...); stack.setItemMeta(m); }`），见 Step 1 CookingModule 代码。
 
 3. **PlayerInteractAtEntityEvent 重复注册**：`KnifeItem` 和 `SpatulaItem` 各自在构造器内注册 Listener，若插件重载会重复注册。生产环境中建议将 Listener 抽为独立类，在 `CookingModule.initialize` 时只注册一次。
 
