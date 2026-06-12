@@ -797,6 +797,14 @@ public class SlimefunItem implements Placeable {
     }
 
     /**
+     * Clears all additional recipes from this {@link SlimefunItem}.
+     * The primary recipe (set via constructor or {@link #setRecipe}) is not affected.
+     */
+    public void clearAdditionalRecipes() {
+        additionalRecipes.clear();
+    }
+
+    /**
      * This method returns whether or not this {@link SlimefunItem} is allowed to
      * be used in a Crafting Table.
      *
