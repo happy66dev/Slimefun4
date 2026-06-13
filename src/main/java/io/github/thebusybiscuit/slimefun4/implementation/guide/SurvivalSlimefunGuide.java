@@ -826,11 +826,12 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
             int prevSlot = 11;
             int nextSlot = 15;
 
-            // Page indicator at slot 17
+            // Page indicator at slot 9
             menu.replaceExistingItem(
-                    17,
+                    9,
                     new CustomItemStack(
                             Material.PAPER, ChatColor.WHITE + "配方 " + (currentPage + 1) + " / " + totalPages));
+            menu.addMenuClickHandler(9, ChestMenuUtils.getEmptyClickHandler());
 
             // Previous button
             if (currentPage > 0) {
