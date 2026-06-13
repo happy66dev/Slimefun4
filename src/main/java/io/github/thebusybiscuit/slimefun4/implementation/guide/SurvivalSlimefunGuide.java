@@ -19,6 +19,7 @@ import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.api.researches.Research;
 import io.github.thebusybiscuit.slimefun4.core.attributes.RecipeDisplayItem;
 import io.github.thebusybiscuit.slimefun4.core.guide.GuideHistory;
+import io.github.thebusybiscuit.slimefun4.core.guide.ScgBridge;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuide;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuideImplementation;
 import io.github.thebusybiscuit.slimefun4.core.guide.SlimefunGuideMode;
@@ -776,7 +777,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
         }
 
         if (addToHistory) {
-            cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.pushNestedDetail(p, item.getId());
+            ScgBridge.pushNestedDetail(p, item.getId());
         }
 
         ChestMenu menu = create(p);
@@ -943,14 +944,14 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
 
     private void addBackButton(ChestMenu menu, int slot, Player p, PlayerProfile profile) {
         GuideHistory history = profile.getGuideHistory();
-        boolean extView = cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.isInExternalView(p);
+        boolean extView = ScgBridge.isInExternalView(p);
         String shiftLore = extView ? "&fShift + 左键: &7返回SCG分类" : "&fShift + 左键: &7返回主菜单";
 
         if (isSurvivalMode() && history.size() > 1) {
             menu.addItem(slot, new CustomItemStack(ChestMenuUtils.getBackButton(p, "", "&f左键: &7返回上一页", shiftLore)));
 
             menu.addMenuClickHandler(slot, (pl, s, is, action) -> {
-                if (cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.isInExternalView(pl)) {
+                if (ScgBridge.isInExternalView(pl)) {
                     if (action.isShiftClicked()) {
                         SlimefunGuide.openGuide(pl, pl.getInventory().getItemInMainHand());
                     } else {
@@ -973,7 +974,7 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
                             ChatColor.GRAY + Slimefun.getLocalization().getMessage(p, "guide.back.guide"),
                             shiftLore)));
             menu.addMenuClickHandler(slot, (pl, s, is, action) -> {
-                if (cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.isInExternalView(pl)) {
+                if (ScgBridge.isInExternalView(pl)) {
                     if (action.isShiftClicked()) {
                         SlimefunGuide.openGuide(pl, pl.getInventory().getItemInMainHand());
                     } else {
@@ -988,16 +989,16 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
     }
 
     private void handleExternalBack(Player pl, PlayerProfile profile) {
-        String prevItemId = cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.navigateBackItem(pl);
+        String prevItemId = ScgBridge.navigateBackItem(pl);
         if (prevItemId != null) {
             SlimefunItem sfItem = SlimefunItem.getById(prevItemId);
-            cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.suppressPush(pl);
+            ScgBridge.suppressPush(pl);
             try {
                 if (sfItem != null) {
                     displayItem(profile, sfItem, true);
                 }
             } finally {
-                cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.clearSuppressPush(pl);
+                ScgBridge.clearSuppressPush(pl);
             }
         } else {
             SlimefunGuide.openGuide(pl, pl.getInventory().getItemInMainHand());

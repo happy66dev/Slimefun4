@@ -156,11 +156,11 @@ public final class SlimefunGuide {
             if (targetGuide.getType() == Material.AIR) return false;
         }
 
-        if (!cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.isCustomGuideMode(targetGuide)) {
+        if (!ScgBridge.isCustomGuideMode(targetGuide)) {
             return false;
         }
 
-        cn.rmc.slimefunweaver.api.SlimefunWeaverAPI.openOrRestore(p, targetGuide);
+        ScgBridge.openOrRestore(p, targetGuide);
         return true;
     }
 }
