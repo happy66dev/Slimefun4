@@ -823,12 +823,12 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
 
         // Add recipe pagination buttons if there are multiple recipes
         if (totalPages > 1) {
-            int prevSlot = 1;
-            int nextSlot = 7;
+            int prevSlot = 11;
+            int nextSlot = 15;
 
-            // Page indicator at slot 2
+            // Page indicator at slot 17
             menu.replaceExistingItem(
-                    2,
+                    17,
                     new CustomItemStack(
                             Material.PAPER, ChatColor.WHITE + "配方 " + (currentPage + 1) + " / " + totalPages));
 

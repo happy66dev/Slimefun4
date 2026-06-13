@@ -3,6 +3,7 @@ package io.github.thebusybiscuit.slimefun4.api.recipes;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
+import org.apache.commons.lang.Validate;
 import org.bukkit.inventory.ItemStack;
 
 /**
@@ -18,9 +19,19 @@ public class RecipeEntry {
 
     @ParametersAreNonnullByDefault
     public RecipeEntry(RecipeType recipeType, ItemStack[] recipe, ItemStack recipeOutput) {
+        Validate.notNull(recipeType, "The RecipeType must not be null!");
+        Validate.notNull(recipe, "The recipe must not be null!");
+        Validate.notNull(recipeOutput, "The output must not be null!");
+
+        if (recipe.length != 9) {
+            throw new IllegalArgumentException("Recipes must be of length 9, got " + recipe.length);
+        }
+
         this.recipeType = recipeType;
-        this.recipe = recipe;
-        this.recipeOutput = recipeOutput;
+        this.recipe = java.util.Arrays.stream(recipe)
+                .map(s -> s == null ? null : s.clone())
+                .toArray(ItemStack[]::new);
+        this.recipeOutput = recipeOutput.clone();
     }
 
     @Nonnull
@@ -30,7 +41,9 @@ public class RecipeEntry {
 
     @Nonnull
     public ItemStack[] getRecipe() {
-        return recipe;
+        return java.util.Arrays.stream(recipe)
+                .map(s -> s == null ? null : s.clone())
+                .toArray(ItemStack[]::new);
     }
 
     @Nonnull
