@@ -27,7 +27,7 @@ public class AsyncPlayerRadiationLevelUpdateEvent extends PlayerEvent { // 异�
      *
      * @return 之前的辐射等级喵
      */
-    private final int previousLevel;
+    private final int previousLevel; // 玩家在本次tick更新前的辐射等级值喵~用于计算辐射等级变化量喵
 
     /**
      * 返回辐射等级更新的增量喵~这个数值可能为负数喵~
