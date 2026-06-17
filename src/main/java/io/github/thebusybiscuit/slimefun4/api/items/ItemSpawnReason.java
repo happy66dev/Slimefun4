@@ -9,10 +9,10 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.seasonal.EasterEg
 import io.github.thebusybiscuit.slimefun4.implementation.items.tools.GoldPan;
 import io.github.thebusybiscuit.slimefun4.implementation.items.tools.PickaxeOfContainment;
 import org.bukkit.block.Block;
-import org.bukkit.inventory.ItemStack;
 
 /**
- * This enum holds the different reasons as to why we may need to spawn an item.
+ * 这个枚举列出了所有可能触发物品生成（掉落/放置）的原因喵~
+ * 每个枚举常量代表一种具体的业务场景，会在 SlimefunItemSpawnEvent 事件中被引用喵~
  *
  * @author TheBusyBiscuit
  *
@@ -22,46 +22,44 @@ import org.bukkit.inventory.ItemStack;
 public enum ItemSpawnReason {
 
     /**
-     * The item is spawned on top of an {@link AncientPedestal}.
+     * 物品被放置在 {@link AncientPedestal}（远古祭坛基座）上方时触发的生成原因喵~
      */
     ANCIENT_PEDESTAL_PLACE_ITEM,
 
     /**
-     * This {@link ItemStack} is dropped as a result of the {@link PickaxeOfContainment}
-     * breaking a monster spawner.
+     * 使用 {@link PickaxeOfContainment}（封印镐）破坏怪物刷怪笼时，
+     * 刷怪笼以 ItemStack 形式掉落到地上的原因喵~
      */
     BROKEN_SPAWNER_DROP,
 
     /**
-     * The {@link ItemStack} is dropped as the result of a {@link CargoNet}
-     * overflowing.
+     * {@link CargoNet}（货运网络）物品溢出时，多余的 ItemStack 被强制掉落到世界中的原因喵~
      */
     CARGO_OVERFLOW,
 
     /**
-     * The {@link ItemStack} is dropped as the result of a {@link MultiBlockMachine}
-     * overflowing.
+     * {@link MultiBlockMachine}（多方块机器）输出槽溢出时，多余的 ItemStack 被强制掉落到地面的原因喵~
      */
     MULTIBLOCK_MACHINE_OVERFLOW,
 
     /**
-     * The {@link ItemStack} is dropped as the result of an opened {@link ChristmasPresent}.
+     * 玩家打开 {@link ChristmasPresent}（圣诞礼物）后，礼物内容物以 ItemStack 形式掉落的原因喵~
      */
     CHRISTMAS_PRESENT_OPENED,
 
     /**
-     * THe {@link ItemStack} is dropped as the result of an opened {@link EasterEgg}.
+     * 玩家打开 {@link EasterEgg}（复活节彩蛋）后，内容物以 ItemStack 形式掉落的原因喵~
      */
     EASTER_EGG_OPENED,
 
     /**
-     * The {@link ItemStack} is dropped as the result of a {@link GoldPan} being used
-     * on a {@link Block} which yields drops.
+     * 玩家使用 {@link GoldPan}（淘金盘）对某个 {@link Block}（方块）进行操作，
+     * 该方块产生了掉落物时对应的生成原因喵~
      */
     GOLD_PAN_USE,
 
     /**
-     * Other reasons we did not account for.
+     * 其他未被上方枚举值覆盖到的杂项生成原因喵~
      */
     MISC;
 }

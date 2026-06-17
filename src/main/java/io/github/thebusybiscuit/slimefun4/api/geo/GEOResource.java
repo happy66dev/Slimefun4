@@ -1,27 +1,21 @@
 package io.github.thebusybiscuit.slimefun4.api.geo;
 
 import io.github.thebusybiscuit.slimefun4.api.events.GEOResourceGenerationEvent;
-import io.github.thebusybiscuit.slimefun4.core.services.localization.Language;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.items.geo.GEOMiner;
 import io.github.thebusybiscuit.slimefun4.implementation.items.geo.GEOScanner;
 import javax.annotation.Nonnull;
-import org.bukkit.Chunk;
 import org.bukkit.Keyed;
-import org.bukkit.World;
 import org.bukkit.World.Environment;
 import org.bukkit.block.Biome;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 /**
- * A {@link GEOResource} is a virtual resource that can be thought of as world-gen.
- * However it cannot be found in a {@link World}.
+ * GEOResource 代表一种虚拟地质资源，类似于世界生成的矿物，但不会真实出现在世界方块里喵~
+ * 这类资源只存在于内存中，必须通过 GEOMiner（地质采矿机）等设备才能获取喵~
  *
- * This resource only exists in memory and can be retrieved through a {@link GEOMiner}
- * or similar devices.
- *
- * A {@link GEOResource} can be detected via the {@link GEOScanner}.
+ * 玩家可以使用 GEOScanner（地质扫描仪）检测某区块内的资源储量喵~
  *
  * @author TheBusyBiscuit
  *
@@ -34,68 +28,78 @@ import org.bukkit.inventory.ItemStack;
 public interface GEOResource extends Keyed {
 
     /**
-     * Returns the default supply of this resource in that biome
+     * 根据所在维度环境和生物群系，返回该资源在区块内的默认储量喵~
+     * 不同生物群系（沙漠/丛林等）和维度（主世界/下界/末地）会有不同的资源储量喵~
      *
      * @param environment
-     *            The {@link Environment} this area is currently in (NORMAL / NETHER / THE_END)
+     *            当前区域所处的维度环境（NORMAL主世界 / NETHER下界 / THE_END末地）喵~
      * @param biome
-     *            The {@link Biome} this area is currently in.
+     *            当前区域所处的生物群系（如平原、沙漠等）喵~
      *
-     * @return The default supply found in a {@link Chunk} with the given {@link Biome}
+     * @return 在给定生物群系的区块中，该资源的默认储量数值喵~
      */
     int getDefaultSupply(@Nonnull Environment environment, @Nonnull Biome biome);
 
     /**
-     * Returns how much the value may deviate from the default supply (positive only).
+     * 返回资源实际储量相对于默认储量的最大随机偏差值（只取正数）喵~
+     * 用于给资源储量添加随机性，让每个区块的资源数量不完全一样喵~
      *
-     * @return The deviation or spread of the supply
+     * @return 储量的最大偏差/波动范围喵~
      */
     int getMaxDeviation();
 
     /**
-     * Returns the name of this resource (e.g. "Oil")
+     * 返回该资源的名称（例如 "Oil" 石油），用于内部标识和默认显示喵~
      *
-     * @return The name of this Resource
+     * @return 资源的名称字符串喵~
      */
     @Nonnull
     String getName();
 
     /**
-     * This {@link ItemStack} is used for display-purposes in the GEO Scanner.
-     * But will also determine the Output of the GEO Miner, if it is applicable for that.
+     * 返回该资源对应的 ItemStack 物品对象，用于在 GEO Scanner 扫描结果中展示图标喵~
+     * 如果该资源支持被 GEO Miner 开采，这个 ItemStack 也将作为采矿机的产出物品喵~
      *
-     * @return The {@link ItemStack} version of this Resource.
+     * @return 代表该资源的 ItemStack 物品喵~
      */
     @Nonnull
     ItemStack getItem();
 
     /**
-     * Returns whether this Resource can be obtained using a GEO Miner.
-     * This will automatically add it to the GEO - Miner.
+     * 返回该资源是否可以被 GEO Miner（地质采矿机）开采喵~
+     * 如果返回 true，该资源会被自动添加进采矿机的产出列表喵~
      *
-     * @return Whether you can get obtain this resource using a GEO Miner.
+     * @return 可被 GEO Miner 开采则返回 true，否则返回 false 喵~
      */
     boolean isObtainableFromGEOMiner();
 
     /**
-     * Registers this GEO Resource
+     * 将当前 GEO Resource 注册到 GPS 网络的资源管理器中，使其在游戏中生效喵~
      */
     default void register() {
+        // 通过 GPS 网络获取资源管理器，将当前资源注册进去让游戏能识别和使用喵~
         Slimefun.getGPSNetwork().getResourceManager().register(this);
     }
 
     /**
-     * This method returns a localized name for this {@link GEOResource} in the
-     * {@link Language} the given {@link Player} selected.
+     * 根据玩家选择的语言，返回该资源的本地化名称喵~
+     * 先从本地化文件中查找对应翻译，找不到则回退到默认英文名称喵~
+     *
+     * 整体思路：
+     *   输入：玩家对象 p，用来确定其所使用的语言设置喵~
+     *   输出：该资源在玩家语言下的本地化名称，找不到翻译时返回默认名称喵~
+     *   边界条件：本地化字符串不存在（返回null）时，自动回退到 getName() 的默认值喵~
      *
      * @param p
-     *            The {@link Player} to localize the name for.
-     * @return The localized name for this {@link GEOResource}
+     *            需要获取本地化名称的玩家对象喵~
+     * @return 该资源在玩家所用语言下的本地化名称喵~
      */
     @Nonnull
     default String getName(@Nonnull Player p) {
+        // 拼接本地化键名路径（格式: resources.命名空间.资源键），从本地化服务中查找对应翻译喵~
         String name = Slimefun.getLocalization()
                 .getResourceString(p, "resources." + getKey().getNamespace() + "." + getKey().getKey());
+        // 喵~防御：name为null说明没有找到本地化翻译，回退使用默认名称避免返回空值喵~
         return name == null ? getName() : name;
     }
 }
