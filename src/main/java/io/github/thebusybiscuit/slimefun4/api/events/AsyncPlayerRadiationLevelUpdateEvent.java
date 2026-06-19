@@ -55,7 +55,8 @@ public class AsyncPlayerRadiationLevelUpdateEvent extends PlayerEvent { // 异�
      */
     private final boolean fullProtection; // 完全辐射防护标志喵~表示玩家是否免疫辐射伤害喵
 
-    public AsyncPlayerRadiationLevelUpdateEvent(Player player, int previousLevel, int delta, boolean hasProtection) { // 构造方法喵~传入玩家对象之前的辐射等级增量值和防护状态喵
+    public AsyncPlayerRadiationLevelUpdateEvent(
+            Player player, int previousLevel, int delta, boolean hasProtection) { // 构造方法喵~传入玩家对象之前的辐射等级增量值和防护状态喵
         super(player, !Bukkit.isPrimaryThread()); // 调用父类PlayerEvent构造方法喵~第二个参数表示是否异步true为异步事件喵
 
         this.previousLevel = previousLevel; // 记录本次tick之前的辐射等级喵

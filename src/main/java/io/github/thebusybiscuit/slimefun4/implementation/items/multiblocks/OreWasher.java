@@ -143,6 +143,26 @@ public class OreWasher extends MultiBlockMachine {
                         removeItem(p, b, inv, outputInv, input, event.getOutput(), 2);
 
                         return;
+                    } else if (SlimefunUtils.isItemSimilar(input, SlimefunItems.SALT, true)) {
+                        // 喵~粗盐(SF SALT) → 食盐(EG_FOOD_SALT)，EG插件注册后运行期动态查找喵
+                        io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem egSaltItem =
+                                io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem.getById("EG_FOOD_SALT");
+                        // 喵~防御：EG 未安装或物品未注册时提示材料未知喵
+                        if (egSaltItem == null) {
+                            Slimefun.getLocalization().sendMessage(p, "machines.unknown-material", true);
+                            return;
+                        }
+                        ItemStack output = egSaltItem.getItem().clone();
+                        Inventory outputInv = findOutputInventory(output, dispBlock, inv);
+
+                        MultiBlockCraftEvent event = new MultiBlockCraftEvent(p, this, input, output);
+                        if (event.isCancelled()) {
+                            return;
+                        }
+
+                        removeItem(p, b, inv, outputInv, input, event.getOutput(), 1);
+
+                        return;
                     } else if (SlimefunUtils.isItemSimilar(input, SlimefunItems.PULVERIZED_ORE, true)) {
                         ItemStack output = SlimefunItems.PURE_ORE_CLUSTER;
                         Inventory outputInv = findOutputInventory(output, dispBlock, inv);
