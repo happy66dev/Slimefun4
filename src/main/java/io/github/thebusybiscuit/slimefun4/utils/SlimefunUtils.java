@@ -443,10 +443,12 @@ public final class SlimefunUtils {
             return false;
         } else if (checkLore) {
             Optional<List<String>> itemLore = itemMetaSnapshot.getLore();
+            boolean hasLore1 = hasNonIgnoredLore(itemMeta);
+            boolean hasLore2 = itemLore.isPresent() && itemLore.get().stream().anyMatch(l -> !isLineIgnored(l));
 
-            if (itemMeta.hasLore() && itemLore.isPresent() && !equalsLore(itemMeta.getLore(), itemLore.get())) {
+            if (hasLore1 && hasLore2 && !equalsLore(itemMeta.getLore(), itemLore.get())) {
                 return false;
-            } else if (itemMeta.hasLore() != itemLore.isPresent()) {
+            } else if (hasLore1 != hasLore2) {
                 return false;
             }
         }
@@ -484,8 +486,8 @@ public final class SlimefunUtils {
             Debug.log(TestCase.CARGO_INPUT_TESTING, "  Comparing display name failed");
             return false;
         } else if (checkLore) {
-            boolean hasItemMetaLore = itemMeta.hasLore();
-            boolean hasSfItemMetaLore = sfitemMeta.hasLore();
+            boolean hasItemMetaLore = hasNonIgnoredLore(itemMeta);
+            boolean hasSfItemMetaLore = hasNonIgnoredLore(sfitemMeta);
 
             if (hasItemMetaLore && hasSfItemMetaLore) {
                 if (!equalsLore(itemMeta.getLore(), sfitemMeta.getLore())) {
@@ -576,6 +578,17 @@ public final class SlimefunUtils {
         }
 
         return b == shorterList.size();
+    }
+
+    /**
+     * 喵~判断 ItemMeta 是否含有至少一行非忽略 lore（排除 EG 烹饪系统动态行）喵
+     */
+    private static boolean hasNonIgnoredLore(@Nonnull ItemMeta meta) {
+        if (!meta.hasLore()) return false;
+        for (String line : meta.getLore()) {
+            if (!isLineIgnored(line)) return true;
+        }
+        return false;
     }
 
     private static boolean isLineIgnored(@Nonnull String line) {
