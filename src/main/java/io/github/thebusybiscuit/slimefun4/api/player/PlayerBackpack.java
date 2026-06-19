@@ -65,14 +65,6 @@ public class PlayerBackpack extends SlimefunInventoryHolder {
     @Nonnull
     @Getter
     private InvSnapshot snapshot;
-    // 背包格子数量，必须是9的倍数且在9到54之间喵
-    private int size;
-    // 标记背包是否已失效（比如主人换了背包或数据出错），失效后禁止打开喵
-    private boolean isInvalid = false;
-    // 这个快照保存了背包上次保存时的内容，每次写入数据库后需要调用PlayerBackpack#refreshSnapshot刷新喵
-    @Nonnull
-    @Getter
-    private InvSnapshot snapshot;
 
     /**
      * 异步获取背包实例的静态方法（带回调版本）。

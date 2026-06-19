@@ -11,106 +11,103 @@ import org.bukkit.event.HandlerList;
 import org.bukkit.inventory.ItemStack;
 
 /**
- * 该 {@link Event} 在 {@link FarmerAndroid} 收获 {@link Block} 之前被触发喵~
- * 如果此 {@link Event} 被取消，那么 {@link Block} 将不会被收获喵~
+ * This {@link Event} is fired before a {@link FarmerAndroid} harvests a {@link Block}.
+ * If this {@link Event} is cancelled, the {@link Block} will not be harvested.
  * <p>
- * 即使方块不可收获，该事件仍然会触发喵~
+ * The {@link Event} will still be fired for non-harvestable blocks.
  *
  * @author TheBusyBiscuit
  */
-// 安卓农场事件：在农民安卓机器人收获方块时触发，支持取消操作喵~
 public class AndroidFarmEvent extends Event implements Cancellable {
 
-    // 静态事件处理器列表，用于Bukkit事件系统注册和分发事件喵~
     private static final HandlerList handlers = new HandlerList();
 
-    private final Block block; // 被收获的目标方块喵~
-    private final AndroidInstance android; // 触发此事件的安卓机器人实例喵~
-    private final boolean isAdvanced; // 是否为高级耕作模式（影响收获行为和产出）喵~
-    private ItemStack drop; // 收获掉落的物品栈，可为null表示无掉落喵~
-    private boolean cancelled; // 事件取消标志，设为true则阻止方块收获喵~
+    private final Block block;
+    private final AndroidInstance android;
+    private final boolean isAdvanced;
+    private ItemStack drop;
+    private boolean cancelled;
 
     /**
-     * 构造一个安卓农场事件喵~
-     *
-     * @param block      被收获的方块喵~
-     * @param android    触发此事件的安卓机器人实例喵~
-     * @param isAdvanced 是否为高级耕作操作喵~
-     * @param drop       将要掉落的物品，可为null喵~
+     * @param block      The harvested {@link Block}
+     * @param android    The {@link AndroidInstance} that triggered this {@link Event}
+     * @param isAdvanced Whether this is an advanced farming action
+     * @param drop       The item to be dropped or null
      */
     public AndroidFarmEvent(
             @Nonnull Block block, @Nonnull AndroidInstance android, boolean isAdvanced, @Nullable ItemStack drop) {
-        this.block = block; // 记录被收获的目标方块喵~
-        this.android = android; // 记录触发事件的安卓机器人喵~
-        this.isAdvanced = isAdvanced; // 记录是否为高级耕作模式喵~
-        this.drop = drop; // 记录收获掉落的物品（可能为null）喵~
+        this.block = block;
+        this.android = android;
+        this.isAdvanced = isAdvanced;
+        this.drop = drop;
     }
 
     /**
-     * 获取被开采的方块喵~
+     * This method returns the mined {@link Block}
      *
-     * @return 被开采的方块喵~
+     * @return the mined {@link Block}
      */
     @Nonnull
     public Block getBlock() {
-        return block; // 返回被收获的方块实例喵~
+        return block;
     }
 
     /**
-     * 获取收获掉落的物品，可能为null喵~
+     * This returns the harvested item or null.
      *
-     * @return 收获掉落的物品，如果没有掉落则返回null喵~
+     * @return The harvested item or null
      */
     @Nullable public ItemStack getDrop() {
-        return drop; // 返回收获掉落物品，可能为null喵~
+        return drop;
     }
 
     /**
-     * 判断此次事件是否由高级耕作操作触发喵~
+     * Whether this was invoked via an advanced farming action
      *
-     * @return 是否为高级耕作模式喵~
+     * @return Whether it is advanced
      */
     public boolean isAdvanced() {
-        return isAdvanced; // 返回高级耕作模式标志喵~
+        return isAdvanced;
     }
 
     /**
-     * 设置收获的 {@link ItemStack} 结果喵~
+     * This will set the {@link ItemStack} result.
      *
-     * @param drop 物品结果，可为null表示无掉落喵~
+     * @param drop The result or null
      */
     public void setDrop(@Nullable ItemStack drop) {
-        this.drop = drop; // 更新收获掉落物品喵~
+        this.drop = drop;
     }
 
     /**
-     * 获取触发此事件的安卓机器人实例喵~
+     * This method returns the {@link AndroidInstance} who
+     * triggered this {@link Event}
      *
-     * @return 相关的安卓机器人实例喵~
+     * @return the involved {@link AndroidInstance}
      */
     @Nonnull
     public AndroidInstance getAndroid() {
-        return android; // 返回触发事件的安卓机器人喵~
+        return android;
     }
 
     @Override
     public boolean isCancelled() {
-        return cancelled; // 返回事件是否被取消，true表示阻止收获喵~
+        return cancelled;
     }
 
     @Override
     public void setCancelled(boolean cancel) {
-        cancelled = cancel; // 设置事件取消状态，可阻止方块收获喵~
+        cancelled = cancel;
     }
 
     @Nonnull
     public static HandlerList getHandlerList() {
-        return handlers; // 返回Bukkit事件系统的处理器列表（静态获取）喵~
+        return handlers;
     }
 
     @Nonnull
     @Override
     public HandlerList getHandlers() {
-        return getHandlerList(); // 返回事件实例的处理器列表，委托给静态方法喵~
+        return getHandlerList();
     }
 }

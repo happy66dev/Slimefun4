@@ -579,18 +579,7 @@ public final class SlimefunUtils {
     }
 
     private static boolean isLineIgnored(@Nonnull String line) {
-        if (line.equals(SOULBOUND_LORE)) return true;
-        // 喵~忽略 ExoticGarden 烹饪系统写入的保质期/食材/过期标签，防止 lore 污染配方匹配喵
-        return line.startsWith("§8保质期:")
-                || line.startsWith("§8生产日期:")
-                || line.startsWith("§c已过期")
-                || line.startsWith("§7[食物]")
-                || line.startsWith("§7[烹饪食材]")
-                || line.startsWith("§7[辅料]")
-                || line.startsWith("§7[燃料]")
-                || line.startsWith("§7[药水]")
-                || line.startsWith("§7推荐温度:")
-                || line.startsWith("§8食材提示:");
+        return line.equals(SOULBOUND_LORE);
     }
 
     @Deprecated(forRemoval = true)
