@@ -406,6 +406,12 @@ public final class SlimefunUtils {
                         return equalsItemMeta(itemMeta, possibleSfItemMeta, checkLore, checkCustomModelData);
                     }
                 } else {
+                    // 喵~sfitem 无 meta（如 new ItemStack(Material.SAND)），但玩家物品因 EG 烹饪标签有 meta
+                    // 若玩家物品的 meta 只含全部可忽略内容（无 displayName、无非忽略 lore、无 customModelData），
+                    // 则仍视为与无 meta 的 sfitem 匹配，避免 EG 标签污染原版配方匹配喵
+                    if (!itemMeta.hasDisplayName() && !hasNonIgnoredLore(itemMeta) && !itemMeta.hasCustomModelData()) {
+                        return true;
+                    }
                     return false;
                 }
             }
