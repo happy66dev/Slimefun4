@@ -822,39 +822,47 @@ public class SurvivalSlimefunGuide implements SlimefunGuideImplementation {
 
         displayItem(menu, profile, p, item, result, recipeType, recipe, task);
 
+        // 喵~先调用 displayRecipes，让菜单在分页按钮写入前就扩展到 54 格
+        // 原因：addItem(53,null) 触发 setSize(54)→reset(false)，会用 items 列表重建 inventory
+        // 若分页按钮用 replaceExistingItem 写在前面，reset 时 items 里没有这些按钮会全部消失喵
+        if (item instanceof RecipeDisplayItem recipeDisplayItem) {
+            displayRecipes(p, profile, menu, recipeDisplayItem, 0);
+        }
+
         // Add recipe pagination buttons if there are multiple recipes
         if (totalPages > 1) {
             int prevSlot = 11;
             int nextSlot = 15;
 
-            // Page indicator at slot 9
-            menu.replaceExistingItem(
+            // 喵~用 addItem 写入 items 列表（而非 replaceExistingItem 只写 inventory），
+            // 防止后续任何 reset 调用把按钮冲掉喵
+            menu.addItem(
                     9,
                     new CustomItemStack(
-                            Material.PAPER, ChatColor.WHITE + "配方 " + (currentPage + 1) + " / " + totalPages));
-            menu.addMenuClickHandler(9, ChestMenuUtils.getEmptyClickHandler());
+                            Material.PAPER, ChatColor.WHITE + "配方 " + (currentPage + 1) + " / " + totalPages),
+                    ChestMenuUtils.getEmptyClickHandler());
 
             // Previous button
             if (currentPage > 0) {
-                menu.replaceExistingItem(prevSlot, ChestMenuUtils.getPreviousButton(p, currentPage + 1, totalPages));
-                menu.addMenuClickHandler(prevSlot, (pl, slot, itemstack, action) -> {
-                    displayItem(profile, item, false, currentPage - 1);
-                    return false;
-                });
+                menu.addItem(
+                        prevSlot,
+                        ChestMenuUtils.getPreviousButton(p, currentPage + 1, totalPages),
+                        (pl, slot, itemstack, action) -> {
+                            displayItem(profile, item, false, currentPage - 1);
+                            return false;
+                        });
             }
 
             // Next button
             if (currentPage < totalPages - 1) {
-                menu.replaceExistingItem(nextSlot, ChestMenuUtils.getNextButton(p, currentPage + 1, totalPages));
-                menu.addMenuClickHandler(nextSlot, (pl, slot, itemstack, action) -> {
-                    displayItem(profile, item, false, currentPage + 1);
-                    return false;
-                });
+                menu.addItem(
+                        nextSlot,
+                        ChestMenuUtils.getNextButton(p, currentPage + 1, totalPages),
+                        (pl, slot, itemstack, action) -> {
+                            displayItem(profile, item, false, currentPage + 1);
+                            return false;
+                        });
             }
-        }
-
-        if (item instanceof RecipeDisplayItem recipeDisplayItem) {
-            displayRecipes(p, profile, menu, recipeDisplayItem, 0);
         }
 
         menu.open(p);
