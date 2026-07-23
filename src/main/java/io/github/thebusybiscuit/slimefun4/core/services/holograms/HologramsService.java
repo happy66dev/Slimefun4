@@ -71,6 +71,8 @@ public class HologramsService implements Listener {
 
     private final NamespacedKey multiLineKey;
 
+    private final NamespacedKey multiLineBaseKey;
+
     /**
      * Our cache to save {@link Entity} lookups
      */
@@ -92,6 +94,7 @@ public class HologramsService implements Listener {
         // Null-Validation is performed in the NamespacedKey constructor
         persistentDataKey = new NamespacedKey(plugin, "hologram_id");
         multiLineKey = new NamespacedKey(plugin, "multiline_id");
+        multiLineBaseKey = new NamespacedKey(plugin, "multiline_base_id");
     }
 
     /**
@@ -121,7 +124,7 @@ public class HologramsService implements Listener {
     }
 
     /**
-     * 扫描指定区块内所有 ArmorStand，删除带有 Slimefun 全息 PDC 标记的孤儿实体
+     * 扫描指定区块内所有 ArmorStand，仅删除能够确认失去 Slimefun 方块归属的全息实体
      *
      * @param chunk 要扫描的区块
      */
@@ -131,31 +134,46 @@ public class HologramsService implements Listener {
             return;
         }
         for (Entity entity : chunk.getEntities()) {
-            if (!(entity instanceof ArmorStand)) {
-                continue;
-            }
-            PersistentDataContainer container = entity.getPersistentDataContainer();
-            // 只处理带有 Slimefun 全息标记的 ArmorStand，避免误删其他插件实体
-            if (container.has(persistentDataKey, PersistentDataType.LONG)
-                    || container.has(multiLineKey, PersistentDataType.INTEGER)) {
-                if (isHologram(entity)) {
-                    entity.remove();
-                }
+            if (isOrphanHologram(entity)) {
+                entity.remove();
             }
         }
+    }
+
+    /**
+     * 判断实体是否是可安全删除的 Slimefun 孤儿全息
+     *
+     * @param entity 待检查的实体
+     * @return 实体带有可验证归属且所属方块不存在时返回 true
+     */
+    private boolean isOrphanHologram(@Nonnull Entity entity) {
+        if (!isHologram(entity)) {
+            return false;
+        }
+
+        PersistentDataContainer container = entity.getPersistentDataContainer();
+        Long singleLinePosition = container.get(persistentDataKey, PersistentDataType.LONG);
+        Long multiLineBasePosition = container.get(multiLineBaseKey, PersistentDataType.LONG);
+
+        if (singleLinePosition != null) {
+            return !hasBlockDataNearby(new BlockPosition(entity.getWorld(), singleLinePosition));
+        }
+
+        if (multiLineBasePosition != null) {
+            return !hasBlockDataNearby(new BlockPosition(entity.getWorld(), multiLineBasePosition));
+        }
+
+        // 喵~防御：旧版多行全息没有所属位置，无法证明为孤儿时必须保留，避免误删合法显示
+        return false;
     }
 
     private void cleanupOrphanHologramsOnStartup() {
         int removed = 0;
         for (World world : Bukkit.getWorlds()) {
             for (Entity entity : world.getEntitiesByClass(ArmorStand.class)) {
-                PersistentDataContainer container = entity.getPersistentDataContainer();
-                if (container.has(persistentDataKey, PersistentDataType.LONG)
-                        || container.has(multiLineKey, PersistentDataType.INTEGER)) {
-                    if (isHologram(entity)) {
-                        entity.remove();
-                        removed++;
-                    }
+                if (isOrphanHologram(entity)) {
+                    entity.remove();
+                    removed++;
                 }
             }
         }
@@ -491,7 +509,7 @@ public class HologramsService implements Listener {
                     }
                 }
                 Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
-                Hologram hologram = createLineArmorStand(lineLoc, i, lines[i]);
+                Hologram hologram = createLineArmorStand(lineLoc, position, i, lines[i]);
                 if (i < existing.size()) {
                     existing.set(i, hologram);
                 } else {
@@ -505,14 +523,15 @@ public class HologramsService implements Listener {
             List<Hologram> holograms = new ArrayList<>();
             for (int i = 0; i < lines.length; i++) {
                 Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
-                holograms.add(createLineArmorStand(lineLoc, i, lines[i]));
+                holograms.add(createLineArmorStand(lineLoc, position, i, lines[i]));
             }
             multiLineCache.put(position, holograms);
         }
     }
 
     @Nonnull
-    private Hologram createLineArmorStand(@Nonnull Location lineLoc, int index, @Nullable String text) {
+    private Hologram createLineArmorStand(
+            @Nonnull Location lineLoc, @Nonnull BlockPosition basePosition, int index, @Nullable String text) {
         for (Entity entity : lineLoc.getWorld().getNearbyEntities(lineLoc, 0.1, 0.1, 0.1, this::isHologram)) {
             if (entity instanceof ArmorStand) {
                 entity.remove();
@@ -535,6 +554,8 @@ public class HologramsService implements Listener {
 
         PersistentDataContainer container = armorstand.getPersistentDataContainer();
         container.set(multiLineKey, PersistentDataType.INTEGER, index);
+        // 多行全息所有行共享 base 位置，用于重启后验证实体归属
+        container.set(multiLineBaseKey, PersistentDataType.LONG, basePosition.getPosition());
 
         return new Hologram(armorstand.getUniqueId());
     }
