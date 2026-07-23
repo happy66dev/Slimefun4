@@ -44,7 +44,9 @@ public class EnergyRegulator extends SlimefunItem implements HologramOwner, NotR
 
             @Override
             public void onBlockBreak(@Nonnull Block b) {
-                removeHologram(b);
+                // 喵~防御：同时删除默认偏移和多行偏移两个位置的全息，防止只删单行导致堆叠
+                // EnergyNet.removeHologramAt 会清理两个已知偏移的全息实体
+                EnergyNet.removeHologramAt(b.getLocation());
             }
         };
     }

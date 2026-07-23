@@ -18,6 +18,7 @@ import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
 import org.apache.commons.lang.Validate;
 import org.bukkit.Bukkit;
+import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Server;
@@ -25,6 +26,9 @@ import org.bukkit.World;
 import org.bukkit.entity.ArmorStand;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.event.EventHandler;
+import org.bukkit.event.Listener;
+import org.bukkit.event.world.ChunkLoadEvent;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.Plugin;
@@ -37,7 +41,7 @@ import org.bukkit.util.Vector;
  *
  * @see HologramOwner
  */
-public class HologramsService {
+public class HologramsService implements Listener {
 
     /**
      * The radius in which we scan for holograms
@@ -96,7 +100,49 @@ public class HologramsService {
      */
     public void start() {
         plugin.getServer().getScheduler().scheduleSyncRepeatingTask(plugin, this::purge, PURGE_RATE, PURGE_RATE);
+        // 注册区块加载监听器，用于延后补扫区块内孤儿全息
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
         cleanupOrphanHologramsOnStartup();
+    }
+
+    /**
+     * 当区块加载时，延后一 tick 扫描并删除该区块内残留的孤儿全息 ArmorStand
+     * 解决服务器重启时未加载区块中旧全息未被清理的问题喵~
+     */
+    @EventHandler
+    public void onChunkLoad(ChunkLoadEvent e) {
+        if (e.isNewChunk()) {
+            // 喵~防御：新生成的区块不可能有旧全息，直接跳过
+            return;
+        }
+        Chunk chunk = e.getChunk();
+        // 延后一 tick 等待实体从磁盘完整反序列化后再扫描
+        plugin.getServer().getScheduler().runTask(plugin, () -> cleanupChunkHolograms(chunk));
+    }
+
+    /**
+     * 扫描指定区块内所有 ArmorStand，删除带有 Slimefun 全息 PDC 标记的孤儿实体
+     *
+     * @param chunk 要扫描的区块
+     */
+    private void cleanupChunkHolograms(@Nonnull Chunk chunk) {
+        // 喵~防御：区块可能在延后的一 tick 内被卸载
+        if (!chunk.isLoaded()) {
+            return;
+        }
+        for (Entity entity : chunk.getEntities()) {
+            if (!(entity instanceof ArmorStand)) {
+                continue;
+            }
+            PersistentDataContainer container = entity.getPersistentDataContainer();
+            // 只处理带有 Slimefun 全息标记的 ArmorStand，避免误删其他插件实体
+            if (container.has(persistentDataKey, PersistentDataType.LONG)
+                    || container.has(multiLineKey, PersistentDataType.INTEGER)) {
+                if (isHologram(entity)) {
+                    entity.remove();
+                }
+            }
+        }
     }
 
     private void cleanupOrphanHologramsOnStartup() {
