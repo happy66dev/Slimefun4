@@ -165,6 +165,17 @@ class MultimeterCommand extends SubCommand {
             sb.append("&7电网: &c")
                     .append(Slimefun.getLocalization().getMessage(p, "commands.multimeter.no-network"))
                     .append("\n");
+            // 离网连接器仍可从方块数据读取老化状态，不能因缺少电网而省略喵~
+            if (component.getEnergyComponentType() == EnergyNetComponentType.CONNECTOR) {
+                // 读取连接器当前耐久度，用于复用联网连接器的状态分段逻辑喵~
+                float durability = ConnectorAgingManager.getDurability(loc);
+                // 根据耐久度取得对应的状态颜色，保持查询结果与联网连接器一致喵~
+                String statusColor = ConnectorAgingManager.getStatusColor(durability);
+                // 根据耐久度取得模糊老化状态文字，避免暴露精确耐久百分比喵~
+                String statusText = ConnectorAgingManager.getStatusText(durability);
+                // 输出离网连接器的模糊老化状态，不伪造负载、路径或剩余吞吐数据喵~
+                sb.append("&7状态: ").append(statusColor).append(statusText).append("\n");
+            }
             return sb.toString();
         }
         sb.append("&7电网调节器: &f")
