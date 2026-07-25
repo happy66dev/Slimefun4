@@ -82,6 +82,9 @@ public class HologramsService implements Listener {
 
     private static final double LINE_SPACING = 0.3;
 
+    // 多行全息最多管理的行数，限制缓存恢复扫描范围并防止异常索引扩大扫描开销喵~
+    private static final int MAX_MULTI_LINE_HOLOGRAM_LINES = 16;
+
     /**
      * This constructs a new {@link HologramsService}.
      *
@@ -496,48 +499,213 @@ public class HologramsService implements Listener {
         // 同时清除该位置已有的单行全息（避免闪烁/重叠）
         removeHologram(baseLoc);
 
-        List<Hologram> existing = multiLineCache.get(position);
+        // 优先复用完整缓存，避免能源调节器高频刷新时重复扫描世界实体喵~
+        List<Hologram> existing = getValidMultiLineCache(position);
+        // 缓存缺失或失效时，从带归属标签的实体恢复行列表并顺带去重喵~
+        if (existing == null) {
+            existing = restoreMultiLineHolograms(baseLoc, position);
+        }
 
-        if (existing != null) {
-            for (int i = 0; i < lines.length; i++) {
-                if (i < existing.size()) {
-                    Hologram hologram = existing.get(i);
-                    ArmorStand as = hologram.getArmorStand();
-                    if (as != null && as.isValid()) {
-                        hologram.setLabel(lines[i] != null ? ChatColors.color(lines[i]) : null);
-                        continue;
-                    }
+        // 空文本列表表示此基准位置不应继续保留任何多行显示喵~
+        if (lines.length == 0) {
+            // 删除所有可验证归属的旧行，避免缓存重建后继续叠加喵~
+            removeMultiLineHologram(baseLoc);
+            return;
+        }
+
+        // 逐行复用有效实体或仅为缺失行创建新的 ArmorStand 喵~
+        for (int index = 0; index < lines.length; index++) {
+            // 读取当前索引对应的缓存行，缺失索引会返回 null 喵~
+            Hologram hologram = index < existing.size() ? existing.get(index) : null;
+            // 检查缓存行仍存在且归属于当前多行全息喵~
+            if (isValidMultiLineHologram(hologram, position, index)) {
+                // 更新现有行文本，不生成新的实体喵~
+                hologram.setLabel(lines[index] != null ? ChatColors.color(lines[index]) : null);
+                continue;
+            }
+
+            // 根据行索引计算缺失行的垂直显示坐标喵~
+            Location lineLoc = baseLoc.clone().subtract(0, index * LINE_SPACING, 0);
+            // 创建前只清理同一基准和同一索引的可验证重复行喵~
+            removeOwnedMultiLineHolograms(lineLoc, position, index);
+            // 为当前缺失索引创建并标记新的多行全息实体喵~
+            Hologram createdHologram = createLineArmorStand(lineLoc, position, index, lines[index]);
+            // 将列表扩展到当前索引，保持行索引与列表索引一一对应喵~
+            while (existing.size() <= index) {
+                existing.add(null);
+            }
+            // 回填新创建的行，供后续更新快速复用喵~
+            existing.set(index, createdHologram);
+        }
+
+        // 删除本次显示行数之外的旧行，避免内容缩短时遗留实体喵~
+        while (existing.size() > lines.length) {
+            // 从末尾移除，使剩余列表继续按行索引排列喵~
+            Hologram removedHologram = existing.remove(existing.size() - 1);
+            // 喵~防御：缓存恢复可能留下索引空洞，空条目无需删除实体喵~
+            if (removedHologram != null) {
+                // 删除不再需要的旧行实体喵~
+                removedHologram.remove();
+            }
+        }
+        // 将规范化后的行列表写回缓存，后续 tick 可走无扫描快速路径喵~
+        multiLineCache.put(position, existing);
+    }
+
+    /**
+     * 验证缓存中的多行全息是否仍完整地对应当前基准位置。
+     *
+     * @param basePosition 当前多行全息的基准位置编码
+     * @return 缓存完整时返回对应行列表，否则返回 null 触发世界实体恢复
+     */
+    @Nullable private List<Hologram> getValidMultiLineCache(@Nonnull BlockPosition basePosition) {
+        // 读取当前基准位置的内存缓存，正常 tick 应从这里快速返回喵~
+        List<Hologram> cachedHolograms = multiLineCache.get(basePosition);
+        // 喵~防御：没有缓存时必须扫描已持久化标记的实体，不能盲目创建新行喵~
+        if (cachedHolograms == null) {
+            return null;
+        }
+        // 逐个确认缓存行仍有效且与它应有的行索引一致喵~
+        for (int index = 0; index < cachedHolograms.size(); index++) {
+            // 缓存行失效时返回 null，让恢复流程重新发现并去重喵~
+            if (!isValidMultiLineHologram(cachedHolograms.get(index), basePosition, index)) {
+                return null;
+            }
+        }
+        // 返回已验证的缓存，避免高频更新扫描附近实体喵~
+        return cachedHolograms;
+    }
+
+    /**
+     * 检查一条缓存全息是否仍是指定基准位置和行索引的有效实体。
+     *
+     * @param hologram 待检查的缓存全息
+     * @param basePosition 预期的多行全息基准位置
+     * @param index 预期的行索引
+     * @return 实体存在且 PDC 归属信息完全匹配时返回 true
+     */
+    private boolean isValidMultiLineHologram(
+            @Nullable Hologram hologram, @Nonnull BlockPosition basePosition, int index) {
+        // 喵~防御：空缓存槽位无法代表有效实体，必须触发恢复或创建喵~
+        if (hologram == null) {
+            return false;
+        }
+        // 读取 ArmorStand 同时检测实体是否已被外部删除喵~
+        ArmorStand armorStand = hologram.getArmorStand();
+        // 喵~防御：失效实体不能继续复用，避免更新写入已删除对象喵~
+        if (armorStand == null || !armorStand.isValid()) {
+            return false;
+        }
+        // 根据 PDC 标签验证实体归属，避免缓存位置复用时串用其他机器的全息喵~
+        return isOwnedMultiLineHologram(armorStand, basePosition, index);
+    }
+
+    /**
+     * 判断 ArmorStand 是否由当前服务创建，并精确归属于指定多行全息。
+     *
+     * @param entity 待验证的实体
+     * @param basePosition 预期的多行全息基准位置
+     * @param expectedIndex 预期的行索引，传入负数时忽略行索引校验
+     * @return PDC 标签完整且归属匹配时返回 true
+     */
+    private boolean isOwnedMultiLineHologram(
+            @Nonnull Entity entity, @Nonnull BlockPosition basePosition, int expectedIndex) {
+        // 喵~防御：仅处理本服务外观定义的 ArmorStand，避免误删其他类型实体喵~
+        if (!(entity instanceof ArmorStand) || !isHologram(entity)) {
+            return false;
+        }
+        // 读取实体的持久化标签以验证多行全息所有权喵~
+        PersistentDataContainer container = entity.getPersistentDataContainer();
+        // 读取创建时写入的共享基准位置编码喵~
+        Long storedBasePosition = container.get(multiLineBaseKey, PersistentDataType.LONG);
+        // 读取创建时写入的行索引喵~
+        Integer storedIndex = container.get(multiLineKey, PersistentDataType.INTEGER);
+        // 喵~防御：缺少任一标签的旧实体无法可靠归属，保守不处理喵~
+        if (storedBasePosition == null || storedIndex == null) {
+            return false;
+        }
+        // 基准位置不相同表示属于其他机器，绝不能触碰喵~
+        if (storedBasePosition.longValue() != basePosition.getPosition()) {
+            return false;
+        }
+        // 负行索引不是合法 API 产物，拒绝作为正常缓存行复用喵~
+        if (storedIndex < 0) {
+            return false;
+        }
+        // 负期望索引表示调用方只验证 base 所有权，否则要求索引精确匹配喵~
+        return expectedIndex < 0 || storedIndex == expectedIndex;
+    }
+
+    /**
+     * 从世界中恢复指定基准位置的多行实体，并删除每行的重复实例。
+     *
+     * @param baseLoc 多行显示的基准坐标
+     * @param basePosition 多行显示的基准位置编码
+     * @return 按行索引排列的已恢复缓存列表
+     */
+    @Nonnull
+    private List<Hologram> restoreMultiLineHolograms(@Nonnull Location baseLoc, @Nonnull BlockPosition basePosition) {
+        // 创建按行索引排列的恢复列表，空槽位代表该行实体尚不存在喵~
+        List<Hologram> restoredHolograms = new ArrayList<>();
+        // 逐行扫描有限的垂直显示列，避免遍历整个区块的实体喵~
+        for (int index = 0; index < MAX_MULTI_LINE_HOLOGRAM_LINES; index++) {
+            // 计算当前候选行的预期坐标喵~
+            Location lineLoc = baseLoc.clone().subtract(0, index * LINE_SPACING, 0);
+            // 主人注意：仅在缓存失效时扫描附近实体，正常高频更新会走缓存快速路径喵~
+            Collection<Entity> candidates =
+                    lineLoc.getWorld().getNearbyEntities(lineLoc, RADIUS, RADIUS, RADIUS, this::isHologram);
+            // 用于保留当前索引的第一条合法实体，其余同索引实体会被删除喵~
+            Hologram restoredHologram = null;
+            // 检查候选实体的 PDC 所有权和行索引喵~
+            for (Entity candidate : candidates) {
+                // 不是当前 base 与当前行索引的多行实体时跳过喵~
+                if (!isOwnedMultiLineHologram(candidate, basePosition, index)) {
+                    continue;
                 }
-                Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
-                Hologram hologram = createLineArmorStand(lineLoc, position, i, lines[i]);
-                if (i < existing.size()) {
-                    existing.set(i, hologram);
+                // 第一个合法实体成为该行的缓存对象喵~
+                if (restoredHologram == null) {
+                    restoredHologram = new Hologram(candidate.getUniqueId());
                 } else {
-                    existing.add(hologram);
+                    // 同一机器同行索引的额外实体属于可验证重复项，立即删除喵~
+                    candidate.remove();
                 }
             }
-            while (existing.size() > lines.length) {
-                existing.remove(existing.size() - 1).remove();
+            // 发现该行时将列表补齐并写入其对应索引喵~
+            if (restoredHologram != null) {
+                while (restoredHolograms.size() <= index) {
+                    restoredHolograms.add(null);
+                }
+                restoredHolograms.set(index, restoredHologram);
             }
-        } else {
-            List<Hologram> holograms = new ArrayList<>();
-            for (int i = 0; i < lines.length; i++) {
-                Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
-                holograms.add(createLineArmorStand(lineLoc, position, i, lines[i]));
+        }
+        // 把恢复结果回填缓存，防止下一次更新再次创建重复实体喵~
+        multiLineCache.put(basePosition, restoredHolograms);
+        // 返回恢复后的行列表供本次更新继续复用喵~
+        return restoredHolograms;
+    }
+
+    /**
+     * 删除指定基准位置和行索引的所有可验证多行实体。
+     *
+     * @param lineLoc 当前行的预期坐标
+     * @param basePosition 当前多行全息的基准位置
+     * @param index 需要删除的行索引
+     */
+    private void removeOwnedMultiLineHolograms(
+            @Nonnull Location lineLoc, @Nonnull BlockPosition basePosition, int index) {
+        // 在当前行附近寻找实体，并仅移除 PDC 归属完全匹配的重复行喵~
+        for (Entity entity : lineLoc.getWorld().getNearbyEntities(lineLoc, RADIUS, RADIUS, RADIUS, this::isHologram)) {
+            // 只删除同一调节器同一行的旧实体，保护相邻机器和其他插件显示喵~
+            if (isOwnedMultiLineHologram(entity, basePosition, index)) {
+                entity.remove();
             }
-            multiLineCache.put(position, holograms);
         }
     }
 
     @Nonnull
     private Hologram createLineArmorStand(
             @Nonnull Location lineLoc, @Nonnull BlockPosition basePosition, int index, @Nullable String text) {
-        for (Entity entity : lineLoc.getWorld().getNearbyEntities(lineLoc, 0.1, 0.1, 0.1, this::isHologram)) {
-            if (entity instanceof ArmorStand) {
-                entity.remove();
-            }
-        }
-
+        // 创建新的 ArmorStand 以补齐确认缺失的多行显示行喵~
         ArmorStand armorstand = (ArmorStand) lineLoc.getWorld().spawnEntity(lineLoc, EntityType.ARMOR_STAND);
         armorstand.setVisible(false);
         armorstand.setInvulnerable(true);
@@ -567,28 +735,36 @@ public class HologramsService implements Listener {
      *            The base {@link Location} (block position)
      */
     public void removeMultiLineHologram(@Nonnull Location baseLoc) {
+        // 喵~防御：基准位置不能为空，否则无法判断应清理的实体归属喵~
+        Validate.notNull(baseLoc, "Location cannot be null");
+        // 异步调用统一切换到主线程，确保 Bukkit 实体操作线程安全喵~
         if (!Bukkit.isPrimaryThread()) {
+            // 在主线程重新执行完整清理，避免异步读取世界实体喵~
             Slimefun.runSync(() -> removeMultiLineHologram(baseLoc));
             return;
         }
 
+        // 将基准坐标转换为缓存与 PDC 使用的位置编码喵~
         BlockPosition position = new BlockPosition(baseLoc);
-        List<Hologram> holograms = multiLineCache.remove(position);
-
-        if (holograms != null) {
-            for (Hologram hologram : holograms) {
-                hologram.remove();
-            }
-        } else {
-            for (int i = 0; i < 6; i++) {
-                Location lineLoc = baseLoc.clone().subtract(0, i * LINE_SPACING, 0);
-                for (Entity entity : lineLoc.getWorld().getNearbyEntities(lineLoc, 0.2, 0.2, 0.2, this::isHologram)) {
-                    if (entity instanceof ArmorStand as
-                            && as.getPersistentDataContainer().has(multiLineKey, PersistentDataType.INTEGER)) {
-                        as.remove();
-                    }
+        // 先移除缓存引用，防止清理后旧行被后续更新继续复用喵~
+        List<Hologram> cachedHolograms = multiLineCache.remove(position);
+        // 喵~防御：缓存可能缺失，只有存在时才遍历对应实体喵~
+        if (cachedHolograms != null) {
+            // 删除缓存中记录的所有行实体喵~
+            for (Hologram hologram : cachedHolograms) {
+                // 喵~防御：缓存恢复过程可能包含空槽位，空槽位没有实体可删除喵~
+                if (hologram != null) {
+                    hologram.remove();
                 }
             }
+        }
+
+        // 继续扫描可管理的所有行，清除缓存外但 PDC 可验证归属的重复实体喵~
+        for (int index = 0; index < MAX_MULTI_LINE_HOLOGRAM_LINES; index++) {
+            // 计算当前行的预期垂直坐标喵~
+            Location lineLoc = baseLoc.clone().subtract(0, index * LINE_SPACING, 0);
+            // 仅删除同一基准位置与同行索引的实体，不能按外观或距离误删喵~
+            removeOwnedMultiLineHolograms(lineLoc, position, index);
         }
     }
 }
