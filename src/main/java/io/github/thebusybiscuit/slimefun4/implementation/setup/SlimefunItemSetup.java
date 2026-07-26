@@ -6326,6 +6326,44 @@ public final class SlimefunItemSetup {
                         })
                 .register(plugin);
 
+        // 注册原版物品：海绵，使用远古祭坛配方，通过水系材料合成喵~
+        new VanillaItem(
+                        itemGroups.magicalGadgets, // 魔法小物品分组喵~
+                        new ItemStack(Material.SPONGE), // 目标产出物：原版海绵喵~
+                        "SPONGE", // Slimefun物品ID喵~
+                        RecipeType.ANCIENT_ALTAR, // 在远古祭坛合成喵~
+                        new ItemStack[] {
+                            new ItemStack(Material.KELP), // 位置0：左上，海带喵~
+                            SlimefunItems.WATER_RUNE, // 位置1：上中，水符文喵~
+                            new ItemStack(Material.KELP), // 位置2：右上，海带喵~
+                            new ItemStack(Material.KELP), // 位置3：左中，海带喵~
+                            new ItemStack(Material.PRISMARINE_SHARD), // 位置4：中心，海晶碎片喵~
+                            new ItemStack(Material.KELP), // 位置5：右中，海带喵~
+                            new ItemStack(Material.KELP), // 位置6：左下，海带喵~
+                            SlimefunItems.WATER_RUNE, // 位置7：下中，水符文喵~
+                            new ItemStack(Material.KELP) // 位置8：右下，海带喵~
+                        })
+                .register(plugin);
+
+        // 注册原版物品：海洋之心，使用远古祭坛配方，用鹦鹉螺壳与水系材料合成喵~
+        new VanillaItem(
+                        itemGroups.magicalGadgets, // 魔法小物品分组喵~
+                        new ItemStack(Material.HEART_OF_THE_SEA), // 目标产出物：原版海洋之心喵~
+                        "HEART_OF_THE_SEA", // Slimefun物品ID喵~
+                        RecipeType.ANCIENT_ALTAR, // 在远古祭坛合成喵~
+                        new ItemStack[] {
+                            new ItemStack(Material.NAUTILUS_SHELL), // 位置0：左上，鹦鹉螺壳喵~
+                            SlimefunItems.WATER_RUNE, // 位置1：上中，水符文喵~
+                            new ItemStack(Material.NAUTILUS_SHELL), // 位置2：右上，鹦鹉螺壳喵~
+                            SlimefunItems.WATER_RUNE, // 位置3：左中，水符文喵~
+                            new ItemStack(Material.PRISMARINE_CRYSTALS), // 位置4：中心，海晶石英喵~
+                            SlimefunItems.WATER_RUNE, // 位置5：右中，水符文喵~
+                            new ItemStack(Material.NAUTILUS_SHELL), // 位置6：左下，鹦鹉螺壳喵~
+                            SlimefunItems.MAGIC_LUMP_3, // 位置7：下中，三阶魔法碎块喵~
+                            new ItemStack(Material.NAUTILUS_SHELL) // 位置8：右下，鹦鹉螺壳喵~
+                        })
+                .register(plugin);
+
         new VanillaItem(
                         itemGroups.magicalGadgets,
                         new ItemStack(Material.TOTEM_OF_UNDYING),
