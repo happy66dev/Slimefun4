@@ -8,6 +8,7 @@ import io.github.thebusybiscuit.slimefun4.core.services.sounds.SoundEffect;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 import javax.annotation.Nonnull;
@@ -77,6 +78,34 @@ public class OreWasher extends MultiBlockMachine {
     }
 
     private final boolean legacyMode;
+
+    /**
+     * 精炼配方条目：一种输入粉末对应一个加权产物列表，按概率随机选取喵~
+     * 每个 RefineryEntry 持有输入物品和带权重的产物候选数组。
+     * 权重实现方式：候选数组里重复放相同物品，数组长度即总权重。
+     */
+    public static class RefineryEntry {
+        // 输入粉末物品，用 SlimefunUtils.isItemSimilar 匹配
+        public final ItemStack input;
+        // 加权产物池：同一物品出现 N 次代表权重 N
+        public final ItemStack[] weightedOutputs;
+
+        public RefineryEntry(ItemStack input, ItemStack[] weightedOutputs) {
+            this.input = input;
+            this.weightedOutputs = weightedOutputs;
+        }
+    }
+
+    // 由附属插件注入的精炼配方列表，onInteract 遍历此列表处理粉末输入
+    private final List<RefineryEntry> refineryRecipes = new ArrayList<>();
+
+    /**
+     * 注册一条精炼配方供 OreWasher 的 onInteract 识别和处理喵~
+     * 调用者需在服务器启动后（延迟1tick）调用，确保物品已注册。
+     */
+    public void registerRefineryRecipe(RefineryEntry entry) {
+        refineryRecipes.add(entry);
+    }
 
     @ParametersAreNonnullByDefault
     public OreWasher(ItemGroup itemGroup, SlimefunItemStack item) {
@@ -204,6 +233,24 @@ public class OreWasher extends MultiBlockMachine {
                         removeItem(p, b, inv, outputInv, input, event.getOutput(), 1);
 
                         return;
+                    } else {
+                        // 查询附属插件注册的精炼配方（如 MoreOres 的粉末→精粉）
+                        for (RefineryEntry entry : refineryRecipes) {
+                            // 用 SF 的 isItemSimilar 匹配，确保 SF 物品 ID 一致性
+                            if (!SlimefunUtils.isItemSimilar(input, entry.input, true)) continue;
+                            // 从加权产物池中随机取一种（池中重复项越多概率越高）
+                            int idx = ThreadLocalRandom.current().nextInt(entry.weightedOutputs.length);
+                            ItemStack output = entry.weightedOutputs[idx].clone();
+                            Inventory outputInv = findOutputInventory(output, dispBlock, inv);
+
+                            MultiBlockCraftEvent event = new MultiBlockCraftEvent(p, this, input, output);
+                            if (event.isCancelled()) {
+                                return;
+                            }
+                            // 消耗1个输入粉末，产出1个随机精粉或副产物
+                            removeItem(p, b, inv, outputInv, input, event.getOutput(), 1);
+                            return;
+                        }
                     }
                 }
             }
