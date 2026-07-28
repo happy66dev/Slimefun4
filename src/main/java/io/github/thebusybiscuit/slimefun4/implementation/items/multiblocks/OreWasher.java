@@ -35,7 +35,10 @@ import org.bukkit.inventory.ItemStack;
 public class OreWasher extends MultiBlockMachine {
 
     // @formatter:off
-    private final ItemStack[] dusts = new ItemStack[] {
+    // 筛矿产物池：14种等概率产物，getRandomDust()从中均匀随机取一个喵~
+    // 后5种物品是 MoreOres 插件添加的，需在服务器启动后通过 setMoreOresDusts() 注入，
+    // 未注入时退化到原版9种产物
+    private ItemStack[] dusts = new ItemStack[] {
         SlimefunItems.IRON_DUST,
         SlimefunItems.GOLD_DUST,
         SlimefunItems.COPPER_DUST,
@@ -47,6 +50,31 @@ public class OreWasher extends MultiBlockMachine {
         SlimefunItems.SILVER_DUST
     };
     // @formatter:on
+
+    /**
+     * 由 MoreOres 插件在启动后注入额外的筛矿产物，实现14种产物等概率产出喵~
+     * 传入5种额外物品：钴粉、镍粉、石块、粗盐、杂矿粉
+     */
+    public void setMoreOresDusts(
+            ItemStack cobaltDust, ItemStack nickelDust, ItemStack cobblestone, ItemStack salt, ItemStack impureOre) {
+        // 创建新数组：原9种 + 传入的5种，共14种等概率产物
+        this.dusts = new ItemStack[] {
+            SlimefunItems.IRON_DUST,
+            SlimefunItems.GOLD_DUST,
+            SlimefunItems.COPPER_DUST,
+            SlimefunItems.TIN_DUST,
+            SlimefunItems.ZINC_DUST,
+            SlimefunItems.ALUMINUM_DUST,
+            SlimefunItems.MAGNESIUM_DUST,
+            SlimefunItems.LEAD_DUST,
+            SlimefunItems.SILVER_DUST,
+            cobaltDust, // MoreOres 钴粉
+            nickelDust, // MoreOres 镍粉
+            cobblestone, // 原版石块
+            salt, // SF 粗盐
+            impureOre // MoreOres 杂矿粉
+        };
+    }
 
     private final boolean legacyMode;
 
