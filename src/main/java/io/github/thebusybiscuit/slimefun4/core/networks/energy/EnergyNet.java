@@ -160,6 +160,51 @@ public class EnergyNet extends Network implements HologramOwner {
         Slimefun.getHologramsService().removeMultiLineHologram(loc);
     }
 
+    /**
+     * 统一全息切换方法：清理旧模式显示并设置新模式显示喵~
+     *
+     * @param b 调节器方块喵~
+     * @param targetMode 目标显示模式喵~
+     * @param lines 显示内容，单行模式传1条，多行模式传3条，NONE模式忽略喵~
+     */
+    private void switchHologramMode(@Nonnull Block b, @Nonnull HologramMode targetMode, @Nonnull String... lines) {
+        // 如果目标模式与当前模式相同，直接更新内容而不重复清理喵~
+        if (currentHologramMode == targetMode) {
+            // 喵~防御：模式相同时根据目标模式更新对应显示内容喵~
+            if (targetMode == HologramMode.SINGLE_LINE && lines.length > 0) {
+                // 单行模式直接更新单行全息文本喵~
+                updateHologram(b, lines[0], () -> false);
+            } else if (targetMode == HologramMode.MULTI_LINE && lines.length >= 3) {
+                // 多行模式更新三行统计数据喵~
+                updateMultiLineHologram(b, lines);
+            }
+            // NONE 模式或内容空时不做操作喵~
+            return;
+        }
+
+        // 喵~防御：模式切换时，先根据当前模式清理对应显示喵~
+        if (currentHologramMode == HologramMode.SINGLE_LINE) {
+            // 清理单行全息喵~
+            Location singleLoc = b.getLocation().add(HOLOGRAM_OFFSET);
+            Slimefun.getHologramsService().removeHologram(singleLoc);
+        } else if (currentHologramMode == HologramMode.MULTI_LINE) {
+            // 清理多行全息喵~
+            removeMultiLineHologram(b);
+        }
+        // NONE 模式无需清理喵~
+
+        // 切换到目标模式并显示新内容喵~
+        currentHologramMode = targetMode;
+        if (targetMode == HologramMode.SINGLE_LINE && lines.length > 0) {
+            // 设置单行全息喵~
+            updateHologram(b, lines[0], () -> false);
+        } else if (targetMode == HologramMode.MULTI_LINE && lines.length >= 3) {
+            // 设置多行全息喵~
+            updateMultiLineHologram(b, lines);
+        }
+        // 目标模式为 NONE 时只清理不显示新内容喵~
+    }
+
     private final Map<Location, EnergyNetProvider> generators = new HashMap<>();
     private final Map<Location, EnergyNetComponent> capacitors = new HashMap<>();
     private final Map<Location, EnergyNetComponent> consumers = new HashMap<>();
@@ -182,6 +227,15 @@ public class EnergyNet extends Network implements HologramOwner {
     private volatile boolean conflictMode = false;
     private volatile EnergyNet conflictPartner;
     private final Set<Location> conflictHologramTargets = ConcurrentHashMap.newKeySet();
+
+    // 全息显示模式枚举：跟踪当前调节器显示的全息类型喵~
+    private enum HologramMode {
+        NONE, // 无显示喵~
+        SINGLE_LINE, // 单行文本显示（错误、初始化状态等）喵~
+        MULTI_LINE // 三行统计数据显示（正常运行）喵~
+    }
+    // 当前全息显示模式，用于避免重复清理和状态不一致喵~
+    private volatile HologramMode currentHologramMode = HologramMode.NONE;
 
     private volatile int initTotalWork = 0;
     private volatile int initWorkDone = 0;
@@ -518,8 +572,8 @@ public class EnergyNet extends Network implements HologramOwner {
         try {
             if (!regulator.equals(b.getLocation())) {
                 debugLog("tick: 调节器不匹配，预期=" + formatLocation(regulator) + " 实际=" + formatLocation(b.getLocation()));
-                removeMultiLineHologram(b);
-                updateHologram(b, "&c电网冲突：多个能源调节器相连", blockData::isPendingRemove);
+                // 调节器位置不匹配时显示冲突单行全息喵~
+                switchHologramMode(b, HologramMode.SINGLE_LINE, "&c电网冲突：多个能源调节器相连");
                 if (initializing) {
                     abortRequested = true;
                     initializing = false;
@@ -528,19 +582,19 @@ public class EnergyNet extends Network implements HologramOwner {
             }
 
             if (conflictMode) {
-                removeMultiLineHologram(b);
-                updateHologram(b, "&c电网冲突：电网交叉", () -> false);
+                // 电网交叉冲突时显示单行全息喵~
+                switchHologramMode(b, HologramMode.SINGLE_LINE, "&c电网冲突：电网交叉");
                 return;
             }
 
             if (!initialized) {
-                removeMultiLineHologram(b);
+                // 未初始化状态下显示单行全息喵~
                 if (!initializing && !pendingInit) {
                     pendingInit = true;
                     debugLog("tick: 未初始化，提交异步初始化任务");
                     GRID_EXECUTOR.submit(this::initializeNetworkAsync);
                 } else if (pendingInit) {
-                    updateHologram(b, "&e初始化排队中", blockData::isPendingRemove);
+                    switchHologramMode(b, HologramMode.SINGLE_LINE, "&e初始化排队中");
                 }
                 return;
             }
@@ -554,17 +608,18 @@ public class EnergyNet extends Network implements HologramOwner {
                 debugLog("tick: connectorNodes和terminusNodes均为空，但regulatorNodes=" + regulatorNodes.size()
                         + " initialized=" + initialized);
                 if (!regulatorNodes.isEmpty()) {
-                    removeMultiLineHologram(b);
-                    updateHologram(b, "&7电网已就绪，等待接入设备", blockData::isPendingRemove);
+                    // 电网就绪但无设备时显示单行全息喵~
+                    switchHologramMode(b, HologramMode.SINGLE_LINE, "&7电网已就绪，等待接入设备");
                 } else {
-                    removeMultiLineHologram(b);
-                    updateHologram(b, "&4找不到能源网络", blockData::isPendingRemove);
+                    // 找不到能源网络时显示单行全息喵~
+                    switchHologramMode(b, HologramMode.SINGLE_LINE, "&4找不到能源网络");
                 }
             } else if (!firstTickDone) {
-                removeMultiLineHologram(b);
-                updateHologram(b, "&e初始化完成，等待首个tick数据...", blockData::isPendingRemove);
+                // 初始化完成但等待首个tick数据时显示单行全息喵~
+                switchHologramMode(b, HologramMode.SINGLE_LINE, "&e初始化完成，等待首个tick数据...");
             } else {
-                updateHologram(blockData, lastSupply, lastDemand);
+                // 正常运行时显示三行统计数据喵~
+                updateHologramWithStats(blockData, lastSupply, lastDemand);
             }
         } finally {
             Slimefun.getProfiler()
@@ -934,16 +989,25 @@ public class EnergyNet extends Network implements HologramOwner {
         return supply;
     }
 
-    private void updateHologram(@Nonnull SlimefunBlockData data, double supply, double demand) {
+    /**
+     * 更新调节器的三行统计数据全息显示喵~
+     *
+     * @param data 调节器方块数据喵~
+     * @param supply 当前供应量喵~
+     * @param demand 当前需求量喵~
+     */
+    private void updateHologramWithStats(@Nonnull SlimefunBlockData data, double supply, double demand) {
+        // 计算可调度电量行文本喵~
         String netLine;
         if (demand > supply) {
             String netLoss = NumberUtils.getCompactDouble(demand - supply);
-            netLine = "&e可调度电量 &7| &4&l- &c" + netLoss + " &7J &e\u26A1";
+            netLine = "&e可调度电量 &7| &4&l- &c" + netLoss + " &7J &e⚡";
         } else {
             String netGain = NumberUtils.getCompactDouble(supply - demand);
-            netLine = "&e可调度电量 &7| &2&l+ &a" + netGain + " &7J &e\u26A1";
+            netLine = "&e可调度电量 &7| &2&l+ &a" + netGain + " &7J &e⚡";
         }
 
+        // 计算产出消耗净值行文本喵~
         String prodStr = NumberUtils.getCompactDouble(totalProducedThisTick);
         String consStr = NumberUtils.getCompactDouble(totalConsumedThisTick);
         long absNet = Math.abs(totalNetStoredThisTick);
@@ -953,14 +1017,15 @@ public class EnergyNet extends Network implements HologramOwner {
         String prodConsLine = "&2产出 +" + prodStr + " J &7| &e净值 " + netColor + netPrefix + netStr + " &7J &7| &c消耗 -"
                 + consStr + " J";
 
+        // 计算储能行文本喵~
         long totalCharge = calculateTotalCharge();
         long totalCapacity = calculateTotalCapacity();
         String chargeStr = NumberUtils.getCompactDouble(totalCharge);
         String capacityStr = NumberUtils.getCompactDouble(totalCapacity);
         String storageLine = "&e储能 " + chargeStr + " &7/ &e" + capacityStr + " &7J";
 
-        updateMultiLineHologram(
-                data.getLocation().getBlock(), data::isPendingRemove, netLine, prodConsLine, storageLine);
+        // 通过统一方法切换到多行全息模式并更新三行内容喵~
+        switchHologramMode(data.getLocation().getBlock(), HologramMode.MULTI_LINE, netLine, prodConsLine, storageLine);
     }
 
     private void updateHologramOnMain(@Nonnull Location loc, @Nonnull String message) {
@@ -1062,7 +1127,8 @@ public class EnergyNet extends Network implements HologramOwner {
             try {
                 Slimefun.runSync(() -> {
                     if (!destroyed) {
-                        updateHologram(regulator.getBlock(), "&e初始化电网中 0%", () -> false);
+                        // 初始化开始时显示单行进度全息喵~
+                        switchHologramMode(regulator.getBlock(), HologramMode.SINGLE_LINE, "&e初始化电网中 0%");
                     }
                 });
 
@@ -1125,8 +1191,8 @@ public class EnergyNet extends Network implements HologramOwner {
                         + " 路径=" + (countTotalPaths(generatorPaths) + countTotalPaths(capacitorPaths)));
                 if (!destroyed) {
                     Slimefun.runSync(() -> {
-                        removeMultiLineHologram(regulator.getBlock());
-                        updateHologram(regulator.getBlock(), "&e初始化完成，等待首个tick数据...", () -> false);
+                        // 初始化完成时显示单行等待全息喵~
+                        switchHologramMode(regulator.getBlock(), HologramMode.SINGLE_LINE, "&e初始化完成，等待首个tick数据...");
                     });
                 }
             } finally {
@@ -1468,7 +1534,8 @@ public class EnergyNet extends Network implements HologramOwner {
                             ((collectFraction + (1.0 - collectFraction) * pathFraction) * 100)));
                     Slimefun.runSync(() -> {
                         if (!destroyed) {
-                            updateHologram(regulator.getBlock(), "&e初始化电网中 " + pct + "%", () -> false);
+                            // 初始化进度更新时显示单行进度全息喵~
+                            switchHologramMode(regulator.getBlock(), HologramMode.SINGLE_LINE, "&e初始化电网中 " + pct + "%");
                         }
                     });
                 }
@@ -1897,7 +1964,8 @@ public class EnergyNet extends Network implements HologramOwner {
                 initWorkDone = visited.size();
                 Slimefun.runSync(() -> {
                     if (!destroyed) {
-                        updateHologram(regulator.getBlock(), "&e初始化电网中 " + pct + "%", () -> false);
+                        // BFS 初始化进度更新时显示单行进度全息喵~
+                        switchHologramMode(regulator.getBlock(), HologramMode.SINGLE_LINE, "&e初始化电网中 " + pct + "%");
                     }
                 });
             }
@@ -3057,7 +3125,8 @@ public class EnergyNet extends Network implements HologramOwner {
         if (regulator.getWorld() != null && regulator.getChunk().isLoaded()) {
             var data = StorageCacheUtils.getBlock(regulator);
             if (data != null && !data.isPendingRemove()) {
-                updateHologram(data, lastSupply, lastDemand);
+                // 自动 tick 完成后更新三行统计数据全息喵~
+                updateHologramWithStats(data, lastSupply, lastDemand);
             }
         }
     }
@@ -3403,8 +3472,8 @@ public class EnergyNet extends Network implements HologramOwner {
      * 清除电网内所有机器的悬浮字（用于电网销毁时清理冲突提示等）
      */
     private void removeAllHolograms() {
-        removeMultiLineHologram(regulator.getBlock());
-        removeHologram(regulator.getBlock());
+        // 电网销毁时清空所有全息显示喵~
+        switchHologramMode(regulator.getBlock(), HologramMode.NONE);
         for (Location loc : connectedLocations) {
             if (!loc.equals(regulator)) {
                 removeHologram(loc.getBlock());
