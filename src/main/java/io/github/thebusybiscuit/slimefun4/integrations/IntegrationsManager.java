@@ -55,6 +55,8 @@ public class IntegrationsManager {
     private boolean isClearLagInstalled = false;
     private boolean isItemsAdderInstalled = false;
     private boolean isOrebfuscatorInstalled = false;
+    // 标记Plan（Player Analytics）插件是否已安装并成功挂钩喵
+    private boolean isPlanInstalled = false;
 
     /**
      * This initializes the {@link IntegrationsManager}
@@ -121,6 +123,12 @@ public class IntegrationsManager {
         load("ClearLag", integration -> {
             new ClearLagIntegration(plugin).register();
             isClearLagInstalled = true;
+        });
+
+        // Plan（Player Analytics）集成，向Plan数据面板提供粘液科技玩家统计数据喵
+        load("Plan", integration -> {
+            new PlanIntegration().register(plugin);
+            isPlanInstalled = true;
         });
 
         // ItemsAdder Integration (custom blocks)
@@ -330,5 +338,10 @@ public class IntegrationsManager {
 
     public boolean isOrebfuscatorInstalled() {
         return isOrebfuscatorInstalled;
+    }
+
+    // 返回Plan（Player Analytics）插件是否已成功挂钩喵
+    public boolean isPlanInstalled() {
+        return isPlanInstalled;
     }
 }

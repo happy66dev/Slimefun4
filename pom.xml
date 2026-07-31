@@ -122,6 +122,11 @@
             <id>codemc-repo</id>
             <url>https://repo.codemc.io/repository/maven-public/</url>
         </repository>
+        <repository>
+            <!-- Plan (Player Analytics) API -->
+            <id>plan-repo</id>
+            <url>https://repo.playeranalytics.net/releases</url>
+        </repository>
     </repositories>
 
     <build>
@@ -619,6 +624,14 @@
             <groupId>cn.rmc</groupId>
             <artifactId>SlimefunWeaver</artifactId>
             <version>0.1Alpha</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- Plan (Player Analytics) API - soft dependency，用于在Plan插件存在时向其提供粘液科技统计数据喵 -->
+        <dependency>
+            <groupId>com.djrapitops</groupId>
+            <artifactId>plan-api</artifactId>
+            <version>5.8-R0.1</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
