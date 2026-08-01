@@ -57,6 +57,8 @@ commands:
     none-running: '&7当前没有运行的测试项!'
     running: '&7正在调试模式中运行该测试项: &6%test%'
     disabled: '&7已禁用调试模式'
+  getcount:
+    description: 输出当前 Research 注册表数量
   help: 显示此帮助
   cheat: 直接拿取 Slimefun 物品
   give: 给予玩家 Slimefun 物品
