@@ -45,10 +45,16 @@ public class SlimefunDataExtension implements DataExtension {
     /*
      * 指定Plan在哪些事件发生时自动调用本扩展的Provider方法喵
      * PLAYER_JOIN/PLAYER_LEAVE：玩家上下线时；SERVER_EXTENSION_REGISTER：插件启动注册时（用于拉取服务器整体研究总数）喵
+     * SERVER_PERIODICAL：定期重新采集服务器研究总数，因为SlimefunCustomGuide在启动后可能修改研究注册表，导致注册时采集到的数据过期喵
      */
     @Override
     public CallEvents[] callExtensionMethodsOn() {
-        return new CallEvents[] {CallEvents.PLAYER_JOIN, CallEvents.PLAYER_LEAVE, CallEvents.SERVER_EXTENSION_REGISTER};
+        return new CallEvents[] {
+            CallEvents.PLAYER_JOIN,
+            CallEvents.PLAYER_LEAVE,
+            CallEvents.SERVER_EXTENSION_REGISTER,
+            CallEvents.SERVER_PERIODICAL
+        };
     }
 
     /*
