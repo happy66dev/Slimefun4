@@ -56,6 +56,8 @@ public final class PlayerEnergyStatisticsService {
     private long startedAt;
     // 保存周期刷盘任务 ID，关闭时主动取消避免访问已关闭服务喵
     private int flushTaskId = -1;
+    // 保存最近一次清零实时值的服务器 tick 编号，避免多个电网在同一 tick 内相互覆盖实时值喵
+    private long lastRealtimeResetTick = -1L;
     // 标记服务是否已经关闭，防止关闭后继续提交异步写入喵
     private volatile boolean closed;
 
@@ -153,10 +155,21 @@ public final class PlayerEnergyStatisticsService {
         }
         // 建立本 tick 的实时值表，避免复用调用方可变 Map 喵
         Map<UUID, MutableCurrent> currentByPlayer = new HashMap<>();
-        // 清理旧实时值，确保本次没有活动的玩家返回零喵
-        for (MutableTotals totals : totalsByPlayer.values()) {
-            totals.currentProduced = 0L;
-            totals.currentConsumed = 0L;
+        /*
+         * 实时值按服务器 tick 而不是按电网清零喵
+         * 服务器上通常存在多个能源调节器，每个电网都会独立调用本方法一次喵
+         * 如果每次调用都清零全部玩家，后一个电网就会把前一个电网刚写入的实时值抹掉喵
+         * 因此只在服务器 tick 编号变化时清零一次，同一 tick 内多个电网的贡献可以叠加喵
+         */
+        long currentServerTick = Bukkit.getCurrentTick();
+        if (currentServerTick != lastRealtimeResetTick) {
+            // 进入新的服务器 tick，清零上一 tick 遗留的实时值，让停机玩家回落到零喵
+            for (MutableTotals totals : totalsByPlayer.values()) {
+                totals.currentProduced = 0L;
+                totals.currentConsumed = 0L;
+            }
+            // 记录本次清零对应的服务器 tick，同一 tick 内后续电网不再重复清零喵
+            lastRealtimeResetTick = currentServerTick;
         }
         // 应用发电增量并更新对应玩家的累计值喵
         applyDelta(producedByPlayer, currentByPlayer, true);
@@ -182,6 +195,47 @@ public final class PlayerEnergyStatisticsService {
         PlayerEnergySnapshot snapshot = publishedSnapshots.get(playerUUID);
         // 喵~防御：玩家尚未产生统计时返回安全的零快照喵
         return snapshot == null ? PlayerEnergySnapshot.ZERO : snapshot;
+    }
+
+    /**
+     * 返回当前已经跟踪的玩家数量，仅供调试命令排查统计是否生效喵
+     *
+     * @return 已跟踪玩家数量喵
+     */
+    public int getTrackedPlayerCount() {
+        // 直接读取已发布快照的容量，不触碰主线程可变表喵
+        return publishedSnapshots.size();
+    }
+
+    /**
+     * 返回统计文件是否已经落盘，仅供调试命令确认持久化状态喵
+     *
+     * @return 统计文件存在时返回 true 喵
+     */
+    public boolean isStatisticsFilePresent() {
+        // 喵~防御：文件系统异常时 exists 返回 false，调试命令按不存在处理即可喵
+        return statisticsFile.exists();
+    }
+
+    /**
+     * 返回统计文件路径，仅供调试命令展示给管理员喵
+     *
+     * @return 统计文件路径文本喵
+     */
+    @Nonnull
+    public String getStatisticsFilePath() {
+        // 返回相对可读路径，便于管理员直接定位文件喵
+        return statisticsFile.getPath();
+    }
+
+    /**
+     * 返回统计开始时间，仅供调试命令展示统计边界喵
+     *
+     * @return 统计开始毫秒时间戳，尚未初始化时为 0 喵
+     */
+    public long getStartedAt() {
+        // 返回加载时确定的统计起点，用于判断累计值覆盖的时间范围喵
+        return startedAt;
     }
 
     /**
@@ -283,11 +337,13 @@ public final class PlayerEnergyStatisticsService {
             // 根据指标类型执行饱和累加，禁止 long 溢出回绕喵
             if (produced) {
                 totals.totalProduced = saturatingAdd(totals.totalProduced, deltaValue);
-                totals.currentProduced = saturatingAdd(0L, deltaValue);
+                // 实时值在同一服务器 tick 内叠加，玩家跨多个电网的发电量才能合并统计喵
+                totals.currentProduced = saturatingAdd(totals.currentProduced, deltaValue);
                 current.produced = saturatingAdd(current.produced, deltaValue);
             } else {
                 totals.totalConsumed = saturatingAdd(totals.totalConsumed, deltaValue);
-                totals.currentConsumed = saturatingAdd(0L, deltaValue);
+                // 实时值在同一服务器 tick 内叠加，玩家跨多个电网的耗电量才能合并统计喵
+                totals.currentConsumed = saturatingAdd(totals.currentConsumed, deltaValue);
                 current.consumed = saturatingAdd(current.consumed, deltaValue);
             }
         }

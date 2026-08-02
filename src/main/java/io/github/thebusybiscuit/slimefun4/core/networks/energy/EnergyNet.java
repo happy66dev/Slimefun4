@@ -2576,6 +2576,9 @@ public class EnergyNet extends Network implements HologramOwner {
 
             GridTickSnapshot snapshot = collectTickSnapshot();
             if (snapshot == null) {
+                // 喵~防御：本次采样中断后不会执行写回，必须清空临时聚合值避免下次 tick 重复累计发电量喵
+                producedEnergyByPlayerThisTick.clear();
+                consumedEnergyByPlayerThisTick.clear();
                 return;
             }
 
@@ -3338,8 +3341,12 @@ public class EnergyNet extends Network implements HologramOwner {
     // 按机器数据中的 owner UUID 聚合正能量增量，无法解析归属时跳过玩家统计喵
     private static void recordEnergyDeltaForOwner(
             @Nonnull Map<UUID, Long> energyByPlayer, @Nullable ASlimefunDataContainer data, long energyDelta) {
-        // 喵~防御：空数据、非正能量或缺少 owner 时不写入统计喵
+        // 喵~防御：空数据、非正能量时不写入统计喵
         if (data == null || energyDelta <= 0L) {
+            return;
+        }
+        // 喵~防御：未加载完成的方块数据调用 getData 会抛 IllegalStateException，会中断整个电网写回流程喵
+        if (!data.isDataLoaded()) {
             return;
         }
         // 读取标准机器放置流程保存的 owner UUID 字符串喵
