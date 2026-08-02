@@ -489,8 +489,9 @@ public class HologramsService implements Listener {
     public void setMultiLineHologram(@Nonnull Location baseLoc, @Nonnull String... lines) {
         Validate.notNull(baseLoc, "Location must not be null");
 
-        if (!Bukkit.isPrimaryThread()) {
-            Slimefun.runSync(() -> setMultiLineHologram(baseLoc, lines));
+        // 喵~防御：目标区块未加载时禁止扫描和创建实体，避免弱加载期间重复生成全息喵~
+        if (!baseLoc.getWorld().isChunkLoaded(baseLoc.getBlockX() >> 4, baseLoc.getBlockZ() >> 4)) {
+            // 区块加载完成前等待下一次主线程更新，绝不主动强加载区块喵~
             return;
         }
 
@@ -748,7 +749,9 @@ public class HologramsService implements Listener {
         if (multilineHolograms != null) {
             // 只统计仍然有效的多行实体，避免失效缓存误判数量喵~
             for (Hologram hologram : multilineHolograms) {
-                if (hologram != null && hologram.getArmorStand() != null && hologram.getArmorStand().isValid()) {
+                if (hologram != null
+                        && hologram.getArmorStand() != null
+                        && hologram.getArmorStand().isValid()) {
                     hologramCount++;
                 }
             }

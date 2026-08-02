@@ -70,7 +70,8 @@ public class EnergyRegulator extends SlimefunItem implements HologramOwner, NotR
 
             @Override
             public boolean isSynchronized() {
-                return false;
+                // 全息与 Bukkit 方块实体操作必须在主线程执行，避免区块加载竞态喵~
+                return true;
             }
 
             @Override

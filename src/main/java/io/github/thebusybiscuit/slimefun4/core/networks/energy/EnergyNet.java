@@ -184,7 +184,7 @@ public class EnergyNet extends Network implements HologramOwner {
         // 在主线程创建或更新多行全息喵~
         Slimefun.getHologramsService().setMultiLineHologram(multilineLoc, lines);
         // 检查更新后全息数量，异常时执行调节器级别的完整清理并重试一次喵~
-        if (Slimefun.getHologramsService().countHolograms(multilineLoc) > 3) {
+        if (Slimefun.getHologramsService().countHolograms(b.getLocation()) > 3) {
             // 清除单行与多行残留，避免异常实体继续堆叠喵~
             removeHologramAt(b.getLocation());
             // 清理后重新创建本次请求的多行全息喵~
