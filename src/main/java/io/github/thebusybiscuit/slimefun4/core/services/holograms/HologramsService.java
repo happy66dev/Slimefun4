@@ -729,6 +729,35 @@ public class HologramsService implements Listener {
     }
 
     /**
+     * 统计指定基准位置当前可管理的全息实体数量。
+     *
+     * @param baseLoc 全息基准位置喵~
+     * @return 单行与多行全息实体总数喵~
+     */
+    public int countHolograms(@Nonnull Location baseLoc) {
+        // 喵~防御：全息实体查询必须在主线程执行，异步调用返回安全值喵~
+        if (!Bukkit.isPrimaryThread()) {
+            return 0;
+        }
+
+        // 统计该位置缓存中的单行全息实体喵~
+        int hologramCount = cache.containsKey(new BlockPosition(baseLoc)) ? 1 : 0;
+        // 读取该位置缓存中的多行全息实体喵~
+        List<Hologram> multilineHolograms = multiLineCache.get(new BlockPosition(baseLoc));
+        // 喵~防御：缓存缺失时按零行处理，避免空指针异常喵~
+        if (multilineHolograms != null) {
+            // 只统计仍然有效的多行实体，避免失效缓存误判数量喵~
+            for (Hologram hologram : multilineHolograms) {
+                if (hologram != null && hologram.getArmorStand() != null && hologram.getArmorStand().isValid()) {
+                    hologramCount++;
+                }
+            }
+        }
+        // 返回当前缓存可确认的全息数量喵~
+        return hologramCount;
+    }
+
+    /**
      * Removes the multi-line hologram at the given base {@link Location}.
      *
      * @param baseLoc

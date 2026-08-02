@@ -135,8 +135,21 @@ public class EnergyNet extends Network implements HologramOwner {
      * 静态辅助方法：清除指定位置的悬浮字（不需要电网实例）
      */
     public static void removeHologramAt(Location loc) {
+        // 喵~防御：全息实体只能由主线程操作，异步调用必须切回主线程喵~
+        if (!Bukkit.isPrimaryThread()) {
+            // 复制位置，避免异步任务执行时调用方修改原始 Location 喵~
+            Location hologramBaseLocation = loc.clone();
+            // 将全息清理任务安全提交到 Bukkit 主线程喵~
+            Slimefun.runSync(() -> removeHologramAt(hologramBaseLocation));
+            // 异步调用只负责提交任务，不继续访问全息服务喵~
+            return;
+        }
+
+        // 计算单行全息的实际位置喵~
         Location hologramLoc = loc.clone().add(HOLOGRAM_OFFSET);
+        // 删除单行全息，当前代码已运行在主线程喵~
         Slimefun.getHologramsService().removeHologram(hologramLoc);
+        // 删除多行全息，防止不同显示模式产生残留喵~
         Slimefun.getHologramsService().removeMultiLineHologram(loc.clone().add(MULTILINE_HOLOGRAM_OFFSET));
     }
 
@@ -148,15 +161,50 @@ public class EnergyNet extends Network implements HologramOwner {
 
     @Override
     public void updateMultiLineHologram(@Nonnull Block b, @Nonnull String... lines) {
+        // 喵~防御：多行全息的移除与创建必须在主线程执行喵~
+        if (!Bukkit.isPrimaryThread()) {
+            // 复制方块位置，避免异步任务继续持有 Bukkit 方块对象喵~
+            Location hologramBaseLocation = b.getLocation().clone();
+            // 复制文本数组，避免调用方修改异步任务即将显示的内容喵~
+            String[] hologramLines = lines.clone();
+            // 将多行全息更新任务提交到主线程喵~
+            Slimefun.runSync(() -> updateMultiLineHologram(hologramBaseLocation.getBlock(), hologramLines));
+            // 异步调用完成调度后立即返回喵~
+            return;
+        }
+
+        // 计算多行全息的实际位置喵~
         Location multilineLoc = b.getLocation().add(MULTILINE_HOLOGRAM_OFFSET);
+        // 计算需要先清除的单行全息位置喵~
         Location singleLoc = b.getLocation().add(HOLOGRAM_OFFSET);
+        // 删除旧单行全息，避免单行与多行显示重叠喵~
         Slimefun.getHologramsService().removeHologram(singleLoc);
+        // 在主线程创建或更新多行全息喵~
         Slimefun.getHologramsService().setMultiLineHologram(multilineLoc, lines);
+        // 检查更新后全息数量，异常时执行调节器级别的完整清理并重试一次喵~
+        if (Slimefun.getHologramsService().countHolograms(multilineLoc) > 3) {
+            // 清除单行与多行残留，避免异常实体继续堆叠喵~
+            removeHologramAt(b.getLocation());
+            // 清理后重新创建本次请求的多行全息喵~
+            Slimefun.getHologramsService().setMultiLineHologram(multilineLoc, lines);
+        }
     }
 
     @Override
     public void removeMultiLineHologram(@Nonnull Block b) {
+        // 喵~防御：异步线程禁止直接删除多行全息，先切换到主线程喵~
+        if (!Bukkit.isPrimaryThread()) {
+            // 复制方块位置，避免异步任务读取失效的 Bukkit 方块对象喵~
+            Location hologramBaseLocation = b.getLocation().clone();
+            // 将多行全息清理任务提交到主线程喵~
+            Slimefun.runSync(() -> removeMultiLineHologram(hologramBaseLocation.getBlock()));
+            // 异步调用只负责调度，不直接访问全息服务喵~
+            return;
+        }
+
+        // 计算多行全息的实际位置喵~
         Location loc = b.getLocation().add(MULTILINE_HOLOGRAM_OFFSET);
+        // 在主线程删除多行全息喵~
         Slimefun.getHologramsService().removeMultiLineHologram(loc);
     }
 
@@ -168,6 +216,18 @@ public class EnergyNet extends Network implements HologramOwner {
      * @param lines 显示内容，单行模式传1条，多行模式传3条，NONE模式忽略喵~
      */
     private void switchHologramMode(@Nonnull Block b, @Nonnull HologramMode targetMode, @Nonnull String... lines) {
+        // 喵~防御：异步 ticker 不得直接访问 Bukkit 全息实体，所有模式切换统一回主线程喵~
+        if (!Bukkit.isPrimaryThread()) {
+            // 复制方块位置，避免主线程任务执行时继续读取异步 Bukkit 方块对象喵~
+            Location hologramBaseLocation = b.getLocation().clone();
+            // 复制显示文本，避免异步调用方修改任务中的数组内容喵~
+            String[] hologramLines = lines.clone();
+            // 将完整的模式切换操作提交主线程，保证清理和创建顺序一致喵~
+            Slimefun.runSync(() -> switchHologramMode(hologramBaseLocation.getBlock(), targetMode, hologramLines));
+            // 异步线程完成调度后立即返回，禁止继续触碰全息服务喵~
+            return;
+        }
+
         // 如果目标模式与当前模式相同，直接更新内容而不重复清理喵~
         if (currentHologramMode == targetMode) {
             // 喵~防御：模式相同时根据目标模式更新对应显示内容喵~
