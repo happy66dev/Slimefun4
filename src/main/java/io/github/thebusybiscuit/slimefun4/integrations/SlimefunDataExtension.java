@@ -42,6 +42,20 @@ import org.bukkit.OfflinePlayer;
         elementOrder = {})
 public class SlimefunDataExtension implements DataExtension {
 
+    // 获取玩家能源统计服务，Plan provider 只读取不可变快照喵
+    private PlayerEnergyStatisticsService energyStatisticsService() {
+        return Slimefun.getPlayerEnergyStatisticsService();
+    }
+
+    // 根据 Plan 传入的玩家 UUID 读取能源快照，不访问 EnergyNet 或 Bukkit 网络对象喵
+    private PlayerEnergyStatisticsService.PlayerEnergySnapshot energySnapshot(UUID playerUUID) {
+        // 喵~防御：Plan 不应传入 null UUID，异常输入统一返回零快照喵
+        if (playerUUID == null) {
+            return PlayerEnergyStatisticsService.PlayerEnergySnapshot.ZERO;
+        }
+        return energyStatisticsService().getSnapshot(playerUUID);
+    }
+
     /*
      * 指定Plan在哪些事件发生时自动调用本扩展的Provider方法喵
      * PLAYER_JOIN/PLAYER_LEAVE：玩家上下线时；SERVER_EXTENSION_REGISTER：插件启动注册时（用于拉取服务器整体研究总数）喵
@@ -52,6 +66,7 @@ public class SlimefunDataExtension implements DataExtension {
         return new CallEvents[] {
             CallEvents.PLAYER_JOIN,
             CallEvents.PLAYER_LEAVE,
+            CallEvents.PLAYER_PERIODICAL,
             CallEvents.SERVER_EXTENSION_REGISTER,
             CallEvents.SERVER_PERIODICAL
         };
@@ -154,5 +169,39 @@ public class SlimefunDataExtension implements DataExtension {
     @Tab("研究")
     public long totalResearches() {
         return Slimefun.getRegistry().getResearches().size();
+    }
+
+    // 返回玩家功能上线后的累计发电量，单位：Slimefun 能量单位喵
+    @NumberProvider(
+            text = "累计发电量",
+            description = "该玩家自能源统计功能启用后累计产生的能量",
+            iconName = "bolt",
+            iconColor = Color.YELLOW,
+            showInPlayerTable = true)
+    public long totalEnergyProduced(UUID playerUUID) {
+        return energySnapshot(playerUUID).getTotalProduced();
+    }
+
+    // 返回最近一次完整 EnergyNet tick 的发电量，单位：Slimefun 能量单位喵
+    @NumberProvider(text = "实时发电量", description = "该玩家最近一次完整电网周期实际产生的能量", iconName = "bolt", iconColor = Color.ORANGE)
+    public long currentEnergyProduced(UUID playerUUID) {
+        return energySnapshot(playerUUID).getCurrentProduced();
+    }
+
+    // 返回玩家功能上线后的累计耗电量，单位：Slimefun 能量单位喵
+    @NumberProvider(
+            text = "累计耗电量",
+            description = "该玩家自能源统计功能启用后累计消耗的能量",
+            iconName = "plug",
+            iconColor = Color.RED,
+            showInPlayerTable = true)
+    public long totalEnergyConsumed(UUID playerUUID) {
+        return energySnapshot(playerUUID).getTotalConsumed();
+    }
+
+    // 返回最近一次完整 EnergyNet tick 的耗电量，单位：Slimefun 能量单位喵
+    @NumberProvider(text = "实时耗电量", description = "该玩家最近一次完整电网周期实际消耗的能量", iconName = "plug", iconColor = Color.RED)
+    public long currentEnergyConsumed(UUID playerUUID) {
+        return energySnapshot(playerUUID).getCurrentConsumed();
     }
 }

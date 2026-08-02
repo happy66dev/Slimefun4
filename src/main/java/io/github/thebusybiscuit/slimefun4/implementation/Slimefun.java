@@ -131,6 +131,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.tasks.armor.RainbowArmo
 import io.github.thebusybiscuit.slimefun4.implementation.tasks.armor.SlimefunArmorTask;
 import io.github.thebusybiscuit.slimefun4.implementation.tasks.armor.SolarHelmetTask;
 import io.github.thebusybiscuit.slimefun4.integrations.IntegrationsManager;
+import io.github.thebusybiscuit.slimefun4.integrations.PlayerEnergyStatisticsService;
 import io.github.thebusybiscuit.slimefun4.utils.MachineStatePersistence;
 import io.github.thebusybiscuit.slimefun4.utils.NumberUtils;
 import io.github.thebusybiscuit.slimefun4.utils.tags.SlimefunTag;
@@ -225,7 +226,11 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     private final ItemStackService itemStackService = new ItemStackService();
 
     // Some other things we need
+    // 保存第三方插件集成管理器实例喵
     private final IntegrationsManager integrations = new IntegrationsManager(this);
+    // 保存玩家能源统计服务实例，负责累计值持久化和Plan快照读取喵
+    private final PlayerEnergyStatisticsService playerEnergyStatisticsService = new PlayerEnergyStatisticsService(this);
+    // 保存 Slimefun 性能分析器实例喵
     private final SlimefunProfiler profiler = new SlimefunProfiler();
     private final SQLProfiler sqlProfiler = new SQLProfiler();
     private final GPSNetwork gpsNetwork = new GPSNetwork(this);
@@ -379,7 +384,10 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
             Slimefun.logger().warning("\n");
             Slimefun.logger().warning("====================================================");
         }
+        // 加载数据库并准备所有 Slimefun 数据控制器喵
         databaseManager.init();
+        // 加载 Plan 能源统计累计值，首次启用时从零开始喵
+        playerEnergyStatisticsService.load();
 
         // Set up localization
         logger.log(Level.INFO, "正在加载语言文件...");
@@ -539,13 +547,16 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         // Kill our Profiler Threads
         profiler.kill();
 
-        // Save all Player Profiles that are still in memory
+        // 保存所有仍在内存中的玩家档案喵
         PlayerProfile.iterator().forEachRemaining(profile -> {
             if (profile.isDirty()) {
                 profile.save();
             }
         });
 
+        // 关闭前同步保存 Plan 能源统计，避免累计 long 因服务器停止丢失喵
+        playerEnergyStatisticsService.close();
+        // 关闭 Slimefun 数据库控制器和底层连接喵
         databaseManager.shutdown();
 
         // Create a new backup zip
@@ -1107,6 +1118,16 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     public static @Nonnull SlimefunDatabaseManager getDatabaseManager() {
         validateInstance();
         return instance.databaseManager;
+    }
+
+    /**
+     * 返回玩家能源统计服务，供 EnergyNet 和 Plan 扩展读取统一快照喵
+     *
+     * @return 玩家能源统计服务实例喵
+     */
+    public static @Nonnull PlayerEnergyStatisticsService getPlayerEnergyStatisticsService() {
+        validateInstance();
+        return instance.playerEnergyStatisticsService;
     }
 
     public static @Nonnull SlimefunRegistry getRegistry() {

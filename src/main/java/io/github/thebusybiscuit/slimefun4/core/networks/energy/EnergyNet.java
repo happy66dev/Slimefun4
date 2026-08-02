@@ -47,6 +47,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -55,6 +56,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.LongConsumer;
+import java.util.logging.Level;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
 import org.bukkit.Bukkit;
@@ -305,6 +307,10 @@ public class EnergyNet extends Network implements HologramOwner {
     private long totalProducedThisTick = 0;
     private long totalConsumedThisTick = 0;
     private long totalStoredThisTick = 0;
+    // 保存当前网络 tick 按玩家聚合的实际发电增量，等待耗电写回后一次提交喵
+    private final Map<UUID, Long> producedEnergyByPlayerThisTick = new HashMap<>();
+    // 保存当前网络 tick 按玩家聚合的实际耗电增量，完成写回后提交统计喵
+    private final Map<UUID, Long> consumedEnergyByPlayerThisTick = new HashMap<>();
     private long totalNetStoredThisTick = 0;
     private long lastTotalCharge = 0;
 
@@ -970,6 +976,7 @@ public class EnergyNet extends Network implements HologramOwner {
                     continue;
                 }
 
+                // 读取本次发电机实际产生的能量，作为网络计算输入喵
                 long generatedEnergy = provider.getGeneratedOutputLong(loc, data);
 
                 if (provider.isChargeable()) {
@@ -979,10 +986,14 @@ public class EnergyNet extends Network implements HologramOwner {
                     }
                     long chargeAfter = provider.getChargeLong(loc);
                     long newCharge = chargeAfter - chargeBefore;
+                    // 统计可储能发电机实际新增到自身电量的能量喵
+                    recordEnergyDeltaForOwner(producedEnergyByPlayerThisTick, data, Math.max(0L, newCharge));
                     netNewEnergy += newCharge;
                     supply += chargeAfter;
                 } else {
                     nonChargeableSupply.put(loc, generatedEnergy);
+                    // 统计非储能发电机实际提供给网络的有效能量喵
+                    recordEnergyDeltaForOwner(producedEnergyByPlayerThisTick, data, generatedEnergy);
                     supply += generatedEnergy;
                 }
 
@@ -3134,12 +3145,25 @@ public class EnergyNet extends Network implements HologramOwner {
         }
 
         long consumedByGrid = 0;
-        for (long delta : result.consumerChargeDeltas.values()) {
+        for (Map.Entry<Location, Long> entry : result.consumerChargeDeltas.entrySet()) {
+            long delta = entry.getValue();
             if (delta > 0) {
                 consumedByGrid = NumberUtils.flowSafeAddition(consumedByGrid, delta);
+                // 读取实际成功耗电的消费者数据，避免把未满足需求计入玩家统计喵
+                var consumerData = StorageCacheUtils.getDataContainer(entry.getKey());
+                // 按消费者放置人聚合实际耗电量，旧机器无归属时跳过玩家统计喵
+                recordEnergyDeltaForOwner(consumedEnergyByPlayerThisTick, consumerData, delta);
             }
         }
         totalConsumedThisTick = consumedByGrid;
+
+        // 将本次完整网络 tick 的发电与耗电快照一次性提交给 Plan 统计服务喵
+        Slimefun.getPlayerEnergyStatisticsService()
+                .recordTick(
+                        new HashMap<>(producedEnergyByPlayerThisTick), new HashMap<>(consumedEnergyByPlayerThisTick));
+        // 清理本次 tick 的临时玩家聚合值，避免重复累计到下一次 tick 喵
+        producedEnergyByPlayerThisTick.clear();
+        consumedEnergyByPlayerThisTick.clear();
 
         connectorLoad.clear();
         connectorLoad.putAll(result.connectorLoads);
@@ -3289,20 +3313,54 @@ public class EnergyNet extends Network implements HologramOwner {
     }
 
     /**
-     * 计算总用电需求（所有用电器充满所需的电量缺口）
+     * 计算总用电需求（所有用电器充满所需的电量缺口）喵
      */
     private long calculateTotalDemand() {
+        // 初始化所有用电器的总需求喵
         long demand = 0;
+        // 遍历当前网络中的所有用电器喵
         for (Map.Entry<Location, EnergyNetComponent> entry : consumers.entrySet()) {
+            // 读取用电器位置和组件实例喵
             Location loc = entry.getKey();
             EnergyNetComponent component = entry.getValue();
+            // 读取用电器容量和当前电量喵
             long capacity = component.getChargeCapacityLong(loc);
             long charge = component.getChargeLong(loc);
+            // 只统计尚未充满的电量缺口喵
             if (charge < capacity) {
                 demand = NumberUtils.flowSafeAddition(demand, capacity - charge);
             }
         }
+        // 返回当前网络总需求喵
         return demand;
+    }
+
+    // 按机器数据中的 owner UUID 聚合正能量增量，无法解析归属时跳过玩家统计喵
+    private static void recordEnergyDeltaForOwner(
+            @Nonnull Map<UUID, Long> energyByPlayer, @Nullable ASlimefunDataContainer data, long energyDelta) {
+        // 喵~防御：空数据、非正能量或缺少 owner 时不写入统计喵
+        if (data == null || energyDelta <= 0L) {
+            return;
+        }
+        // 读取标准机器放置流程保存的 owner UUID 字符串喵
+        String ownerUUIDText = data.getData("machine_owner_uuid");
+        // 喵~防御：旧机器可能没有 owner 字段，不能根据附近玩家猜测归属喵
+        if (ownerUUIDText == null || ownerUUIDText.isBlank()) {
+            return;
+        }
+        try {
+            // 将 owner 文本解析为 UUID，非法值由当前机器单独跳过喵
+            UUID ownerUUID = UUID.fromString(ownerUUIDText);
+            // 使用饱和加法聚合多个机器，避免 long 溢出回绕为负数喵
+            long previousEnergy = energyByPlayer.getOrDefault(ownerUUID, 0L);
+            long safeEnergy =
+                    previousEnergy > Long.MAX_VALUE - energyDelta ? Long.MAX_VALUE : previousEnergy + energyDelta;
+            // 保存该玩家本次网络 tick 的聚合值喵
+            energyByPlayer.put(ownerUUID, safeEnergy);
+        } catch (IllegalArgumentException exception) {
+            // 喵~防御：非法 owner UUID 不应阻止整个 EnergyNet tick 完成喵
+            Slimefun.logger().log(Level.FINE, "跳过非法 machine_owner_uuid 能源节点", exception);
+        }
     }
 
     /**
