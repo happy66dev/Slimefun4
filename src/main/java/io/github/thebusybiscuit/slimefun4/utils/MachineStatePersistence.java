@@ -477,6 +477,12 @@ public final class MachineStatePersistence {
             if (op != null) {
                 startOperationUnchecked(processor, loc.getBlock(), op, sfItem);
                 restored = true;
+            } else {
+                Slimefun.logger()
+                        .log(
+                                Level.WARNING,
+                                "[MachineStatePersistence] 丢弃无法恢复的机器操作: machine={0}, location={1}, type={2}",
+                                new Object[] {sfItem.getId(), loc, type});
             }
 
             clearSavedOperation(loc);

@@ -118,6 +118,9 @@ public class CraftingOperation implements MachineOperation {
 
             int totalTicks = Integer.parseInt(parts[offset]);
             int currentTicks = Integer.parseInt(parts[1 + offset]);
+            if (totalTicks < 0 || currentTicks < 0 || currentTicks > totalTicks) {
+                return null;
+            }
 
             int ingredientCount = Integer.parseInt(parts[2 + offset]);
             if (ingredientCount < 0 || ingredientCount > 64) {
@@ -127,6 +130,12 @@ public class CraftingOperation implements MachineOperation {
             ItemStack[] ingredients = new ItemStack[ingredientCount];
             for (int i = 0; i < ingredientCount && i < ingredientData.length; i++) {
                 ingredients[i] = DataUtils.deserializeItemStack(ingredientData[i]);
+                if (ingredients[i] == null || ingredients[i].getType().isAir()) {
+                    return null;
+                }
+            }
+            if (ingredientData.length < ingredientCount) {
+                return null;
             }
 
             int resultCount = Integer.parseInt(parts[4 + offset]);
@@ -138,6 +147,12 @@ public class CraftingOperation implements MachineOperation {
             ItemStack[] results = new ItemStack[resultCount];
             for (int i = 0; i < resultCount && i < resultData.length; i++) {
                 results[i] = DataUtils.deserializeItemStack(resultData[i]);
+                if (results[i] == null || results[i].getType().isAir()) {
+                    return null;
+                }
+            }
+            if (resultData.length < resultCount) {
+                return null;
             }
 
             CraftingOperation op = new CraftingOperation(ingredients, results, totalTicks);

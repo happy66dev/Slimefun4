@@ -426,6 +426,20 @@ public abstract class AContainer extends SlimefunItem
                 } else {
                     inv.replaceExistingItem(22, new CustomItemStack(Material.BLACK_STAINED_GLASS_PANE, " "));
 
+                    boolean hasInvalidOutput = false;
+                    for (ItemStack output : currentOperation.getResults()) {
+                        if (output == null || output.getType().isAir()) {
+                            hasInvalidOutput = true;
+                            Slimefun.logger().warning("机器检测到无效输出，已终止操作: " + getId() + " @ " + b.getLocation());
+                            break;
+                        }
+                    }
+
+                    if (hasInvalidOutput) {
+                        processor.endOperation(b);
+                        return;
+                    }
+
                     for (ItemStack output : currentOperation.getResults()) {
                         inv.pushItem(output.clone(), getOutputSlots());
                     }
