@@ -25,6 +25,7 @@ import io.github.thebusybiscuit.slimefun4.core.attributes.rotations.NotRotatable
 import io.github.thebusybiscuit.slimefun4.core.handlers.BlockUseHandler;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingManager;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
+import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.items.SimpleSlimefunItem;
 import java.util.logging.Level;
 import javax.annotation.Nonnull;
@@ -64,15 +65,19 @@ public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> impleme
             boolean damaged = ConnectorAgingManager.isConnectorDamaged(loc);
             float durability = ConnectorAgingManager.getDurability(loc);
 
-            Slimefun.logger().log(Level.INFO, "[连接器维修Debug] 玩家={0}, 目标位置={1}, 连接器={2}, damaged={3}, durability={4}, 手持Material={5}, 手持数量={6}", new Object[] {
-                p.getName(),
-                loc,
-                getId(),
-                damaged,
-                durability,
-                p.getInventory().getItemInMainHand().getType(),
-                p.getInventory().getItemInMainHand().getAmount()
-            });
+            Slimefun.logger()
+                    .log(
+                            Level.INFO,
+                            "[连接器维修Debug] 玩家={0}, 目标位置={1}, 连接器={2}, damaged={3}, durability={4}, 手持Material={5}, 手持数量={6}",
+                            new Object[] {
+                                p.getName(),
+                                loc,
+                                getId(),
+                                damaged,
+                                durability,
+                                p.getInventory().getItemInMainHand().getType(),
+                                p.getInventory().getItemInMainHand().getAmount()
+                            });
 
             if (damaged) {
                 p.sendMessage(ChatColors.color("&c连接器已损坏！"));
