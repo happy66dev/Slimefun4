@@ -277,13 +277,40 @@ public class MultimeterDisplayManager implements Listener {
                 if (consumerKey == null) {
                     continue;
                 }
-                for (Location pathLocation : fullPath) {
-                    BlockPositionKey positionKey = blockKey(pathLocation);
-                    if (positionKey != null) {
-                        positionConsumers
-                                .computeIfAbsent(positionKey, key -> new HashSet<>())
-                                .add(consumerKey);
-                    }
+                for (int pathIndex = 0; pathIndex < fullPath.size() - 1; pathIndex++) {
+                    addSegmentPositions(fullPath.get(pathIndex), fullPath.get(pathIndex + 1), consumerKey);
+                }
+            }
+        }
+
+        private void addSegmentPositions(Location from, Location to, BlockPositionKey consumerKey) {
+            if (from == null
+                    || to == null
+                    || from.getWorld() == null
+                    || to.getWorld() == null
+                    || !from.getWorld().getUID().equals(to.getWorld().getUID())) {
+                return;
+            }
+            int startX = from.getBlockX();
+            int startY = from.getBlockY();
+            int startZ = from.getBlockZ();
+            int endX = to.getBlockX();
+            int endY = to.getBlockY();
+            int endZ = to.getBlockZ();
+            int stepCount =
+                    Math.max(Math.abs(endX - startX), Math.max(Math.abs(endY - startY), Math.abs(endZ - startZ)));
+            for (int step = 0; step <= stepCount; step++) {
+                double progress = stepCount == 0 ? 0.0 : (double) step / stepCount;
+                Location segmentLocation = new Location(
+                        from.getWorld(),
+                        startX + Math.round((float) ((endX - startX) * progress)),
+                        startY + Math.round((float) ((endY - startY) * progress)),
+                        startZ + Math.round((float) ((endZ - startZ) * progress)));
+                BlockPositionKey positionKey = blockKey(segmentLocation);
+                if (positionKey != null) {
+                    positionConsumers
+                            .computeIfAbsent(positionKey, key -> new HashSet<>())
+                            .add(consumerKey);
                 }
             }
         }
@@ -357,7 +384,7 @@ public class MultimeterDisplayManager implements Listener {
             }
             Location particleLocation = blockLocation.clone().add(0.5, 0.5, 0.5);
             Particle.DustOptions options = new Particle.DustOptions(color, 1.5F);
-            world.spawnParticle(VersionedParticle.DUST, particleLocation, 1, 0, 0, 0, 1, options);
+            world.spawnParticle(VersionedParticle.DUST, particleLocation, 2, 0, 0, 0, 1, options);
         }
 
         void createHolograms() {
