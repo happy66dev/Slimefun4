@@ -128,7 +128,8 @@ public class SlimefunItemInteractListener implements Listener {
                         && !(sfItem instanceof EnergyNetComponent
                                 && ((EnergyNetComponent) sfItem).getEnergyComponentType()
                                         == EnergyNetComponentType.CONNECTOR)) {
-                    event.getPlayer().sendMessage("§c机器损坏！无法交互");
+                    event.getPlayer().sendMessage("§c机器已损坏，无法运行！");
+                    event.getPlayer().sendMessage("§7请手持对应维修材料右键提交：");
                     event.getInteractEvent().setCancelled(true);
                     return false;
                 }

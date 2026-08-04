@@ -64,8 +64,9 @@ public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> impleme
             float durability = ConnectorAgingManager.getDurability(loc);
 
             if (damaged) {
-                p.sendMessage(ChatColors.color("&c连接器已损坏！"));
-                p.sendMessage(ChatColors.color("&7修复: " + ConnectorAgingManager.getRepairItemsDisplay(loc)));
+                p.sendMessage(ChatColors.color("&c连接器已损坏，无法供能！"));
+                p.sendMessage(ChatColors.color("&7请手持对应维修材料右键提交："));
+                p.sendMessage(ChatColors.color("&e需要：" + ConnectorAgingManager.getRepairItemsDisplay(loc)));
                 ConnectorAgingManager.tryRepair(p, loc);
                 return;
             }
@@ -74,7 +75,9 @@ public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> impleme
                 return;
             }
 
-            p.sendMessage(ChatColors.color("&7修复: " + ConnectorAgingManager.getRepairItemsDisplay(loc)));
+            p.sendMessage(ChatColors.color("&e连接器正在老化！"));
+            p.sendMessage(ChatColors.color("&7请手持维修材料右键提交："));
+            p.sendMessage(ChatColors.color("&e需要：" + ConnectorAgingManager.getRepairItemsDisplay(loc)));
             ConnectorAgingManager.tryRepair(p, loc);
         };
     }

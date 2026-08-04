@@ -171,6 +171,7 @@ public class MachineDamageListener implements Listener {
                                     (com.xzavier0722.mc.plugin.slimefun4.storage.controller.SlimefunBlockData) data,
                                     heldItem)) {
                                 heldItem.setAmount(heldItem.getAmount() - 1);
+                                player.updateInventory();
 
                                 if (damageService.canRepair(data)) {
                                     damageService.repairMachine(location);
