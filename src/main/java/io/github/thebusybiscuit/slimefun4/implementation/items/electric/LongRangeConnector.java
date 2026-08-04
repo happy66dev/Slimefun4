@@ -30,6 +30,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
 public class LongRangeConnector extends SimpleSlimefunItem<BlockUseHandler>
@@ -51,6 +52,10 @@ public class LongRangeConnector extends SimpleSlimefunItem<BlockUseHandler>
     public @Nonnull BlockUseHandler getItemHandler() {
         return e -> {
             if (!e.getClickedBlock().isPresent()) {
+                return;
+            }
+
+            if (e.getInteractEvent().getHand() != EquipmentSlot.HAND) {
                 return;
             }
 

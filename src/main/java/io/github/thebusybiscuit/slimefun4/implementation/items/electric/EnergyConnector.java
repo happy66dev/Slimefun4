@@ -33,6 +33,7 @@ import javax.annotation.ParametersAreNonnullByDefault;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.ItemStack;
 
 public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> implements EnergyNetComponent, NotRotatable {
@@ -55,6 +56,22 @@ public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> impleme
     public @Nonnull BlockUseHandler getItemHandler() {
         return e -> {
             if (!e.getClickedBlock().isPresent()) {
+                return;
+            }
+
+            Slimefun.logger()
+                    .log(
+                            Level.INFO,
+                            "[连接器维修Debug] 事件手={0}, useBlock={1}, useItem={2}, 事件取消={3}",
+                            new Object[] {
+                                e.getInteractEvent().getHand(),
+                                e.useBlock(),
+                                e.useItem(),
+                                e.getInteractEvent().isCancelled()
+                            });
+
+            if (e.getInteractEvent().getHand() != EquipmentSlot.HAND) {
+                Slimefun.logger().info("[连接器维修Debug] 忽略副手连接器交互");
                 return;
             }
 
