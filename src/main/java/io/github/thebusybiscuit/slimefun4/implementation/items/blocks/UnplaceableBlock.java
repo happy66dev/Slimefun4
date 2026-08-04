@@ -7,6 +7,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItemStack;
 import io.github.thebusybiscuit.slimefun4.api.recipes.RecipeType;
 import io.github.thebusybiscuit.slimefun4.core.attributes.NotPlaceable;
 import io.github.thebusybiscuit.slimefun4.core.handlers.ItemUseHandler;
+import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.items.SimpleSlimefunItem;
 import javax.annotation.Nullable;
 import javax.annotation.ParametersAreNonnullByDefault;
@@ -58,6 +59,7 @@ public class UnplaceableBlock extends SimpleSlimefunItem<ItemUseHandler> impleme
         return event -> {
             if (allowBlockInteraction) {
                 event.setUseItem(org.bukkit.event.Event.Result.DENY);
+                event.getPlayer().updateInventory();
             } else {
                 event.cancel();
             }
