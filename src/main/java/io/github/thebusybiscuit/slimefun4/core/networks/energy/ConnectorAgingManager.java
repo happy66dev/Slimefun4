@@ -471,12 +471,11 @@ public final class ConnectorAgingManager {
         if (data == null) return false;
 
         String itemsJson = data.getData(REPAIR_ITEMS_KEY);
-        Slimefun.logger().log(java.util.logging.Level.INFO, "[连接器维修Debug] 位置={0}, repairItemsJson={1}, durability={2}, submittedRaw={3}", new Object[] {
-            loc,
-            itemsJson,
-            getDurability(loc),
-            data.getData(REPAIR_SUBMITTED_KEY)
-        });
+        Slimefun.logger()
+                .log(
+                        java.util.logging.Level.INFO,
+                        "[连接器维修Debug] 位置={0}, repairItemsJson={1}, durability={2}, submittedRaw={3}",
+                        new Object[] {loc, itemsJson, getDurability(loc), data.getData(REPAIR_SUBMITTED_KEY)});
         if (itemsJson == null || itemsJson.isEmpty()) {
             generateRepairItems(loc);
             itemsJson = data.getData(REPAIR_ITEMS_KEY);
@@ -530,15 +529,19 @@ public final class ConnectorAgingManager {
         ItemStack held = p.getInventory().getItemInMainHand();
         SlimefunItem heldSlimefunItem = SlimefunItem.getByItem(held);
         boolean matches = matchesRepairItem(held, targetItem);
-        Slimefun.logger().log(java.util.logging.Level.INFO, "[连接器维修Debug] 位置={0}, targetType={1}, targetId={2}, heldMaterial={3}, heldAmount={4}, heldSlimefunId={5}, matches={6}", new Object[] {
-            loc,
-            targetItem.get("type"),
-            targetItem.get("id"),
-            held.getType(),
-            held.getAmount(),
-            heldSlimefunItem == null ? "null" : heldSlimefunItem.getId(),
-            matches
-        });
+        Slimefun.logger()
+                .log(
+                        java.util.logging.Level.INFO,
+                        "[连接器维修Debug] 位置={0}, targetType={1}, targetId={2}, heldMaterial={3}, heldAmount={4}, heldSlimefunId={5}, matches={6}",
+                        new Object[] {
+                            loc,
+                            targetItem.get("type"),
+                            targetItem.get("id"),
+                            held.getType(),
+                            held.getAmount(),
+                            heldSlimefunItem == null ? "null" : heldSlimefunItem.getId(),
+                            matches
+                        });
         if (held.getType() == Material.AIR) {
             // p.sendMessage(ChatColors.color("&c手持修复材料右键点击连接器来提交"));
             // p.sendMessage(ChatColors.color("&7需要: " + getRepairItemDisplay(targetItem)));
@@ -554,6 +557,7 @@ public final class ConnectorAgingManager {
         if (held.getAmount() <= 0) {
             p.getInventory().setItemInMainHand(null);
         }
+        p.updateInventory();
 
         submitted++;
         data.setData(REPAIR_SUBMITTED_KEY, String.valueOf(submitted));
