@@ -60,15 +60,12 @@ public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> impleme
             }
 
             Slimefun.logger()
-                    .log(
-                            Level.INFO,
-                            "[连接器维修Debug] 事件手={0}, useBlock={1}, useItem={2}, 事件取消={3}",
-                            new Object[] {
-                                e.getInteractEvent().getHand(),
-                                e.useBlock(),
-                                e.useItem(),
-                                e.getInteractEvent().isCancelled()
-                            });
+                    .log(Level.INFO, "[连接器维修Debug] 事件手={0}, useBlock={1}, useItem={2}, 事件取消={3}", new Object[] {
+                        e.getInteractEvent().getHand(),
+                        e.useBlock(),
+                        e.useItem(),
+                        e.getInteractEvent().isCancelled()
+                    });
 
             if (e.getInteractEvent().getHand() != EquipmentSlot.HAND) {
                 Slimefun.logger().info("[连接器维修Debug] 忽略副手连接器交互");

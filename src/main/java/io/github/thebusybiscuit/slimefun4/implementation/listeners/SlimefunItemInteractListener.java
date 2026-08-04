@@ -100,17 +100,13 @@ public class SlimefunItemInteractListener implements Listener {
 
             // Only handle the Item if it hasn't been denied
             if (event.useItem() != Result.DENY) {
-                Slimefun.logger()
-                        .log(
-                                Level.INFO,
-                                "[右键Debug] 手持物品处理前 玩家={0}, useBlock={1}, useItem={2}",
-                                new Object[] {e.getPlayer().getName(), event.useBlock(), event.useItem()});
+                Slimefun.logger().log(Level.INFO, "[右键Debug] 手持物品处理前 玩家={0}, useBlock={1}, useItem={2}", new Object[] {
+                    e.getPlayer().getName(), event.useBlock(), event.useItem()
+                });
                 rightClickItem(e, event, itemUsed);
-                Slimefun.logger()
-                        .log(
-                                Level.INFO,
-                                "[右键Debug] 手持物品处理后 玩家={0}, useBlock={1}, useItem={2}",
-                                new Object[] {e.getPlayer().getName(), event.useBlock(), event.useItem()});
+                Slimefun.logger().log(Level.INFO, "[右键Debug] 手持物品处理后 玩家={0}, useBlock={1}, useItem={2}", new Object[] {
+                    e.getPlayer().getName(), event.useBlock(), event.useItem()
+                });
             }
 
             Slimefun.logger()
