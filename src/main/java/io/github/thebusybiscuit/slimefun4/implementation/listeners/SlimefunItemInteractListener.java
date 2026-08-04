@@ -100,7 +100,17 @@ public class SlimefunItemInteractListener implements Listener {
 
             // Only handle the Item if it hasn't been denied
             if (event.useItem() != Result.DENY) {
+                Slimefun.logger()
+                        .log(
+                                Level.INFO,
+                                "[右键Debug] 手持物品处理前 玩家={0}, useBlock={1}, useItem={2}",
+                                new Object[] {e.getPlayer().getName(), event.useBlock(), event.useItem()});
                 rightClickItem(e, event, itemUsed);
+                Slimefun.logger()
+                        .log(
+                                Level.INFO,
+                                "[右键Debug] 手持物品处理后 玩家={0}, useBlock={1}, useItem={2}",
+                                new Object[] {e.getPlayer().getName(), event.useBlock(), event.useItem()});
             }
 
             Slimefun.logger()
@@ -140,6 +150,18 @@ public class SlimefunItemInteractListener implements Listener {
 
         if (optional.isPresent()) {
             SlimefunItem sfItem = optional.get();
+            Slimefun.logger()
+                    .log(
+                            Level.INFO,
+                            "[右键Debug] 手持物品识别 玩家={0}, itemId={1}, hasItemHandler={2}, canUse={3}, useBlockBefore={4}, useItemBefore={5}",
+                            new Object[] {
+                                e.getPlayer().getName(),
+                                sfItem.getId(),
+                                sfItem.getHandlers().stream().anyMatch(handler -> handler instanceof ItemUseHandler),
+                                sfItem.canUse(e.getPlayer(), true),
+                                event.useBlock(),
+                                event.useItem()
+                            });
 
             if (sfItem.canUse(e.getPlayer(), true)) {
                 return sfItem.callItemHandler(ItemUseHandler.class, handler -> handler.onRightClick(event));
