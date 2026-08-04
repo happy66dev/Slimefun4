@@ -589,9 +589,9 @@ public final class ConnectorAgingManager {
                 if (i > 0) sb.append(", ");
                 String display = getRepairItemDisplay(items.get(i));
                 if (i < submitted) {
-                    sb.append("§7~~").append(display).append("~~");
+                    sb.append("§a").append(display);
                 } else if (i == submitted) {
-                    sb.append("§e> ").append(display).append(" §f<");
+                    sb.append("§c> ").append(display).append(" §f<");
                 } else {
                     sb.append("§7").append(display);
                 }
