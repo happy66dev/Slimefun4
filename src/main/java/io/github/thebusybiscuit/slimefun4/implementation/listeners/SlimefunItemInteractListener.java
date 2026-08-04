@@ -16,7 +16,6 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import java.util.Optional;
-import java.util.logging.Level;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import me.mrCookieSlime.Slimefun.api.inventory.BlockMenuPreset;
@@ -53,22 +52,6 @@ public class SlimefunItemInteractListener implements Listener {
     @EventHandler
     public void onRightClick(PlayerInteractEvent e) {
         if (e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK) {
-            Slimefun.logger()
-                    .log(
-                            Level.INFO,
-                            "[右键Debug] Bukkit入口 玩家={0}, action={1}, hand={2}, item={3}, clickedBlock={4}, useBlock={5}, useItem={6}, cancelled={7}",
-                            new Object[] {
-                                e.getPlayer().getName(),
-                                e.getAction(),
-                                e.getHand(),
-                                e.getItem() == null ? "null" : e.getItem().getType(),
-                                e.getClickedBlock() == null
-                                        ? "null"
-                                        : e.getClickedBlock().getType(),
-                                e.useInteractedBlock(),
-                                e.useItemInHand(),
-                                e.isCancelled()
-                            });
             // Exclude the Debug Fish here because it is handled in a seperate Listener
             if (SlimefunUtils.isItemSimilar(e.getItem(), SlimefunItems.DEBUG_FISH, true)) {
                 return;
@@ -86,39 +69,11 @@ public class SlimefunItemInteractListener implements Listener {
             Bukkit.getPluginManager().callEvent(event);
 
             boolean itemUsed = e.getHand() == EquipmentSlot.OFF_HAND;
-            Slimefun.logger()
-                    .log(
-                            Level.INFO,
-                            "[右键Debug] 自定义事件后 玩家={0}, useItem={1}, useBlock={2}, itemUsed={3}, eventCancelled={4}",
-                            new Object[] {
-                                e.getPlayer().getName(),
-                                event.useItem(),
-                                event.useBlock(),
-                                itemUsed,
-                                event.getInteractEvent().isCancelled()
-                            });
 
             // Only handle the Item if it hasn't been denied
             if (event.useItem() != Result.DENY) {
-                Slimefun.logger().log(Level.INFO, "[右键Debug] 手持物品处理前 玩家={0}, useBlock={1}, useItem={2}", new Object[] {
-                    e.getPlayer().getName(), event.useBlock(), event.useItem()
-                });
                 rightClickItem(e, event, itemUsed);
-                Slimefun.logger().log(Level.INFO, "[右键Debug] 手持物品处理后 玩家={0}, useBlock={1}, useItem={2}", new Object[] {
-                    e.getPlayer().getName(), event.useBlock(), event.useItem()
-                });
             }
-
-            Slimefun.logger()
-                    .log(
-                            Level.INFO,
-                            "[右键Debug] 方块处理判断 玩家={0}, itemUsed={1}, useBlock={2}, willCallBlockHandler={3}",
-                            new Object[] {
-                                e.getPlayer().getName(),
-                                itemUsed,
-                                event.useBlock(),
-                                !itemUsed && event.useBlock() != Result.DENY
-                            });
 
             if (!itemUsed && event.useBlock() != Result.DENY && !rightClickBlock(event)) {
                 return;
@@ -146,18 +101,6 @@ public class SlimefunItemInteractListener implements Listener {
 
         if (optional.isPresent()) {
             SlimefunItem sfItem = optional.get();
-            Slimefun.logger()
-                    .log(
-                            Level.INFO,
-                            "[右键Debug] 手持物品识别 玩家={0}, itemId={1}, hasItemHandler={2}, canUse={3}, useBlockBefore={4}, useItemBefore={5}",
-                            new Object[] {
-                                e.getPlayer().getName(),
-                                sfItem.getId(),
-                                sfItem.getHandlers().stream().anyMatch(handler -> handler instanceof ItemUseHandler),
-                                sfItem.canUse(e.getPlayer(), true),
-                                event.useBlock(),
-                                event.useItem()
-                            });
 
             if (sfItem.canUse(e.getPlayer(), true)) {
                 return sfItem.callItemHandler(ItemUseHandler.class, handler -> handler.onRightClick(event));
@@ -172,18 +115,6 @@ public class SlimefunItemInteractListener implements Listener {
     @ParametersAreNonnullByDefault
     private boolean rightClickBlock(PlayerRightClickEvent event) {
         Optional<SlimefunItem> optional = event.getSlimefunBlock();
-        Slimefun.logger()
-                .log(
-                        Level.INFO,
-                        "[右键Debug] 方块处理入口 玩家={0}, clickedBlock={1}, slimefunBlock={2}, useBlock={3}",
-                        new Object[] {
-                            event.getPlayer().getName(),
-                            event.getClickedBlock().isPresent()
-                                    ? event.getClickedBlock().get().getType()
-                                    : "empty",
-                            optional.isPresent() ? optional.get().getId() : "null",
-                            event.useBlock()
-                        });
 
         if (optional.isPresent()) {
             SlimefunItem sfItem = optional.get();

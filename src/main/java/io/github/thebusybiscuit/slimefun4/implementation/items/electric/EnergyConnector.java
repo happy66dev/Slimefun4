@@ -27,7 +27,6 @@ import io.github.thebusybiscuit.slimefun4.core.networks.energy.ConnectorAgingMan
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNetComponentType;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.items.SimpleSlimefunItem;
-import java.util.logging.Level;
 import javax.annotation.Nonnull;
 import javax.annotation.ParametersAreNonnullByDefault;
 import org.bukkit.Location;
@@ -59,39 +58,12 @@ public class EnergyConnector extends SimpleSlimefunItem<BlockUseHandler> impleme
                 return;
             }
 
-            Slimefun.logger()
-                    .log(Level.INFO, "[连接器维修Debug] 事件手={0}, useBlock={1}, useItem={2}, 事件取消={3}", new Object[] {
-                        e.getInteractEvent().getHand(),
-                        e.useBlock(),
-                        e.useItem(),
-                        e.getInteractEvent().isCancelled()
-                    });
-
-            if (e.getInteractEvent().getHand() != EquipmentSlot.HAND) {
-                Slimefun.logger().info("[连接器维修Debug] 忽略副手连接器交互");
-                return;
-            }
-
             Player p = e.getPlayer();
             Block b = e.getClickedBlock().get();
             Location loc = b.getLocation();
 
             boolean damaged = ConnectorAgingManager.isConnectorDamaged(loc);
             float durability = ConnectorAgingManager.getDurability(loc);
-
-            Slimefun.logger()
-                    .log(
-                            Level.INFO,
-                            "[连接器维修Debug] 玩家={0}, 目标位置={1}, 连接器={2}, damaged={3}, durability={4}, 手持Material={5}, 手持数量={6}",
-                            new Object[] {
-                                p.getName(),
-                                loc,
-                                getId(),
-                                damaged,
-                                durability,
-                                p.getInventory().getItemInMainHand().getType(),
-                                p.getInventory().getItemInMainHand().getAmount()
-                            });
 
             if (damaged) {
                 p.sendMessage(ChatColors.color("&c连接器已损坏！"));
