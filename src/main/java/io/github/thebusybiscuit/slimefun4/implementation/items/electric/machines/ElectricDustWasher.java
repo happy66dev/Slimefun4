@@ -70,8 +70,16 @@ public class ElectricDustWasher extends AContainer {
                         4 / getSpeed(),
                         new ItemStack[] {new ItemStack(Material.SAND)},
                         new ItemStack[] {SlimefunItems.SALT});
+            } else if (oreWasher != null) {
+                // 查询普通洗矿机共享的附属精炼配方，实现电动洗矿机一致产物。
+                ItemStack refineryOutput = oreWasher.getRegisteredRefineryOutput(input);
+                // 喵~防御：没有匹配附属配方时继续检查其他默认分支。
+                if (refineryOutput != null) {
+                    // 创建随机精炼产物对应的电动洗矿机配方。
+                    recipe = new MachineRecipe(
+                            4 / getSpeed(), new ItemStack[] {input.clone()}, new ItemStack[] {refineryOutput});
+                }
             }
-
             if (recipe != null && menu.fits(recipe.getOutput()[0], getOutputSlots())) {
                 menu.consumeItem(slot);
                 return recipe;

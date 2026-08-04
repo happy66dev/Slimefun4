@@ -107,6 +107,29 @@ public class OreWasher extends MultiBlockMachine {
         refineryRecipes.add(entry);
     }
 
+    // 根据输入物品随机返回附属插件注册的精炼产物，供普通和电动洗矿机共用喵~
+    public @Nullable ItemStack getRegisteredRefineryOutput(ItemStack input) {
+        // 喵~防御：输入为空时不匹配任何附属配方。
+        if (input == null || input.getType().isAir()) return null;
+        // 遍历全部附属精炼配方并查找相似输入。
+        for (RefineryEntry entry : refineryRecipes) {
+            // 喵~防御：配方条目或输出池无效时跳过，避免运行时异常。
+            if (entry == null
+                    || entry.input == null
+                    || entry.weightedOutputs == null
+                    || entry.weightedOutputs.length == 0) continue;
+            // 仅对完全匹配的输入物品选择随机输出。
+            if (!SlimefunUtils.isItemSimilar(input, entry.input, true)) continue;
+            // 从加权输出池中均匀选择一个候选物品。
+            int outputIndex = ThreadLocalRandom.current().nextInt(entry.weightedOutputs.length);
+            // 复制输出物品，避免调用方修改注册表中的全局对象。
+            ItemStack output = entry.weightedOutputs[outputIndex];
+            return output == null ? null : output.clone();
+        }
+        // 没有匹配配方时返回空值，交由机器继续处理默认逻辑。
+        return null;
+    }
+
     @ParametersAreNonnullByDefault
     public OreWasher(ItemGroup itemGroup, SlimefunItemStack item) {
         // @formatter:off
