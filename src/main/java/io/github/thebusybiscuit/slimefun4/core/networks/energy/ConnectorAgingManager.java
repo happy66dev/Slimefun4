@@ -591,7 +591,7 @@ public final class ConnectorAgingManager {
                 if (i < submitted) {
                     sb.append("§a").append(display);
                 } else if (i == submitted) {
-                    sb.append("§c> ").append(display).append(" §f<");
+                    sb.append("§c> ").append(display).append(" §c<");
                 } else {
                     sb.append("§7").append(display);
                 }
