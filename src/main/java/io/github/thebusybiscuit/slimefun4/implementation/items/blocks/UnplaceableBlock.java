@@ -28,7 +28,7 @@ public class UnplaceableBlock extends SimpleSlimefunItem<ItemUseHandler> impleme
 
     @ParametersAreNonnullByDefault
     public UnplaceableBlock(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
-        this(itemGroup, item, recipeType, recipe, null, false);
+        this(itemGroup, item, recipeType, recipe, null, true);
     }
 
     @ParametersAreNonnullByDefault
@@ -38,7 +38,7 @@ public class UnplaceableBlock extends SimpleSlimefunItem<ItemUseHandler> impleme
             RecipeType recipeType,
             ItemStack[] recipe,
             @Nullable ItemStack recipeOutput) {
-        this(itemGroup, item, recipeType, recipe, recipeOutput, false);
+        this(itemGroup, item, recipeType, recipe, recipeOutput, true);
     }
 
     @ParametersAreNonnullByDefault
