@@ -18,17 +18,23 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.items.SimpleSlimefunItem;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import javax.annotation.ParametersAreNonnullByDefault;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 public class Multimeter extends SimpleSlimefunItem<ItemUseHandler> {
+
+    private static final long USE_COOLDOWN_NANOS = TimeUnit.SECONDS.toNanos(1);
+    private static final Map<UUID, Long> lastUseTimes = new HashMap<>();
 
     @ParametersAreNonnullByDefault
     public Multimeter(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
@@ -46,6 +52,9 @@ public class Multimeter extends SimpleSlimefunItem<ItemUseHandler> {
                 if (sfItem instanceof EnergyNetComponent component) {
                     e.cancel();
                     Player p = e.getPlayer();
+                    if (!tryUse(p.getUniqueId())) {
+                        return;
+                    }
                     Location loc = e.getClickedBlock().get().getLocation();
                     boolean sneaking = p.isSneaking();
 
@@ -58,6 +67,20 @@ public class Multimeter extends SimpleSlimefunItem<ItemUseHandler> {
                 }
             }
         };
+    }
+
+    private static boolean tryUse(UUID playerId) {
+        long currentTime = System.nanoTime();
+        Long lastUseTime = lastUseTimes.get(playerId);
+        if (lastUseTime != null && currentTime - lastUseTime < USE_COOLDOWN_NANOS) {
+            return false;
+        }
+        lastUseTimes.put(playerId, currentTime);
+        return true;
+    }
+
+    public static void clearUseCooldown(UUID playerId) {
+        lastUseTimes.remove(playerId);
     }
 
     private void handleSneakAction(Player p, Location loc, EnergyNetComponent component) {

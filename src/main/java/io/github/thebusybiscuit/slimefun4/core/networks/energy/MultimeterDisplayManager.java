@@ -20,6 +20,7 @@ import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
 import io.github.thebusybiscuit.slimefun4.core.attributes.EnergyNetComponent;
 import io.github.thebusybiscuit.slimefun4.core.networks.energy.EnergyNet.EnergyPath;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
+import io.github.thebusybiscuit.slimefun4.implementation.items.electric.gadgets.Multimeter;
 import io.github.thebusybiscuit.slimefun4.utils.compatibility.VersionedParticle;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -34,6 +35,7 @@ import org.bukkit.Bukkit;
 import org.bukkit.Color;
 import org.bukkit.Location;
 import org.bukkit.Particle;
+import org.bukkit.World;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
@@ -41,7 +43,6 @@ import org.bukkit.event.player.PlayerQuitEvent;
 
 public class MultimeterDisplayManager implements Listener {
 
-    private static final int PARTICLES_PER_METER = 4;
     private static final double MAX_DISTANCE = 32.0;
     private static final int DISPLAY_SECONDS = 15;
     private static final Color SHARED_COLOR = Color.WHITE;
@@ -82,23 +83,27 @@ public class MultimeterDisplayManager implements Listener {
             @Nonnull EnergyNet net,
             @Nonnull EnergyNetComponentType type) {
         init();
-        UUID uid = p.getUniqueId();
-        Map<Location, PathDisplay> map = pathDisplays.computeIfAbsent(uid, k -> new HashMap<>());
-        PathDisplay existing = map.get(machineLoc);
-        if (existing != null) {
-            existing.cancel();
-            map.remove(machineLoc);
+        if (machineLoc.getWorld() == null || paths.isEmpty()) {
             return false;
         }
-        PathDisplay display = new PathDisplay(p, machineLoc, paths, net, type);
-        map.put(machineLoc, display);
+        Location canonicalMachineLoc = machineLoc.getBlock().getLocation();
+        UUID uid = p.getUniqueId();
+        Map<Location, PathDisplay> map = pathDisplays.computeIfAbsent(uid, k -> new HashMap<>());
+        PathDisplay existing = map.get(canonicalMachineLoc);
+        if (existing != null) {
+            existing.cancel();
+            map.remove(canonicalMachineLoc);
+            return false;
+        }
+        PathDisplay display = new PathDisplay(p, canonicalMachineLoc, paths, net, type);
+        map.put(canonicalMachineLoc, display);
         display.start();
         return true;
     }
 
     public static boolean isPathDisplayActive(@Nonnull Player p, @Nonnull Location machineLoc) {
         Map<Location, PathDisplay> map = pathDisplays.get(p.getUniqueId());
-        return map != null && map.containsKey(machineLoc);
+        return map != null && map.containsKey(machineLoc.getBlock().getLocation());
     }
 
     public static void showConnectorLoad(@Nonnull Player p, @Nonnull Location connLoc, @Nonnull EnergyNet net) {
@@ -117,6 +122,7 @@ public class MultimeterDisplayManager implements Listener {
 
     public static void cleanupPlayer(@Nonnull Player p) {
         UUID uid = p.getUniqueId();
+        Multimeter.clearUseCooldown(uid);
         Map<Location, PathDisplay> pMap = pathDisplays.remove(uid);
         if (pMap != null) {
             for (PathDisplay d : pMap.values()) d.cancel();
@@ -240,8 +246,8 @@ public class MultimeterDisplayManager implements Listener {
         final Set<Location> hologramLocs = new HashSet<>();
         final Set<Location> endpointHologramLocs = new HashSet<>();
         final List<List<Location>> fullPaths = new ArrayList<>();
-        final Map<String, Set<Location>> segmentConsumers = new LinkedHashMap<>();
-        final Map<Location, Color> consumerColors;
+        final Map<BlockPositionKey, Set<BlockPositionKey>> positionConsumers = new LinkedHashMap<>();
+        final Map<BlockPositionKey, Color> consumerColors;
         int particleTaskId = -1;
         int hologramTaskId = -1;
         int secondsLeft = DISPLAY_SECONDS;
@@ -267,9 +273,17 @@ public class MultimeterDisplayManager implements Listener {
                 fullPath.add(path.getConsumer());
                 fullPaths.add(fullPath);
 
-                for (int i = 0; i < fullPath.size() - 1; i++) {
-                    String key = segmentKey(fullPath.get(i), fullPath.get(i + 1));
-                    segmentConsumers.computeIfAbsent(key, k -> new HashSet<>()).add(path.getConsumer());
+                BlockPositionKey consumerKey = blockKey(path.getConsumer());
+                if (consumerKey == null) {
+                    continue;
+                }
+                for (Location pathLocation : fullPath) {
+                    BlockPositionKey positionKey = blockKey(pathLocation);
+                    if (positionKey != null) {
+                        positionConsumers
+                                .computeIfAbsent(positionKey, key -> new HashSet<>())
+                                .add(consumerKey);
+                    }
                 }
             }
         }
@@ -305,6 +319,8 @@ public class MultimeterDisplayManager implements Listener {
                 Bukkit.getScheduler().cancelTask(hologramTaskId);
                 hologramTaskId = -1;
             }
+            positionConsumers.clear();
+            fullPaths.clear();
             removeHolograms();
         }
 
@@ -318,50 +334,30 @@ public class MultimeterDisplayManager implements Listener {
 
         void spawnParticles() {
             Color defaultColor = CONSUMER_COLORS[0];
-            for (int pi = 0; pi < paths.size(); pi++) {
-                EnergyPath path = paths.get(pi);
-                List<Location> fullPath = fullPaths.get(pi);
-
-                for (int i = 0; i < fullPath.size() - 1; i++) {
-                    Location from = fullPath.get(i);
-                    Location to = fullPath.get(i + 1);
-
-                    if (!hasNearbyPlayerOnSegment(from, to)) continue;
-
-                    String segKey = segmentKey(from, to);
-                    Set<Location> consumers = segmentConsumers.get(segKey);
-                    Color color = SHARED_COLOR;
-                    if (consumers != null && consumers.size() <= 1) {
-                        color = consumerColors.getOrDefault(path.getConsumer(), defaultColor);
-                    }
-
-                    spawnLineParticles(from, to, color);
+            for (Map.Entry<BlockPositionKey, Set<BlockPositionKey>> entry : positionConsumers.entrySet()) {
+                Location blockLocation = blockLocation(entry.getKey());
+                if (blockLocation == null || !hasNearbyPlayer(blockLocation)) {
+                    continue;
                 }
+
+                Set<BlockPositionKey> consumers = entry.getValue();
+                Color color = SHARED_COLOR;
+                if (consumers.size() == 1) {
+                    BlockPositionKey consumer = consumers.iterator().next();
+                    color = consumerColors.getOrDefault(consumer, defaultColor);
+                }
+                spawnBlockParticle(blockLocation, color);
             }
         }
 
-        void spawnLineParticles(Location from, Location to, Color color) {
-            double dx = to.getX() - from.getX();
-            double dy = to.getY() - from.getY();
-            double dz = to.getZ() - from.getZ();
-            double distance = Math.sqrt(dx * dx + dy * dy + dz * dz);
-            if (distance < 0.1) return;
-            int steps = Math.max(1, (int) (distance * PARTICLES_PER_METER));
-
-            double stepX = dx / steps;
-            double stepY = dy / steps;
-            double stepZ = dz / steps;
-
-            Particle.DustOptions opts = new Particle.DustOptions(color, 1.5F);
-
-            for (int i = 0; i <= steps; i++) {
-                double x = from.getX() + 0.5 + stepX * i;
-                double y = from.getY() + 0.5 + stepY * i;
-                double z = from.getZ() + 0.5 + stepZ * i;
-                Location pos = new Location(from.getWorld(), x, y, z);
-                if (!hasNearbyPlayer(pos)) continue;
-                pos.getWorld().spawnParticle(VersionedParticle.DUST, x, y, z, 1, 0, 0, 0, 1, opts);
+        private void spawnBlockParticle(Location blockLocation, Color color) {
+            World world = blockLocation.getWorld();
+            if (world == null || !world.isChunkLoaded(blockLocation.getBlockX() >> 4, blockLocation.getBlockZ() >> 4)) {
+                return;
             }
+            Location particleLocation = blockLocation.clone().add(0.5, 0.5, 0.5);
+            Particle.DustOptions options = new Particle.DustOptions(color, 1.5F);
+            world.spawnParticle(VersionedParticle.DUST, particleLocation, 1, 0, 0, 0, 1, options);
         }
 
         void createHolograms() {
@@ -501,14 +497,60 @@ public class MultimeterDisplayManager implements Listener {
 
     // ======================== Utility ========================
 
-    private static Map<Location, Color> assignConsumerColors(List<EnergyPath> paths, EnergyNet net) {
-        Map<Location, Color> map = new HashMap<>();
+    private static final class BlockPositionKey {
+        private final UUID worldId;
+        private final int x;
+        private final int y;
+        private final int z;
+
+        private BlockPositionKey(UUID worldId, int x, int y, int z) {
+            this.worldId = worldId;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        @Override
+        public boolean equals(Object object) {
+            if (this == object) return true;
+            if (!(object instanceof BlockPositionKey other)) return false;
+            return x == other.x && y == other.y && z == other.z && worldId.equals(other.worldId);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = worldId.hashCode();
+            result = 31 * result + x;
+            result = 31 * result + y;
+            result = 31 * result + z;
+            return result;
+        }
+    }
+
+    private static BlockPositionKey blockKey(Location location) {
+        if (location == null || location.getWorld() == null) {
+            return null;
+        }
+        return new BlockPositionKey(
+                location.getWorld().getUID(), location.getBlockX(), location.getBlockY(), location.getBlockZ());
+    }
+
+    private static Location blockLocation(BlockPositionKey key) {
+        World world = Bukkit.getWorld(key.worldId);
+        if (world == null) {
+            return null;
+        }
+        return new Location(world, key.x, key.y, key.z);
+    }
+
+    private static Map<BlockPositionKey, Color> assignConsumerColors(List<EnergyPath> paths, EnergyNet net) {
+        Map<BlockPositionKey, Color> map = new HashMap<>();
         int capIdx = 0;
         int consIdx = 0;
         for (EnergyPath path : paths) {
-            Location consumer = path.getConsumer();
-            if (!map.containsKey(consumer)) {
-                if (net.getCapacitors().containsKey(consumer)) {
+            BlockPositionKey consumer = blockKey(path.getConsumer());
+            if (consumer != null && !map.containsKey(consumer)) {
+                if (net.getCapacitors().containsKey(path.getConsumer())) {
                     map.put(consumer, CAPACITOR_COLORS[capIdx++ % CAPACITOR_COLORS.length]);
                 } else {
                     map.put(consumer, CONSUMER_COLORS[consIdx++ % CONSUMER_COLORS.length]);
@@ -516,11 +558,6 @@ public class MultimeterDisplayManager implements Listener {
             }
         }
         return map;
-    }
-
-    private static String segmentKey(Location from, Location to) {
-        return from.getBlockX() + "," + from.getBlockY() + "," + from.getBlockZ() + "->" + to.getBlockX() + ","
-                + to.getBlockY() + "," + to.getBlockZ();
     }
 
     private static String connectorHologramText(Location conn, long load, boolean showTimer) {
