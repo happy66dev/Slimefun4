@@ -24,9 +24,11 @@ import org.bukkit.inventory.ItemStack;
  */
 public class UnplaceableBlock extends SimpleSlimefunItem<ItemUseHandler> implements NotPlaceable {
 
+    private final boolean allowBlockInteraction;
+
     @ParametersAreNonnullByDefault
     public UnplaceableBlock(ItemGroup itemGroup, SlimefunItemStack item, RecipeType recipeType, ItemStack[] recipe) {
-        super(itemGroup, item, recipeType, recipe);
+        this(itemGroup, item, recipeType, recipe, null, false);
     }
 
     @ParametersAreNonnullByDefault
@@ -36,11 +38,29 @@ public class UnplaceableBlock extends SimpleSlimefunItem<ItemUseHandler> impleme
             RecipeType recipeType,
             ItemStack[] recipe,
             @Nullable ItemStack recipeOutput) {
+        this(itemGroup, item, recipeType, recipe, recipeOutput, false);
+    }
+
+    @ParametersAreNonnullByDefault
+    public UnplaceableBlock(
+            ItemGroup itemGroup,
+            SlimefunItemStack item,
+            RecipeType recipeType,
+            ItemStack[] recipe,
+            @Nullable ItemStack recipeOutput,
+            boolean allowBlockInteraction) {
         super(itemGroup, item, recipeType, recipe, recipeOutput);
+        this.allowBlockInteraction = allowBlockInteraction;
     }
 
     @Override
     public ItemUseHandler getItemHandler() {
-        return PlayerRightClickEvent::cancel;
+        return event -> {
+            if (allowBlockInteraction) {
+                event.setUseItem(org.bukkit.event.Event.Result.DENY);
+            } else {
+                event.cancel();
+            }
+        };
     }
 }

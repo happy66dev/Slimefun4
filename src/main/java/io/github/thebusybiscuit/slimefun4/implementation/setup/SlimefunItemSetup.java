@@ -3897,7 +3897,8 @@ public final class SlimefunItemSetup {
                             null,
                             null
                         },
-                        new SlimefunItemStack(SlimefunItems.COPPER_WIRE, 12))
+                        new SlimefunItemStack(SlimefunItems.COPPER_WIRE, 12),
+                        true)
                 .register(plugin);
 
         new BlockPlacer(
