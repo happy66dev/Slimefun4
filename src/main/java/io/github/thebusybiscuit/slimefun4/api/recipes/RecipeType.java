@@ -9,6 +9,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import io.github.thebusybiscuit.slimefun4.implementation.SlimefunItems;
 import io.github.thebusybiscuit.slimefun4.implementation.items.altar.AltarRecipe;
 import io.github.thebusybiscuit.slimefun4.implementation.items.altar.AncientAltar;
+import io.github.thebusybiscuit.slimefun4.utils.SlimefunUtils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -206,37 +207,39 @@ public class RecipeType implements Keyed {
                 recipe.getRecipeClass().getSimpleName().toLowerCase(Locale.ROOT).replace("recipe", ""));
     }
 
-    // 控制核心 ORE_WASHER 配方是否允许在 Slimefun 延迟加载阶段注册喵~
-    private static boolean oreWasherRecipeRegistrationEnabled = true;
+    // 控制核心 SIFTED_ORE 洗矿配方是否允许在 Slimefun 延迟加载阶段注册喵~
+    private static boolean siftedOreRecipeRegistrationEnabled = true;
 
     /**
-     * 设置 ORE_WASHER 类型配方是否允许注册喵~
+     * 设置核心 SIFTED_ORE 洗矿配方是否允许注册喵~
      *
-     * 附属插件可以在 Slimefun 的延迟物品加载前关闭核心洗矿配方喵~
+     * 附属插件可以在 Slimefun 的延迟物品加载前关闭筛矿配方，其他 ORE_WASHER 配方不受影响喵~
      *
-     * @param enabled 是否允许注册 ORE_WASHER 类型配方。
+     * @param enabled 是否允许注册以 SIFTED_ORE 为输入的洗矿配方。
      */
-    public static void setOreWasherRecipeRegistrationEnabled(boolean enabled) {
-        // 保存当前 ORE_WASHER 注册开关喵~
-        oreWasherRecipeRegistrationEnabled = enabled;
+    public static void setSiftedOreRecipeRegistrationEnabled(boolean enabled) {
+        // 保存当前核心筛矿配方注册开关喵~
+        siftedOreRecipeRegistrationEnabled = enabled;
     }
 
     /**
-     * 查询 ORE_WASHER 类型配方是否允许注册喵~
+     * 查询核心 SIFTED_ORE 洗矿配方是否允许注册喵~
      *
      * @return 允许注册时返回 true。
      */
-    public static boolean isOreWasherRecipeRegistrationEnabled() {
-        // 返回当前 ORE_WASHER 注册开关喵~
-        return oreWasherRecipeRegistrationEnabled;
+    public static boolean isSiftedOreRecipeRegistrationEnabled() {
+        // 返回当前核心筛矿配方注册状态喵~
+        return siftedOreRecipeRegistrationEnabled;
     }
 
     /**
      * Registers a recipe of this type.
      */
     public void register(ItemStack[] recipe, ItemStack result) {
-        // ORE_WASHER 配方关闭时跳过核心和附属的洗矿配方注册喵~
-        if (this == ORE_WASHER && !oreWasherRecipeRegistrationEnabled) return;
+        // 仅关闭以 SIFTED_ORE 为输入的核心洗矿配方，砂子等其他配方继续注册喵~
+        if (this == ORE_WASHER && !siftedOreRecipeRegistrationEnabled && containsSiftedOre(recipe)) {
+            return;
+        }
         // 有自定义注册回调时继续交给回调处理喵~
         if (registerConsumer != null) {
             // 调用当前配方类型的专用注册回调喵~
@@ -250,6 +253,28 @@ public class RecipeType implements Keyed {
                 mbm.addRecipe(recipe, result);
             }
         }
+    }
+
+    /**
+     * 判断配方输入中是否包含 Slimefun 核心筛矿物品喵~
+     *
+     * @param recipe 待检查的配方输入数组。
+     * @return 包含 SIFTED_ORE 时返回 true。
+     */
+    private boolean containsSiftedOre(ItemStack[] recipe) {
+        // 喵~防御：空配方不包含任何需要禁用的筛矿物品。
+        if (recipe == null || recipe.length == 0 || SlimefunItems.SIFTED_ORE == null) {
+            return false;
+        }
+        // 遍历全部输入槽，避免多槽配方绕过筛矿禁用规则喵~
+        for (ItemStack input : recipe) {
+            // 跳过空槽，只比较实际输入物品喵~
+            if (input != null && SlimefunUtils.isItemSimilar(input, SlimefunItems.SIFTED_ORE, true, false)) {
+                return true;
+            }
+        }
+        // 所有输入都不是 SIFTED_ORE 时保留配方喵~
+        return false;
     }
 
     public void unregister(ItemStack[] recipe, ItemStack result) {
