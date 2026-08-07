@@ -235,7 +235,7 @@ public class RecipeType implements Keyed {
      * Registers a recipe of this type.
      */
     public void register(ItemStack[] recipe, ItemStack result) {
-        // ORE_WASHER 配方关闭时跳过核心注册，但不影响其他 RecipeType 喵~
+        // ORE_WASHER 配方关闭时跳过核心和附属的洗矿配方注册喵~
         if (this == ORE_WASHER && !oreWasherRecipeRegistrationEnabled) return;
         // 有自定义注册回调时继续交给回调处理喵~
         if (registerConsumer != null) {
