@@ -77,10 +77,102 @@ public class OreWasher extends MultiBlockMachine {
         };
     }
 
+    // 保存核心旧版洗矿库存检查模式，保持原有配置兼容性喵~
     private final boolean legacyMode;
+
+    // 记录是否允许核心默认的 SIFTED_ORE 洗矿流程，默认保持原版行为喵~
+    private boolean siftedOreProcessingEnabled = true;
+
+    /**
+     * 设置核心筛矿物的默认洗矿流程是否启用喵~
+     *
+     * 附属插件可以在自身启用阶段关闭该流程，但不会影响附属插件注册的精炼配方喵~
+     *
+     * @param enabled 是否允许 SIFTED_ORE 进入核心默认洗矿逻辑。
+     */
+    public void setSiftedOreProcessingEnabled(boolean enabled) {
+        // 保存附属插件请求的核心筛矿开关状态喵~
+        this.siftedOreProcessingEnabled = enabled;
+        // 关闭默认筛矿时同步移除指南和已缓存的核心筛矿配方喵~
+        if (!enabled) {
+            // 删除显示列表中的 SIFTED_ORE 配方对，避免指南继续展示核心筛矿喵~
+            removeSiftedOreDisplayRecipes();
+            // 删除已经进入机器配方列表的 SIFTED_ORE 配方，避免旧状态继续执行喵~
+            recipes.removeIf(this::isSiftedOreRecipe);
+        }
+    }
+
+    /**
+     * 删除显示列表中的核心 SIFTED_ORE 配方对喵~
+     */
+    private void removeSiftedOreDisplayRecipes() {
+        // 从后向前按输入输出成对删除，避免列表索引移动导致漏删喵~
+        for (int recipeIndex = displayRecipes.size() - 2; recipeIndex >= 0; recipeIndex -= 2) {
+            // 读取当前配方对的输入物品喵~
+            ItemStack input = displayRecipes.get(recipeIndex);
+            // 输入为核心筛矿时删除输入和对应输出喵~
+            if (isSiftedOreDisplayItem(input)) {
+                // 删除当前配方的输出物品喵~
+                displayRecipes.remove(recipeIndex + 1);
+                // 删除当前配方的输入物品喵~
+                displayRecipes.remove(recipeIndex);
+            }
+        }
+    }
+
+    /**
+     * 判断显示列表中的物品是否为核心筛矿物品喵~
+     *
+     * @param itemStack 待检查的显示物品。
+     * @return 是 SIFTED_ORE 时返回 true。
+     */
+    private boolean isSiftedOreDisplayItem(ItemStack itemStack) {
+        // 喵~防御：空物品或空气不可能是筛矿物品。
+        if (itemStack == null || itemStack.getType().isAir()) return false;
+        // 使用 Slimefun 相似物品判断，兼容带 ID 元数据的 ItemStack 喵~
+        return SlimefunUtils.isItemSimilar(itemStack, SlimefunItems.SIFTED_ORE, true);
+    }
+
+    /**
+     * 判断机器配方是否以核心筛矿物品为输入喵~
+     *
+     * @param recipePair 机器配方的输入输出数组。
+     * @return 首个输入是 SIFTED_ORE 时返回 true。
+     */
+    private boolean isSiftedOreRecipe(ItemStack[] recipePair) {
+        // 喵~防御：空配方或没有输入槽时直接跳过。
+        if (recipePair == null || recipePair.length == 0) return false;
+        // 检查第一个输入槽是否为 SIFTED_ORE 喵~
+        return isSiftedOreDisplayItem(recipePair[0]);
+    }
+
+    /**
+     * 屏蔽核心默认的 SIFTED_ORE 配方注册，同时保留其他洗矿配方喵~
+     *
+     * @param input 配方输入数组。
+     * @param output 配方输出物品。
+     */
+    @Override
+    public void addRecipe(ItemStack[] input, ItemStack output) {
+        // 关闭核心筛矿时拒绝所有以 SIFTED_ORE 开头的默认配方喵~
+        if (!siftedOreProcessingEnabled && isSiftedOreRecipe(input)) return;
+        // 其他洗矿配方继续交给核心机器保存喵~
+        super.addRecipe(input, output);
+    }
+
+    /**
+     * 查询核心筛矿物的默认洗矿流程是否启用喵~
+     *
+     * @return 启用时返回 true，否则返回 false。
+     */
+    public boolean isSiftedOreProcessingEnabled() {
+        // 返回当前核心默认筛矿流程状态喵~
+        return siftedOreProcessingEnabled;
+    }
 
     /**
      * 精炼配方条目：一种输入粉末对应一个加权产物列表，按概率随机选取喵~
+     *
      * 每个 RefineryEntry 持有输入物品和带权重的产物候选数组。
      * 权重实现方式：候选数组里重复放相同物品，数组长度即总权重。
      */
@@ -154,12 +246,17 @@ public class OreWasher extends MultiBlockMachine {
          * way of obtaining them. But we also wanna display them here, so we just
          * add these two recipes manually
          */
-        recipes.add(SlimefunItems.SIFTED_ORE);
-        recipes.add(SlimefunItems.IRON_DUST);
+        // 只有核心筛矿开关开启时，才把默认筛矿展示项加入指南喵~
+        if (siftedOreProcessingEnabled) {
+            // 添加筛矿到铁粉的核心指南展示项喵~
+            recipes.add(SlimefunItems.SIFTED_ORE);
+            recipes.add(SlimefunItems.IRON_DUST);
+            // 添加筛矿到金粉的核心指南展示项喵~
+            recipes.add(SlimefunItems.SIFTED_ORE);
+            recipes.add(SlimefunItems.GOLD_DUST);
+        }
 
-        recipes.add(SlimefunItems.SIFTED_ORE);
-        recipes.add(SlimefunItems.GOLD_DUST);
-
+        // 保留砂子到粗盐的核心指南展示项喵~
         recipes.add(new ItemStack(Material.SAND));
         recipes.add(SlimefunItems.SALT);
     }
@@ -179,7 +276,8 @@ public class OreWasher extends MultiBlockMachine {
 
             for (ItemStack input : inv.getContents()) {
                 if (input != null) {
-                    if (SlimefunUtils.isItemSimilar(input, SlimefunItems.SIFTED_ORE, true)) {
+                    if (siftedOreProcessingEnabled
+                            && SlimefunUtils.isItemSimilar(input, SlimefunItems.SIFTED_ORE, true)) {
                         ItemStack output = getRandomDust();
                         Inventory outputInv;
 

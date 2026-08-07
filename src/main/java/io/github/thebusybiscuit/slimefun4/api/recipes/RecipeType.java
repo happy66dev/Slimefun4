@@ -206,13 +206,47 @@ public class RecipeType implements Keyed {
                 recipe.getRecipeClass().getSimpleName().toLowerCase(Locale.ROOT).replace("recipe", ""));
     }
 
+    // 控制核心 ORE_WASHER 配方是否允许在 Slimefun 延迟加载阶段注册喵~
+    private static boolean oreWasherRecipeRegistrationEnabled = true;
+
+    /**
+     * 设置 ORE_WASHER 类型配方是否允许注册喵~
+     *
+     * 附属插件可以在 Slimefun 的延迟物品加载前关闭核心洗矿配方喵~
+     *
+     * @param enabled 是否允许注册 ORE_WASHER 类型配方。
+     */
+    public static void setOreWasherRecipeRegistrationEnabled(boolean enabled) {
+        // 保存当前 ORE_WASHER 注册开关喵~
+        oreWasherRecipeRegistrationEnabled = enabled;
+    }
+
+    /**
+     * 查询 ORE_WASHER 类型配方是否允许注册喵~
+     *
+     * @return 允许注册时返回 true。
+     */
+    public static boolean isOreWasherRecipeRegistrationEnabled() {
+        // 返回当前 ORE_WASHER 注册开关喵~
+        return oreWasherRecipeRegistrationEnabled;
+    }
+
+    /**
+     * Registers a recipe of this type.
+     */
     public void register(ItemStack[] recipe, ItemStack result) {
+        // ORE_WASHER 配方关闭时跳过核心注册，但不影响其他 RecipeType 喵~
+        if (this == ORE_WASHER && !oreWasherRecipeRegistrationEnabled) return;
+        // 有自定义注册回调时继续交给回调处理喵~
         if (registerConsumer != null) {
+            // 调用当前配方类型的专用注册回调喵~
             registerConsumer.accept(recipe, result);
         } else {
+            // 根据机器 ID 查找对应的多方块机器实例喵~
             SlimefunItem slimefunItem = SlimefunItem.getById(this.machine);
-
+            // 只有多方块机器才支持直接添加机器配方喵~
             if (slimefunItem instanceof MultiBlockMachine mbm) {
+                // 把配方交给目标多方块机器保存喵~
                 mbm.addRecipe(recipe, result);
             }
         }

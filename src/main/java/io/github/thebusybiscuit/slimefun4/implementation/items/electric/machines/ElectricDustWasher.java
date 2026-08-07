@@ -52,7 +52,9 @@ public class ElectricDustWasher extends AContainer {
         for (int slot : getInputSlots()) {
             ItemStack input = menu.getItemInSlot(slot);
             MachineRecipe recipe = null;
-            if (SlimefunUtils.isItemSimilar(input, SlimefunItems.SIFTED_ORE, true, false)) {
+            if (oreWasher != null
+                    && oreWasher.isSiftedOreProcessingEnabled()
+                    && SlimefunUtils.isItemSimilar(input, SlimefunItems.SIFTED_ORE, true, false)) {
                 if (!legacyMode && !hasFreeSlot(menu)) {
                     return null;
                 }
