@@ -44,6 +44,11 @@ public class ElectricDustWasher extends AContainer {
 
     @Override
     protected MachineRecipe findNextRecipe(BlockMenu menu) {
+        // 喵~防御：两个产物槽都被占用时暂停启动新配方，避免随机产物可堆叠导致机器继续产出。
+        if (!hasFreeSlot(menu)) {
+            return null;
+        }
+
         for (int slot : getInputSlots()) {
             ItemStack input = menu.getItemInSlot(slot);
             MachineRecipe recipe = null;
