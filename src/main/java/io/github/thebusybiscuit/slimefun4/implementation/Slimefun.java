@@ -63,6 +63,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.altar.AncientAlta
 import io.github.thebusybiscuit.slimefun4.implementation.items.altar.AncientPedestal;
 import io.github.thebusybiscuit.slimefun4.implementation.items.backpacks.Cooler;
 import io.github.thebusybiscuit.slimefun4.implementation.items.magical.BeeWings;
+import io.github.thebusybiscuit.slimefun4.implementation.items.medical.MedicalSupplyUseManager;
 import io.github.thebusybiscuit.slimefun4.implementation.items.tools.GrapplingHook;
 import io.github.thebusybiscuit.slimefun4.implementation.items.weapons.SeismicAxe;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.AncientAltarListener;
@@ -88,6 +89,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.listeners.ItemPickupLis
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.JoinListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.MachineDamageListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.MachineDamageNotificationListener;
+import io.github.thebusybiscuit.slimefun4.implementation.listeners.MedicalSupplyUseListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.MiddleClickListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.MiningAndroidListener;
 import io.github.thebusybiscuit.slimefun4.implementation.listeners.MultiBlockListener;
@@ -248,6 +250,8 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     private final GrapplingHookListener grapplingHookListener = new GrapplingHookListener();
     private final BackpackListener backpackListener = new BackpackListener();
     private final SlimefunBowListener bowListener = new SlimefunBowListener();
+    // 管理医疗用品读条、打断和玩家共用冷却喵~
+    private final MedicalSupplyUseManager medicalSupplyUseManager = new MedicalSupplyUseManager(this);
     private MachineDamageService machineDamageService;
     private MachineFeedbackService machineFeedbackService;
 
@@ -534,6 +538,9 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
             machineFeedbackService.cleanup();
         }
 
+        // 主动清理医疗用品读条状态，避免插件关闭后玩家残留缓慢效果喵~
+        medicalSupplyUseManager.shutdown();
+
         // Cancel all tasks from this plugin immediately
         Bukkit.getScheduler().cancelTasks(this);
 
@@ -726,6 +733,8 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
         new SlimefunBootsListener(this);
         new SlimefunItemInteractListener(this);
         new SlimefunItemConsumeListener(this);
+        // 注册医疗用品跳跃、伤害、死亡和离线打断监听器喵~
+        new MedicalSupplyUseListener(this, medicalSupplyUseManager);
         new BlockPhysicsListener(this);
         new CargoNodeListener(this);
         new MultiBlockListener(this);
@@ -1133,6 +1142,16 @@ public final class Slimefun extends JavaPlugin implements SlimefunAddon, ICompat
     public static @Nonnull SlimefunRegistry getRegistry() {
         validateInstance();
         return instance.registry;
+    }
+
+    /**
+     * 返回医疗用品使用管理器，供物品注册时共享读条与冷却状态喵~
+     *
+     * @return 全局唯一医疗用品使用管理器喵~
+     */
+    public static @Nonnull MedicalSupplyUseManager getMedicalSupplyUseManager() {
+        validateInstance();
+        return instance.medicalSupplyUseManager;
     }
 
     public static @Nonnull GrapplingHookListener getGrapplingHookListener() {

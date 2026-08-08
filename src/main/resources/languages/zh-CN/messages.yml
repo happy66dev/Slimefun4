@@ -187,6 +187,13 @@ guide:
 
 actionbar:
   radiation: '&6辐射暴露等级：&c%level%&7/&e100'
+  medical-supply:
+    started: '&a正在使用：&f%item%'
+    progress: '&a医疗用品使用中：&f%item% &7（剩余 %remaining% 秒）'
+    cooldown: '&c医疗用品冷却中：&f剩余 %remaining% 秒'
+    interrupted: '&e医疗用品使用已中断'
+    vehicle-restricted: '&c当前载具无法使用医疗用品'
+    already-using: '&e你正在使用医疗用品'
 
 messages:
   android-no-permission: "&c你的机器人在某个你没有权限的领地/地皮中无法工作, 机器人已自动暂停运行."

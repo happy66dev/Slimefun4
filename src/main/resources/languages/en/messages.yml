@@ -178,6 +178,13 @@ guide:
 
 actionbar:
   radiation: '&6Radiation Exposure Level: &c%level%&7/&e100'
+  medical-supply:
+    started: '&aUsing: &f%item%'
+    progress: '&aUsing medical supply: &f%item% &7(%remaining%s)'
+    cooldown: '&cMedical supplies are cooling down: &f%remaining%s'
+    interrupted: '&eMedical supply use interrupted'
+    vehicle-restricted: '&cYou cannot use medical supplies in this vehicle'
+    already-using: '&eYou are already using a medical supply'
 
 messages:
   not-researched: '&4You do not have enough knowledge to understand this. &cYou will need to unlock &f"%item%&f"'

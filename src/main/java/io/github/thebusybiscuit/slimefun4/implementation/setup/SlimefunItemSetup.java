@@ -167,6 +167,7 @@ import io.github.thebusybiscuit.slimefun4.implementation.items.magical.staves.Wi
 import io.github.thebusybiscuit.slimefun4.implementation.items.magical.talismans.MagicianTalisman;
 import io.github.thebusybiscuit.slimefun4.implementation.items.magical.talismans.Talisman;
 import io.github.thebusybiscuit.slimefun4.implementation.items.medical.Bandage;
+import io.github.thebusybiscuit.slimefun4.implementation.items.medical.MedicalSupplyUseManager;
 import io.github.thebusybiscuit.slimefun4.implementation.items.medical.Medicine;
 import io.github.thebusybiscuit.slimefun4.implementation.items.medical.Splint;
 import io.github.thebusybiscuit.slimefun4.implementation.items.medical.Vitamins;
@@ -256,6 +257,8 @@ public final class SlimefunItemSetup {
 
         registeredItems = true;
         DefaultItemGroups itemGroups = new DefaultItemGroups();
+        // 获取全局医疗用品使用管理器，使全部医疗用品共享读条与冷却喵~
+        MedicalSupplyUseManager medicalSupplyUseManager = Slimefun.getMedicalSupplyUseManager();
 
         // @formatter:off (We will need to refactor this one day)
         new SlimefunItem(
@@ -2648,7 +2651,9 @@ public final class SlimefunItemSetup {
                             SlimefunItems.CLOTH
                         },
                         new SlimefunItemStack(SlimefunItems.RAG, 2),
-                        0)
+                        0,
+                        60L,
+                        medicalSupplyUseManager)
                 .register(plugin);
 
         new Bandage(
@@ -2667,7 +2672,9 @@ public final class SlimefunItemSetup {
                             null
                         },
                         new SlimefunItemStack(SlimefunItems.BANDAGE, 4),
-                        1)
+                        1,
+                        100L,
+                        medicalSupplyUseManager)
                 .register(plugin);
 
         new Splint(
@@ -2685,7 +2692,8 @@ public final class SlimefunItemSetup {
                             new ItemStack(Material.IRON_INGOT),
                             null
                         },
-                        new SlimefunItemStack(SlimefunItems.SPLINT, 4))
+                        new SlimefunItemStack(SlimefunItems.SPLINT, 4),
+                        medicalSupplyUseManager)
                 .register(plugin);
 
         new UnplaceableBlock(
@@ -2720,7 +2728,8 @@ public final class SlimefunItemSetup {
                             null,
                             null,
                             null
-                        })
+                        },
+                        medicalSupplyUseManager)
                 .register(plugin);
 
         new Medicine(
@@ -2737,7 +2746,8 @@ public final class SlimefunItemSetup {
                             null,
                             null,
                             null
-                        })
+                        },
+                        medicalSupplyUseManager)
                 .register(plugin);
 
         new SlimefunArmorPiece(
