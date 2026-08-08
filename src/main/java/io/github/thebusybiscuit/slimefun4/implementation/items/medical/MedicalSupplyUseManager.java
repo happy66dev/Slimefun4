@@ -32,8 +32,8 @@ public final class MedicalSupplyUseManager {
     private static final long SHARED_COOLDOWN_MILLIS = 30_000L;
     // 使用进度 Action Bar 的刷新间隔，单位：tick喵~
     private static final long PROGRESS_UPDATE_INTERVAL_TICKS = 10L;
-    // Bukkit amplifier 从零开始，数值六会向玩家显示“缓慢 VII”喵~
-    private static final int SLOWNESS_AMPLIFIER = 6;
+    // Bukkit amplifier 从零开始，数值五会向玩家显示“缓慢 VI”喵~
+    private static final int SLOWNESS_AMPLIFIER = 5;
     // 缓慢效果的额外保护时间，单位：tick喵~
     private static final int SLOWNESS_PADDING_TICKS = 10;
 
@@ -137,10 +137,10 @@ public final class MedicalSupplyUseManager {
                 new UseSession(playerId, supply, hand, sessionToken, completionTimeMillis, originalSlowness);
         activeSessions.put(playerId, session);
 
-        // 施加持续时间覆盖读条的“缓慢 VII”效果喵~
+        // 施加持续时间覆盖读条的“缓慢 VI”效果，并隐藏药水粒子喵~
         int slownessDurationTicks = Math.toIntExact(supply.getUseDurationTicks() + SLOWNESS_PADDING_TICKS);
         player.addPotionEffect(new PotionEffect(
-                PotionEffectType.SLOWNESS, slownessDurationTicks, SLOWNESS_AMPLIFIER, false, true, true));
+                PotionEffectType.SLOWNESS, slownessDurationTicks, SLOWNESS_AMPLIFIER, false, false, false));
         // 播放医疗用品开始读条提示音效喵~
         SoundEffect.MEDICAL_SUPPLY_START_SOUND.playFor(player);
         // 显示医疗用品中文名和开始状态喵~
