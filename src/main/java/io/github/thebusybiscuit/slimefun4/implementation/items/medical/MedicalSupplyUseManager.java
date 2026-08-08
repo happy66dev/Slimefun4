@@ -4,6 +4,7 @@ import io.github.bakedlibs.dough.common.ChatColors;
 import io.github.bakedlibs.dough.items.ItemUtils;
 import io.github.thebusybiscuit.slimefun4.api.events.PlayerRightClickEvent;
 import io.github.thebusybiscuit.slimefun4.api.items.SlimefunItem;
+import io.github.thebusybiscuit.slimefun4.core.services.sounds.SoundEffect;
 import io.github.thebusybiscuit.slimefun4.implementation.Slimefun;
 import java.util.HashMap;
 import java.util.Map;
@@ -31,8 +32,8 @@ public final class MedicalSupplyUseManager {
     private static final long SHARED_COOLDOWN_MILLIS = 30_000L;
     // 使用进度 Action Bar 的刷新间隔，单位：tick喵~
     private static final long PROGRESS_UPDATE_INTERVAL_TICKS = 10L;
-    // Bukkit amplifier 从零开始，数值三会向玩家显示“缓慢 IV”喵~
-    private static final int SLOWNESS_AMPLIFIER = 3;
+    // Bukkit amplifier 从零开始，数值六会向玩家显示“缓慢 VII”喵~
+    private static final int SLOWNESS_AMPLIFIER = 6;
     // 缓慢效果的额外保护时间，单位：tick喵~
     private static final int SLOWNESS_PADDING_TICKS = 10;
 
@@ -136,10 +137,12 @@ public final class MedicalSupplyUseManager {
                 new UseSession(playerId, supply, hand, sessionToken, completionTimeMillis, originalSlowness);
         activeSessions.put(playerId, session);
 
-        // 施加持续时间覆盖读条的“缓慢 IV”效果喵~
+        // 施加持续时间覆盖读条的“缓慢 VII”效果喵~
         int slownessDurationTicks = Math.toIntExact(supply.getUseDurationTicks() + SLOWNESS_PADDING_TICKS);
         player.addPotionEffect(new PotionEffect(
                 PotionEffectType.SLOWNESS, slownessDurationTicks, SLOWNESS_AMPLIFIER, false, true, true));
+        // 播放医疗用品开始读条提示音效喵~
+        SoundEffect.MEDICAL_SUPPLY_START_SOUND.playFor(player);
         // 显示医疗用品中文名和开始状态喵~
         sendActionBar(player, "actionbar.medical-supply.started", "%item%", supply.getItemName());
 
@@ -191,8 +194,11 @@ public final class MedicalSupplyUseManager {
         // 清除本会话施加的缓慢并谨慎恢复原有效果喵~
         restoreSlowness(player, session);
 
-        // 只有可见的跳跃或伤害中断才显示提示，退出和死亡不刷消息喵~
+        // 只有可见的跳跃或伤害中断才显示提示和播放音效，退出和死亡不刷消息喵~
         if (showInterruptionMessage && isValidPlayer(player)) {
+            // 播放医疗用品读条被打断的提示音效喵~
+            SoundEffect.MEDICAL_SUPPLY_INTERRUPT_SOUND.playFor(player);
+            // 显示医疗用品读条中断提示喵~
             sendActionBar(player, "actionbar.medical-supply.interrupted");
         }
     }

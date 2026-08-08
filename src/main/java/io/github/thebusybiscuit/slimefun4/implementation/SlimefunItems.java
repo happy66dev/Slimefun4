@@ -101,6 +101,7 @@ public final class SlimefunItems {
             "",
             "&r恢复2点血量",
             "&r可以熄灭身上的火",
+            "&7使用时间：3秒",
             "",
             LoreBuilder.RIGHT_CLICK_TO_USE);
     public static final SlimefunItemStack BANDAGE = new SlimefunItemStack(
@@ -112,10 +113,20 @@ public final class SlimefunItems {
             "",
             "&r恢复4点血量",
             "&r可以熄灭身上的火",
+            "&7使用时间：5秒",
             "",
             LoreBuilder.RIGHT_CLICK_TO_USE);
     public static final SlimefunItemStack SPLINT = new SlimefunItemStack(
-            "SPLINT", Material.STICK, "&c夹板", "", "&a1级医疗供给", "", "&r恢复2点血量", "", LoreBuilder.RIGHT_CLICK_TO_USE);
+            "SPLINT",
+            Material.STICK,
+            "&c夹板",
+            "",
+            "&a1级医疗供给",
+            "",
+            "&r恢复2点血量",
+            "&7使用时间：7秒",
+            "",
+            LoreBuilder.RIGHT_CLICK_TO_USE);
     public static final SlimefunItemStack VITAMINS = new SlimefunItemStack(
             "VITAMINS",
             Material.NETHER_WART,
@@ -126,6 +137,7 @@ public final class SlimefunItems {
             "&r恢复4点血量",
             "&r可以熄灭身上的火",
             "&r治愈中毒/凋零/辐射的负面效果",
+            "&7使用时间：3秒",
             "",
             LoreBuilder.RIGHT_CLICK_TO_USE);
     public static final SlimefunItemStack MEDICINE = new SlimefunItemStack(
@@ -139,6 +151,7 @@ public final class SlimefunItems {
             "&r恢复4点血量",
             "&r可以熄灭身上的火",
             "&r治愈中毒/凋零/辐射的负面效果",
+            "&7使用时间：3秒",
             "",
             "&7&e右键&7 饮用");
     public static final SlimefunItemStack MAGICAL_ZOMBIE_PILLS =
