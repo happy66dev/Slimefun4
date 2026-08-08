@@ -32,8 +32,10 @@ public class CraftingOperation implements MachineOperation {
     }
 
     public CraftingOperation(@Nonnull ItemStack[] ingredients, @Nonnull ItemStack[] results, int totalTicks) {
+        // 喵~防御：无输入操作无法表达有效机器消耗，拒绝创建不可执行周期喵~
         Validate.notEmpty(ingredients, "The Ingredients array cannot be empty or null");
-        Validate.notEmpty(results, "The results array cannot be empty or null");
+        // 空输出表示合法的无产出机器周期，例如淘金抽到 AIR；数组本身仍不能为 null 喵~
+        Validate.notNull(results, "The results array cannot be null");
         Validate.isTrue(
                 totalTicks >= 0,
                 "The amount of total ticks must be a positive integer or zero, received: " + totalTicks);

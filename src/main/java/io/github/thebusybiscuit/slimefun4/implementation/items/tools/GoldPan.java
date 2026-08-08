@@ -119,11 +119,41 @@ public class GoldPan extends SimpleSlimefunItem<ItemUseHandler> implements Recip
     }
 
     /**
-     * This returns a random output {@link ItemStack} that can be obtained via
-     * this {@link GoldPan}.
+     * 此方法为附属插件设置一个运行时淘金掉落条目。
      *
-     * @return a random {@link ItemStack} obtained by this {@link GoldPan}
+     * 同一键会覆盖已有的运行时条目，避免插件重复初始化时累积相同产物。
+     * AIR 代表消耗输入但不产生物品的空结果，不会显示在指南配方中。
+     *
+     * @param key 运行时条目的唯一键。
+     * @param output 随机抽取到的物品或 AIR 空结果。
+     * @param weight 相对随机权重，必须为非负整数。
      */
+    @ParametersAreNonnullByDefault
+    public void setRuntimeDrop(String key, ItemStack output, int weight) {
+        // 喵~防御：空白键无法稳定替换运行时条目，拒绝创建不可定位的掉落配置喵~
+        if (key == null || key.isBlank()) {
+            // 抛出明确异常，帮助附属插件修正非法运行时条目键喵~
+            throw new IllegalArgumentException("The runtime Gold Pan drop key cannot be blank");
+        }
+        // 喵~防御：空输出会破坏随机池和机器结果处理，拒绝注册喵~
+        if (output == null) {
+            // 抛出明确异常，防止空物品进入随机池喵~
+            throw new IllegalArgumentException("The runtime Gold Pan drop output cannot be null");
+        }
+        // 喵~防御：负权重不具备概率含义，拒绝生成非法随机池喵~
+        if (weight < 0) {
+            // 抛出明确异常，提示调用者使用零或正整数权重喵~
+            throw new IllegalArgumentException("The runtime Gold Pan drop weight cannot be negative");
+        }
+
+        // 移除同键旧条目，使重复调用保持幂等而不会叠加概率喵~
+        drops.removeIf(drop -> drop.getKey().equals(key));
+        // 保存独立副本，防止调用者后续修改 ItemStack 改变随机掉落喵~
+        drops.add(new GoldPanDrop(this, key, weight, output.clone()));
+        // 立即重建随机池，让运行时覆盖无需等待下一次核心重载喵~
+        updateRandomizer();
+    }
+
     public @Nonnull ItemStack getRandomOutput() {
         ItemStack item = randomizer.getRandom();
 
@@ -188,7 +218,7 @@ public class GoldPan extends SimpleSlimefunItem<ItemUseHandler> implements Recip
         List<ItemStack> recipes = new ArrayList<>();
 
         for (GoldPanDrop drop : drops) {
-            if (drop.getValue() <= 0) {
+            if (drop.getValue() <= 0 || drop.getOutput().getType().isAir()) {
                 continue;
             }
 

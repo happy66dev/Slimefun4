@@ -426,6 +426,17 @@ public abstract class AContainer extends SlimefunItem
                 } else {
                     inv.replaceExistingItem(22, new CustomItemStack(Material.BLACK_STAINED_GLASS_PANE, " "));
 
+                    // 空结果数组表示合法的无产出周期，不需要校验或推送任何输出喵~
+                    if (currentOperation.getResults().length == 0) {
+                        // 结束无产出操作并播放正常停止反馈喵~
+                        processor.endOperation(b);
+                        // 通知机器反馈服务当前周期已正常结束喵~
+                        Slimefun.getMachineFeedbackService().onMachineStop(b, feedbackType);
+                        // 结束本次 tick，避免进入普通产物推送分支喵~
+                        return;
+                    }
+
+                    // 保存本轮输出是否包含非法空物品，防止机器写入 AIR 或空值喵~
                     boolean hasInvalidOutput = false;
                     for (ItemStack output : currentOperation.getResults()) {
                         if (output == null || output.getType().isAir()) {
