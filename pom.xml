@@ -631,7 +631,7 @@
         <dependency>
             <groupId>com.djrapitops</groupId>
             <artifactId>plan-api</artifactId>
-            <version>5.8-R0.1</version>
+            <version>5.7-R0.2</version>
             <scope>provided</scope>
         </dependency>
     </dependencies>
